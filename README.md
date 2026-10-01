@@ -183,12 +183,6 @@ versionCode 10`；流程语义与 Python FSSA v1.3.4 对齐。
 提交的一部分。
 ```
 
----
-
-## 配套清理建议
-
-1. **替换占位符**：将两处 `https://github.com/<ORG>/<REPO>/releases/latest` 改为真实仓库地址。
-2. **处理旧中文手册**：现有 `README.zh-CN.md` 描述的是已废弃的"侧边栏 + 五步"UI，与当前应用不符，建议**删除**或移至 `docs/legacy/README.zh-CN.v1.md` 存档，避免评委看到矛盾文档。如需保留独立详细手册，我可以按当前 UI 重新生成一版。
 3. **补充 `LICENSE`**：iGEM 推荐开源许可（如 MIT / Apache-2.0），README 已预留引用位置。
 4. 提交信息建议：`docs: rewrite bilingual README for MycoSpec v2.0.0 UI`。
 
