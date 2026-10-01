@@ -1,0 +1,8 @@
+org.fungalsentinel.app-pngs-0 D:\Documents\iGem\Android\Fungal Sentinel App v2.0.0\app\build\generated\res\pngs\debug
+org.fungalsentinel.app-updated_navigation_xml-1 D:\Documents\iGem\Android\Fungal Sentinel App v2.0.0\app\build\generated\updated_navigation_xml\debug
+org.fungalsentinel.app-packageDebugResources-2 D:\Documents\iGem\Android\Fungal Sentinel App v2.0.0\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+org.fungalsentinel.app-packageDebugResources-3 D:\Documents\iGem\Android\Fungal Sentinel App v2.0.0\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+org.fungalsentinel.app-debug-4 D:\Documents\iGem\Android\Fungal Sentinel App v2.0.0\app\build\intermediates\merged_res\debug\mergeDebugResources
+org.fungalsentinel.app-debug-5 D:\Documents\iGem\Android\Fungal Sentinel App v2.0.0\app\src\debug\res
+org.fungalsentinel.app-main-6 D:\Documents\iGem\Android\Fungal Sentinel App v2.0.0\app\src\main\res
+gradleHome-0 C:\Users\Lenovo\.gradle
