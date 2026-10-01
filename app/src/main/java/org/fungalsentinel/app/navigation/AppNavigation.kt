@@ -1,7 +1,6 @@
 package org.fungalsentinel.app.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,17 +46,11 @@ fun AppNavigation(navController: NavHostController) {
     val settings by settingsViewModel.settings.collectAsState()
     val projectState by projectViewModel.uiState.collectAsState()
 
-    // History data source (Room flow -> Compose state)
     val context = LocalContext.current
     val app = context.applicationContext as FssaApplication
     val dao = app.database.projectDao()
     val projects by dao.getAllProjects().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
-
-    // Auto-resume unfinished draft (README requirement)
-    LaunchedEffect(Unit) {
-        projectViewModel.resumeProject()
-    }
 
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
@@ -128,14 +121,10 @@ fun AppNavigation(navController: NavHostController) {
                 predictedConcentration = projectState.reportData.predictedConcentration.toDoubleOrNull(),
                 onFinish = {
                     projectViewModel.finishProject()
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.HOME) { inclusive = true }
-                    }
+                    navController.navigate(Routes.HOME) { popUpTo(Routes.HOME) { inclusive = true } }
                 },
                 onHome = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.HOME) { inclusive = true }
-                    }
+                    navController.navigate(Routes.HOME) { popUpTo(Routes.HOME) { inclusive = true } }
                 }
             )
         }
@@ -154,11 +143,23 @@ fun AppNavigation(navController: NavHostController) {
         composable(Routes.HISTORY) {
             HistoryScreen(
                 projects = projects,
+                projectViewModel = projectViewModel,
                 onBack = { navController.popBackStack() },
+                onOpenProject = { project ->
+                    projectViewModel.openProject(project.id) { step ->
+                        val route = when (step) {
+                            1 -> Routes.STEP1
+                            2 -> Routes.STEP2
+                            3 -> Routes.STEP3
+                            else -> Routes.STEP4
+                        }
+                        navController.navigate(route) { popUpTo(Routes.HOME) }
+                    }
+                },
                 onDelete = { project ->
                     scope.launch { dao.deleteProject(project) }
                 },
-                onExport = { /* TODO: ZIP export (manifest/result/profiles/standards/spd/raw) */ }
+                onExport = { /* TODO: ZIP export */ }
             )
         }
 

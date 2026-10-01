@@ -29,8 +29,15 @@ fun Step2SpdScreen(
     isHalfScreen: Boolean = false
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
+    val spdPresets by projectViewModel.spdPresets.collectAsState()
     val captures = uiState.spdCaptures
+    val report = uiState.reportData
+
     var showCapture by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var showLoadDialog by remember { mutableStateOf(false) }
+
+    val presetLoaded = report.spdStatus.startsWith("PRESET")
 
     TutorialOverlay(
         stepId = "step2_spd",
@@ -43,10 +50,7 @@ fun Step2SpdScreen(
             CaptureUploadScreen(
                 title = stringResource(R.string.step2_capture_title),
                 subtitle = stringResource(R.string.step2_capture_subtitle),
-                minCaptures = 1,
-                maxCaptures = 5,
                 capturedImages = captures,
-                onLaunchCamera = { /* TODO: Camera2 */ },
                 onImagesChanged = { projectViewModel.setSpdCaptures(it) },
                 onConfirm = { showCapture = false },
                 onBack = { showCapture = false },
@@ -66,7 +70,6 @@ fun Step2SpdScreen(
                     )
                 }
             ) { padding ->
-                // ← 确保包含 verticalScroll
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -76,19 +79,40 @@ fun Step2SpdScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     StepIndicator(currentStep = 2, totalSteps = 4)
+                    // FIX: named argument `style =`
                     Text(
-                        stringResource(R.string.step2_description),
+                        text = stringResource(R.string.step2_description),
                         style = MaterialTheme.typography.bodyLarge
                     )
-                    if (captures.isNotEmpty()) {
+
+                    if (presetLoaded) {
                         Text(
-                            text = "${captures.size} frame(s) loaded — response computed. Open Report to view results.",
+                            text = "Response loaded from preset — no new captures needed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else if (captures.isNotEmpty()) {
+                        Text(
+                            text = "${captures.size} frame(s) loaded — response computed.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { showSaveDialog = true },
+                            enabled = report.spdCoeffR != "—" && !presetLoaded,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Save preset") }
+                        OutlinedButton(
+                            onClick = { showLoadDialog = true },
+                            enabled = spdPresets.isNotEmpty(),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Load preset") }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
 
                     Button(
                         onClick = onOpenReport,
@@ -103,21 +127,71 @@ fun Step2SpdScreen(
                     Button(
                         onClick = { showCapture = true },
                         modifier = Modifier.fillMaxWidth().height(56.dp)
-                    ) {
-                        Text(stringResource(R.string.step2_start_capture))
-                    }
+                    ) { Text(stringResource(R.string.step2_start_capture)) }
 
-                    if (captures.isNotEmpty()) {
+                    if (captures.isNotEmpty() || presetLoaded) {
                         Button(onClick = onNext, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                             Text(stringResource(R.string.next_step))
                             Spacer(Modifier.width(8.dp))
                             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
                         }
                     }
-
                     Spacer(Modifier.height(32.dp))
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showSaveDialog = false },
+            title = { Text("Save SPD preset") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Preset name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (name.isNotBlank()) {
+                            projectViewModel.saveSpdPreset(name)
+                            showSaveDialog = false
+                        }
+                    }
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showLoadDialog) {
+        AlertDialog(
+            onDismissRequest = { showLoadDialog = false },
+            title = { Text("Load SPD preset") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    spdPresets.forEach { p ->
+                        Card(onClick = {
+                            projectViewModel.loadSpdPreset(p)
+                            showLoadDialog = false
+                        }) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(p.name, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    text = "${p.deviceModel} · ${p.frames ?: 0} frames",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showLoadDialog = false }) { Text("Close") } }
+        )
     }
 }

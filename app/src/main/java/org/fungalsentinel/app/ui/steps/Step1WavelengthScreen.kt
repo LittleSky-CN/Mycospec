@@ -29,8 +29,13 @@ fun Step1WavelengthScreen(
     isHalfScreen: Boolean = false
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
+    val wlPresets by projectViewModel.wlPresets.collectAsState()
     val captures = uiState.positioningCaptures
+    val report = uiState.reportData
+
     var showCapture by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var showLoadDialog by remember { mutableStateOf(false) }
 
     TutorialOverlay(
         stepId = "step1_wavelength",
@@ -43,10 +48,7 @@ fun Step1WavelengthScreen(
             CaptureUploadScreen(
                 title = stringResource(R.string.step1_capture_title),
                 subtitle = stringResource(R.string.step1_capture_subtitle),
-                minCaptures = 1,
-                maxCaptures = 5,
                 capturedImages = captures,
-                onLaunchCamera = { /* TODO: Camera2 */ },
                 onImagesChanged = { projectViewModel.setPositioningCaptures(it) },
                 onConfirm = { showCapture = false },
                 onBack = { showCapture = false },
@@ -66,7 +68,6 @@ fun Step1WavelengthScreen(
                     )
                 }
             ) { padding ->
-                // ← 修复：添加 verticalScroll 防止按钮被挤出屏幕
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -76,19 +77,40 @@ fun Step1WavelengthScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     StepIndicator(currentStep = 1, totalSteps = 4)
+                    // FIX: named argument `style =`
                     Text(
                         text = stringResource(R.string.step1_description),
                         style = MaterialTheme.typography.bodyLarge
                     )
-                    if (captures.isNotEmpty()) {
+
+                    if (report.wavelengthQuality == "PRESET") {
                         Text(
-                            text = "${captures.size} frame(s) loaded — calibration computed. Open Report to view results.",
+                            text = "Calibration loaded from preset — no new captures needed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else if (captures.isNotEmpty()) {
+                        Text(
+                            text = "${captures.size} frame(s) loaded — calibration computed.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { showSaveDialog = true },
+                            enabled = report.slope != null && report.wavelengthQuality != "PRESET",
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Save preset") }
+                        OutlinedButton(
+                            onClick = { showLoadDialog = true },
+                            enabled = wlPresets.isNotEmpty(),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Load preset") }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
 
                     Button(
                         onClick = onOpenReport,
@@ -103,22 +125,71 @@ fun Step1WavelengthScreen(
                     Button(
                         onClick = { showCapture = true },
                         modifier = Modifier.fillMaxWidth().height(56.dp)
-                    ) {
-                        Text(stringResource(R.string.step1_start_capture))
-                    }
+                    ) { Text(stringResource(R.string.step1_start_capture)) }
 
-                    if (captures.isNotEmpty()) {
+                    if (captures.isNotEmpty() || report.slope != null) {
                         Button(onClick = onNext, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                             Text(stringResource(R.string.next_step))
                             Spacer(Modifier.width(8.dp))
                             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
                         }
                     }
-
-                    // 底部留白，防止最后一个按钮被系统导航栏遮挡
                     Spacer(Modifier.height(32.dp))
                 }
             }
         }
+    }
+
+    if (showSaveDialog) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showSaveDialog = false },
+            title = { Text("Save wavelength preset") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Preset name (e.g. PhoneA-rig1)") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (name.isNotBlank()) {
+                            projectViewModel.saveWavelengthPreset(name)
+                            showSaveDialog = false
+                        }
+                    }
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showLoadDialog) {
+        AlertDialog(
+            onDismissRequest = { showLoadDialog = false },
+            title = { Text("Load wavelength preset") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    wlPresets.forEach { p ->
+                        Card(onClick = {
+                            projectViewModel.loadWavelengthPreset(p)
+                            showLoadDialog = false
+                        }) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(p.name, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    text = "${p.deviceModel} · quality ${p.quality ?: "—"}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showLoadDialog = false }) { Text("Close") } }
+        )
     }
 }

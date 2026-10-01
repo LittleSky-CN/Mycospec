@@ -107,4 +107,10 @@
     <string name="confirm">确认</string>
     <string name="delete">删除</string>
     <string name="upload_files">文件 / DNG</string>
+    <string name="settings_language">Language / 语言</string>
+    <string name="language_system">Follow system / 跟随系统</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese">中文</string>
+    <string name="language_spanish">Español</string>
+    <string name="language_chichewa">Chichewa</string>
 </resources>
