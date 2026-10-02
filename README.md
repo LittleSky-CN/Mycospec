@@ -7,6 +7,7 @@
 > | 名称 | 含义 |
 > |---|---|
 > | **Fungal Sentinel** | iGEM team project (wet lab + hardware + software) / iGEM 大项目名 |
+> | **OptiX** | Hardware project / 硬件项目 |
 > | **FSSA v1.3.4** | Python desktop spectral analyzer (reference implementation) / Python 桌面版参考实现 |
 > | **MycoSpec** | This Android app / 本 Android 应用 |
 >
@@ -53,7 +54,7 @@ blank-corrected spectrum, and the standard curve.
 
 ### Install
 1. Download the latest APK from
-   [Releases](https://github.com/<ORG>/<REPO>/releases/latest).
+   [Releases](https://github.com/LittleSky-CN/Mycospec/releases).
 2. Allow "install unknown apps" when prompted.
 3. Open MycoSpec → New Project → follow Steps 1–4 → View Report.
 
@@ -145,7 +146,7 @@ MycoSpec 将支持 Camera2 RAW 的 Android 手机与固定的狭缝–光栅–�
 - 无网络权限、无自动上传；数据仅存本地 Room 数据库与 DataStore
 
 ### 安装
-1. 从 [Releases](https://github.com/<ORG>/<REPO>/releases/latest) 下载最新 APK；
+1. 从 [Releases](https://github.com/LittleSky-CN/Mycospec/releases) 下载最新 APK；
 2. 按提示允许"安装未知应用"；
 3. 打开 MycoSpec → 新项目 → 按 Step 1–4 操作 → 查看报告。
 
@@ -177,13 +178,3 @@ versionCode 10`；流程语义与 Python FSSA v1.3.4 对齐。
 - ZIP 导出（manifest.json、result.json、profiles.csv、standards.csv、spd.csv、raw/）
 - 可复用校准模板
 - 教程插图与动画；无障碍（TalkBack）适配
-
-### 许可与引用
-许可见 `LICENSE`（待添加）。本软件由 iGEM Fungal Sentinel 团队开发，为项目软件
-提交的一部分。
-```
-
-3. **补充 `LICENSE`**：iGEM 推荐开源许可（如 MIT / Apache-2.0），README 已预留引用位置。
-4. 提交信息建议：`docs: rewrite bilingual README for MycoSpec v2.0.0 UI`。
-
-完成后，仓库首页将呈现与 APK 实际行为一致的双语说明，与 Releases 页的 v2.0.0_debug 描述相互印证，形成完整的 iGEM 软件交付文档闭环。
