@@ -7,7 +7,7 @@
     <string name="home_dng_camera">Cámara DNG</string>
     <string name="home_dng_camera_desc">Capturar fotos RAW DNG y guardarlas en la galería</string>
     <string name="home_history">Historial</string>
-    <string name="home_history_desc">Ver, exportar o eliminar experimentos pasados</string>
+    <string name="home_history_desc">Ver, continuar, exportar o eliminar experimentos pasados</string>
     <string name="home_settings">Ajustes</string>
     <string name="home_settings_desc">Longitudes de onda, SPD, media pantalla, modo blanco</string>
     <string name="new_project_title">Nuevo proyecto</string>
@@ -33,13 +33,12 @@
     <string name="step3_description">Capture fotogramas de blanco y de muestra para medir el área integrada de fluorescencia.</string>
     <string name="step3_capture_blank_title">Capturas de blanco</string>
     <string name="step3_capture_sample_title">Capturas de muestra</string>
-    <string name="step3_start_capture">Iniciar captura de muestra</string>
     <string name="step4_title">Paso 4: Curva de calibración</string>
     <string name="step4_description">Construya una curva de regresión concentración–fluorescencia con grupos estándar.</string>
-    <string name="step4_start_capture">Añadir grupo estándar</string>
     <string name="step4_concentration_label">Concentración del estándar</string>
     <string name="step4_unit_label">Unidad</string>
     <string name="step4_build_curve">Construir curva</string>
+    <string name="next_step">Siguiente paso</string>
     <string name="result_title">Resultado del análisis</string>
     <string name="result_regression">Regresión</string>
     <string name="result_r2">R²</string>
@@ -51,8 +50,6 @@
     <string name="dng_saved">DNG guardado en la galería</string>
     <string name="history_title">Historial</string>
     <string name="history_empty">Aún no hay experimentos</string>
-    <string name="history_export">Exportar ZIP</string>
-    <string name="history_delete">Eliminar</string>
     <string name="settings_title">Ajustes</string>
     <string name="settings_wavelength">Parámetros de longitud de onda</string>
     <string name="settings_spd">Parámetros SPD</string>
@@ -69,7 +66,7 @@
     <string name="settings_calibration_protection_desc">Bloquear los pasos siguientes si el error de validación G supera 10 nm.</string>
     <string name="tutorial_skip">Omitir</string>
     <string name="tutorial_got_it">Entendido</string>
-    <string name="tutorial_button_desc">Mostrar tutorial</string>
+    <string name="tutorial_button_desc">Mostrar ayuda</string>
     <string name="tutorial_home_title">Bienvenido a MycoSpec</string>
     <string name="tutorial_home_body">Esta app funciona con hardware dedicado para medir la concentración de fluorescencia y evaluar el riesgo de moho en sus muestras.</string>
     <string name="tutorial_project_title">Monte el hardware</string>
@@ -82,15 +79,24 @@
     <string name="tutorial_step3_body">Inserte su muestra o blanco en el puerto de muestra y capture 1–5 imágenes.</string>
     <string name="tutorial_step4_title">Curva de calibración</string>
     <string name="tutorial_step4_body">Para construir la curva, inserte cada estándar y su blanco en el puerto de muestra e introduzca la concentración correspondiente.</string>
-    <string name="next_step">Siguiente paso</string>
-    <string name="back">Atrás</string>
-    <string name="cancel">Cancelar</string>
-    <string name="confirm">Confirmar</string>
-    <string name="delete">Eliminar</string>
     <string name="settings_language">Idioma</string>
     <string name="language_system">Seguir el sistema</string>
     <string name="language_english">English</string>
     <string name="language_chinese">中文</string>
     <string name="language_spanish">Español</string>
     <string name="language_chichewa">Chichewa</string>
+    <string name="tutorial_capture_title">Ayuda de captura</string>
+    <string name="tutorial_capture_body">Usa Capturar para tomar 1–5 fotogramas RAW, o importa desde Galería / Archivos (DNG). Mantén sin cambios el teléfono, la rendija, la rejilla, el ISO y el enfoque entre fotogramas. Toca la × de una miniatura para eliminarla.</string>
+    <string name="tutorial_report_title">Ayuda del informe</string>
+    <string name="tutorial_report_body">El informe reúne todos los resultados: página 1 mapeo de longitud de onda y validación G; página 2 respuesta espectral y curva fusionada; página 3 área de muestra corregida con blanco; página 4 regresión de concentración. Los valores se actualizan tras cada lote.</string>
+    <string name="tutorial_result_title">Ayuda del resultado</string>
+    <string name="tutorial_result_body">Revisa la fórmula de regresión, R² y la concentración predicha. Finalizar guarda el proyecto en el Historial; un R² bajo o predicciones negativas avisan de que la curva no es fiable.</string>
+    <string name="tutorial_dng_title">Ayuda de la cámara DNG</string>
+    <string name="tutorial_dng_body">Cámara RAW independiente: cada pulsación guarda un DNG en Pictures/FungalSentinel de la galería. Úsala para recoger fotogramas de evidencia fuera de un proyecto.</string>
+    <string name="tutorial_history_title">Ayuda del historial</string>
+    <string name="tutorial_history_body">Proyectos: toca un proyecto en curso para continuar donde lo dejaste. Pestañas de presets: ver, renombrar, editar o eliminar calibraciones guardadas. Exportar genera un archivo ZIP.</string>
+    <string name="tutorial_settings_title">Ayuda de ajustes</string>
+    <string name="tutorial_settings_body">Configura idioma, longitudes de onda de posicionamiento, fuente SPD, cobertura de media pantalla, modo de blanco y protección de calibración. Los cambios se aplican a los cálculos nuevos.</string>
+    <string name="tutorial_parameters_title">Ayuda de parámetros</string>
+    <string name="tutorial_parameters_body">Ajusta los parámetros de captura: exposición 10–3000 ms, ISO 50–1600, enfoque 0–5 D (0 = infinito) y balance de blancos. Manténlos fijos durante un experimento.</string>
 </resources>

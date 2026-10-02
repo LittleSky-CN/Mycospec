@@ -15,8 +15,6 @@ import org.fungalsentinel.app.ui.theme.FssaTheme
 import org.fungalsentinel.app.util.LanguageManager
 
 class MainActivity : ComponentActivity() {
-
-    // Apply the saved app language before any view/resource is created
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LanguageManager.wrap(newBase))
     }
@@ -26,10 +24,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             FssaTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val navController = rememberNavController()
                     AppNavigation(navController = navController)
                 }

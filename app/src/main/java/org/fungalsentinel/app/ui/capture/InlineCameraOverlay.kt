@@ -11,10 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,75 +22,42 @@ import androidx.core.content.ContextCompat
 import org.fungalsentinel.app.camera.CameraManager
 import org.fungalsentinel.app.camera.CameraPreviewView
 
+/** Full-screen inline camera; shutter gated on session readiness (fixes first-tap dead). */
 @Composable
-fun InlineCameraOverlay(
-    onCaptured: (Uri) -> Unit,
-    onBack: () -> Unit
-) {
+fun InlineCameraOverlay(onCaptured: (Uri) -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     val cameraManager = remember { CameraManager(context) }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) {
-            Toast.makeText(context, "Camera permission denied", Toast.LENGTH_SHORT).show()
-            onBack()
-        }
+    val isReady by cameraManager.isReady.collectAsState()
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) { Toast.makeText(context, "Camera permission denied", Toast.LENGTH_SHORT).show(); onBack() }
     }
-
     LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
-        // FIX: hardened CameraManager exposes onDngSaved (File, CaptureMetadata)
-        cameraManager.onDngSaved = { file, _ ->
-            onCaptured(Uri.fromFile(file))
-        }
-        cameraManager.onError = { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-        }
+        cameraManager.onDngSaved = { file, _ -> onCaptured(Uri.fromFile(file)) }
+        cameraManager.onError = { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
     }
-
-    DisposableEffect(Unit) {
-        onDispose { cameraManager.close() }
-    }
-
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        CameraPreviewView(
-            cameraManager = cameraManager,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        Text(
-            text = "Align the light source, then tap Capture",
-            color = Color.White,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 24.dp)
-        )
-
+    DisposableEffect(Unit) { onDispose { cameraManager.close() } }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        CameraPreviewView(cameraManager = cameraManager, modifier = Modifier.fillMaxSize())
         Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            Modifier.align(Alignment.TopCenter).padding(top = 24.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
-                )
-            }
-            Button(onClick = { cameraManager.captureRaw() }) {
-                Icon(Icons.Default.CameraAlt, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Capture")
+            if (!isReady) {
+                CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                Text("Starting camera…", color = Color.White)
+            } else Text("Align the light source, then tap Capture", color = Color.White)
+        }
+        Row(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp),
+            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
+            Button(onClick = { cameraManager.captureRaw() }, enabled = isReady) {
+                Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(8.dp))
+                Text(if (isReady) "Capture" else "Starting…")
             }
             Spacer(Modifier.width(48.dp))
         }

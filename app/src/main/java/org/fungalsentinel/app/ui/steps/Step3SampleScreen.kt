@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material3.*
@@ -17,12 +16,14 @@ import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.capture.CaptureUploadScreen
 import org.fungalsentinel.app.ui.components.HalfScreenLayout
+import org.fungalsentinel.app.ui.components.HelpTopBar
 import org.fungalsentinel.app.ui.components.StepIndicator
-import org.fungalsentinel.app.ui.components.TutorialOverlay
+import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 
 /**
  * Fluorophore options with integration ranges (FSSA v1.3.4 aligned).
+ * NOTE: en-dash ranges fixed (previous build had mojibake strings).
  */
 enum class Fluorophore(val displayName: String, val integrationRangeNm: String) {
     YPET("Ypet", "500–530 nm"),
@@ -32,6 +33,10 @@ enum class Fluorophore(val displayName: String, val integrationRangeNm: String) 
     MTURQUOISE2("mTurquoise2", "460–490 nm")
 }
 
+/**
+ * Step 3 — Sample analysis (blank + unknown sample).
+ * Integration window is derived from the Step 1 mapping; results -> Report Page 3.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Step3SampleScreen(
@@ -42,7 +47,6 @@ fun Step3SampleScreen(
     isHalfScreen: Boolean = false,
     blankMode: String = "SINGLE"
 ) {
-    // Captures live in the ViewModel -> survive navigation to Report and back
     val uiState by projectViewModel.uiState.collectAsState()
     val blankCaptures = uiState.blankCaptures
     val sampleCaptures = uiState.sampleCaptures
@@ -51,16 +55,16 @@ fun Step3SampleScreen(
     var showBlankCapture by remember { mutableStateOf(false) }
     var showSampleCapture by remember { mutableStateOf(false) }
 
-    // Push the default fluorophore once so Report has a band before user changes it
-    LaunchedEffect(Unit) {
-        projectViewModel.setFluorophore(selectedFluorophore.name)
-    }
-
-    TutorialOverlay(
+    val tutorial = TutorialHost(
         stepId = "step3_sample",
         titleRes = R.string.tutorial_step3_title,
         bodyRes = R.string.tutorial_step3_body
     )
+
+    // Push default fluorophore once so Report has a band before user changes it
+    LaunchedEffect(Unit) {
+        projectViewModel.setFluorophore(selectedFluorophore.name)
+    }
 
     HalfScreenLayout(forceHalfScreen = isHalfScreen) { innerModifier ->
         if (showBlankCapture) {
@@ -70,10 +74,10 @@ fun Step3SampleScreen(
                 minCaptures = 1,
                 maxCaptures = 5,
                 capturedImages = blankCaptures,
-                onLaunchCamera = { /* TODO: Camera2 RAW preview */ },
                 onImagesChanged = { projectViewModel.setBlankCaptures(it) },
                 onConfirm = { showBlankCapture = false },
                 onBack = { showBlankCapture = false },
+                onHelp = { tutorial.show() },
                 modifier = innerModifier
             )
         } else if (showSampleCapture) {
@@ -83,23 +87,20 @@ fun Step3SampleScreen(
                 minCaptures = 1,
                 maxCaptures = 5,
                 capturedImages = sampleCaptures,
-                onLaunchCamera = { /* TODO: Camera2 RAW preview */ },
                 onImagesChanged = { projectViewModel.setSampleCaptures(it) },
                 onConfirm = { showSampleCapture = false },
                 onBack = { showSampleCapture = false },
+                onHelp = { tutorial.show() },
                 modifier = innerModifier
             )
         } else {
             Scaffold(
                 modifier = innerModifier,
                 topBar = {
-                    TopAppBar(
-                        title = { Text(stringResource(R.string.step3_title)) },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                            }
-                        }
+                    HelpTopBar(
+                        title = stringResource(R.string.step3_title),
+                        tutorial = tutorial,
+                        onBack = onBack
                     )
                 }
             ) { padding ->
@@ -114,16 +115,17 @@ fun Step3SampleScreen(
                     StepIndicator(currentStep = 3, totalSteps = 4)
 
                     Text(
-                        stringResource(R.string.step3_description),
+                        text = stringResource(R.string.step3_description),
                         style = MaterialTheme.typography.bodyLarge
                     )
 
                     // Blank mode note (Settings-driven)
                     Text(
-                        text = if (blankMode == "FULL")
+                        text = if (blankMode == "FULL") {
                             "Blank mode: FULL — Step 4 captures a separate blank per standard group."
-                        else
-                            "Blank mode: SINGLE — one shared blank workflow; Step 4 still captures per-group blanks.",
+                        } else {
+                            "Blank mode: SINGLE — one shared blank workflow; Step 4 still captures per-group blanks."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -180,7 +182,7 @@ fun Step3SampleScreen(
                         }
                     }
 
-                    // ── Blank batch ──
+                    // ── Blank batch card ──
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -188,16 +190,14 @@ fun Step3SampleScreen(
                         )
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
                                 Text("Blank captures", fontWeight = FontWeight.Bold)
                                 Text(
-                                    "${blankCaptures.size} / 5",
+                                    text = "${blankCaptures.size} / 5",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -205,13 +205,11 @@ fun Step3SampleScreen(
                             Button(
                                 onClick = { showBlankCapture = true },
                                 enabled = blankCaptures.size < 5
-                            ) {
-                                Text("Capture")
-                            }
+                            ) { Text("Capture") }
                         }
                     }
 
-                    // ── Sample batch ──
+                    // ── Sample batch card ──
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -219,16 +217,14 @@ fun Step3SampleScreen(
                         )
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
                                 Text("Sample captures", fontWeight = FontWeight.Bold)
                                 Text(
-                                    "${sampleCaptures.size} / 5",
+                                    text = "${sampleCaptures.size} / 5",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -236,28 +232,22 @@ fun Step3SampleScreen(
                             Button(
                                 onClick = { showSampleCapture = true },
                                 enabled = sampleCaptures.size < 5
-                            ) {
-                                Text("Capture")
-                            }
+                            ) { Text("Capture") }
                         }
                     }
 
                     if (blankCaptures.isNotEmpty() && sampleCaptures.isNotEmpty()) {
                         Text(
-                            text = "Analysis computed. Open Report (Page 3) to view integrated area, SD and spectrum.",
+                            text = "Analysis computed. Open Report (Page 3) for integrated area, SD and spectrum.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // ── Report button ──
+                    // ── Report ──
                     Button(
                         onClick = onOpenReport,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.secondary
                         )
@@ -267,13 +257,11 @@ fun Step3SampleScreen(
                         Text("View Report")
                     }
 
-                    // ── Next button ──
+                    // ── Next ──
                     if (blankCaptures.isNotEmpty() && sampleCaptures.isNotEmpty()) {
                         Button(
                             onClick = onNext,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
+                            modifier = Modifier.fillMaxWidth().height(56.dp)
                         ) {
                             Text(stringResource(R.string.next_step))
                             Spacer(Modifier.width(8.dp))

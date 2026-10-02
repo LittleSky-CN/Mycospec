@@ -3,63 +3,32 @@ package org.fungalsentinel.app.analysis
 import kotlin.math.abs
 
 data class WavelengthCalibrationResult(
-    val quality: String,
-    val slope: Double,
-    val intercept: Double,
-    val gResidualPx: Double,
-    val gErrorNm: Double,
-    val roiStart: Int,
-    val roiEnd: Int,
-    val peakR: Int,
-    val peakG: Int,
-    val peakB: Int,
-    val exposureSeconds: Double,
-    val sensorWidth: Int,
-    val sensorHeight: Int,
-    val red: List<Float>,
-    val green: List<Float>,
-    val blue: List<Float>,
+    val quality: String, val slope: Double, val intercept: Double,
+    val gResidualPx: Double, val gErrorNm: Double,
+    val roiStart: Int, val roiEnd: Int,
+    val peakR: Int, val peakG: Int, val peakB: Int,
+    val exposureSeconds: Double, val sensorWidth: Int, val sensorHeight: Int,
+    val red: List<Float>, val green: List<Float>, val blue: List<Float>,
     val frames: Int
 )
 
-data class SpdResult(
-    val status: String,
-    val responseR: Double,
-    val responseB: Double,
-    val frames: Int
-)
-
-/**
- * FSSA v1.3.4-aligned wavelength calibration:
- * B + R two-point fit, G third-point validation, auto X-ROI, dynamic peak windows.
- */
+/** Step 1: auto X-ROI, dynamic peak windows, B+R two-point fit, G validation. */
 object WavelengthCalibrator {
-
-    fun calibrate(
-        frames: List<FrameProfile>,
-        wlR: Double,
-        wlG: Double,
-        wlB: Double
-    ): WavelengthCalibrationResult? {
+    fun calibrate(frames: List<FrameProfile>, wlR: Double, wlG: Double, wlB: Double): WavelengthCalibrationResult? {
         if (frames.isEmpty()) return null
         val f0 = frames[0]
         val r = mean(frames) { it.redProfile }
         val g = mean(frames) { it.greenProfile }
         val b = mean(frames) { it.blueProfile }
         val col = mean(frames) { it.columnEnergy }
-
         val (rs, re) = autoRoi(col)
         val pR = centroid(r); val pG = centroid(g); val pB = centroid(b)
         if (pR < 0 || pG < 0 || pB < 0) return null
-
         val slope = (pR - pB) / (wlR - wlB)
         if (slope == 0.0 || slope.isNaN() || slope.isInfinite()) return null
         val intercept = pR - slope * wlR
-
-        val predictedG = slope * wlG + intercept
-        val residual = pG - predictedG
+        val residual = pG - (slope * wlG + intercept)
         val errorNm = residual / slope
-
         val a = abs(errorNm)
         val quality = when {
             a <= 2.5 -> "PASS"
@@ -68,21 +37,10 @@ object WavelengthCalibrator {
         }
         val exposure = frames.map { it.exposureSeconds }.filter { it > 0 }
             .average().let { if (it.isNaN()) 0.0 else it }
-
         return WavelengthCalibrationResult(
-            quality = quality,
-            slope = slope,
-            intercept = intercept,
-            gResidualPx = residual,
-            gErrorNm = errorNm,
-            roiStart = rs,
-            roiEnd = re,
-            peakR = pR, peakG = pG, peakB = pB,
-            exposureSeconds = exposure,
-            sensorWidth = f0.width,
-            sensorHeight = f0.height,
-            red = downsample(r), green = downsample(g), blue = downsample(b),
-            frames = frames.size
+            quality, slope, intercept, residual, errorNm, rs, re, pR, pG, pB,
+            exposure, f0.width, f0.height,
+            downsample(r), downsample(g), downsample(b), frames.size
         )
     }
 
@@ -107,10 +65,7 @@ object WavelengthCalibrator {
         var s = mi; while (s > 0 && sm[s - 1] > half) s--
         var e = mi; while (e < sm.lastIndex && sm[e + 1] > half) e++
         var num = 0.0; var den = 0.0
-        for (i in s..e) {
-            val w = (sm[i] - half).coerceAtLeast(0f).toDouble()
-            num += w * i; den += w
-        }
+        for (i in s..e) { val w = (sm[i] - half).coerceAtLeast(0f).toDouble(); num += w * i; den += w }
         return if (den > 0) (num / den).toInt() else mi
     }
 
@@ -127,10 +82,7 @@ object WavelengthCalibrator {
     private fun mean(frames: List<FrameProfile>, sel: (FrameProfile) -> FloatArray): FloatArray {
         val n = frames.maxOf { sel(it).size }
         val out = FloatArray(n)
-        for (f in frames) {
-            val p = sel(f)
-            for (i in p.indices) out[i] += p[i]
-        }
+        for (f in frames) { val p = sel(f); for (i in p.indices) out[i] += p[i] }
         val k = frames.size.toFloat()
         for (i in 0 until n) out[i] /= k
         return out
@@ -148,25 +100,5 @@ object WavelengthCalibrator {
             out.add(if (c > 0) s / c else 0f)
         }
         return out
-    }
-}
-
-object SpdCalibrator {
-    fun calibrate(frames: List<FrameProfile>): SpdResult? {
-        if (frames.isEmpty()) return null
-        var ir = 0.0; var ig = 0.0; var ib = 0.0
-        for (f in frames) {
-            val exp = if (f.exposureSeconds > 0) f.exposureSeconds else 1.0
-            ir += f.redProfile.fold(0.0) { a, v -> a + v } / exp
-            ig += f.greenProfile.fold(0.0) { a, v -> a + v } / exp
-            ib += f.blueProfile.fold(0.0) { a, v -> a + v } / exp
-        }
-        if (ig <= 0.0) return null
-        return SpdResult(
-            status = "Calibrated (${frames.size} frame(s))",
-            responseR = ir / ig,
-            responseB = ib / ig,
-            frames = frames.size
-        )
     }
 }

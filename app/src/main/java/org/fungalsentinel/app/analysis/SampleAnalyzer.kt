@@ -3,49 +3,29 @@ package org.fungalsentinel.app.analysis
 import kotlin.math.sqrt
 
 data class SampleAnalysisResult(
-    val blankMeanArea: Double,
-    val sampleMeanArea: Double,
-    val correctedArea: Double,
-    val sampleSD: Double,
-    val replicates: Int,
-    val windowStartPx: Int,
-    val windowEndPx: Int,
-    val correctedSpectrum: List<Float>,
-    val blankSpectrum: List<Float>
+    val blankMeanArea: Double, val sampleMeanArea: Double, val correctedArea: Double,
+    val sampleSD: Double, val replicates: Int,
+    val windowStartPx: Int, val windowEndPx: Int,
+    val correctedSpectrum: List<Float>, val blankSpectrum: List<Float>
 )
 
 data class RegressionResult(
-    val slope: Double,
-    val intercept: Double,
-    val r2: Double,
-    val warnings: List<String>
+    val slope: Double, val intercept: Double, val r2: Double, val warnings: List<String>
 )
 
-/**
- * Step 3: Blank-subtracted, band-limited fluorescence integration.
- * The integration window (in pixels) is derived from the Step 1
- * wavelength mapping, so Step 3 is scientifically chained to Step 1.
- */
+/** Step 3: blank-subtracted, band-limited integration; window from Step 1 mapping. */
 object SampleAnalyzer {
-
     fun analyze(
-        blankFrames: List<FrameProfile>,
-        sampleFrames: List<FrameProfile>,
-        bandStartNm: Double,
-        bandEndNm: Double,
-        slope: Double,
-        intercept: Double
+        blankFrames: List<FrameProfile>, sampleFrames: List<FrameProfile>,
+        bandStartNm: Double, bandEndNm: Double, slope: Double, intercept: Double
     ): SampleAnalysisResult? {
         if (blankFrames.isEmpty() || sampleFrames.isEmpty()) return null
-
-        // wavelength -> pixel window via Step 1 mapping
         val p0 = (slope * bandStartNm + intercept).toInt()
         val p1 = (slope * bandEndNm + intercept).toInt()
         val size = sampleFrames[0].total().size
         val lo = minOf(p0, p1).coerceIn(0, (size - 1).coerceAtLeast(0))
         val hi = maxOf(p0, p1).coerceIn(0, (size - 1).coerceAtLeast(0))
         if (lo > hi) return null
-
         fun areas(frames: List<FrameProfile>): List<Double> = frames.map { f ->
             val t = f.total()
             val exp = if (f.exposureSeconds > 0) f.exposureSeconds else 1.0
@@ -53,33 +33,17 @@ object SampleAnalyzer {
             for (px in lo..hi) sum += t[px]
             sum / exp
         }
-
-        val blankAreas = areas(blankFrames)
-        val sampleAreas = areas(sampleFrames)
-        val blankMean = blankAreas.average()
-        val sampleMean = sampleAreas.average()
-        val corrected = sampleMean - blankMean
-
+        val blankAreas = areas(blankFrames); val sampleAreas = areas(sampleFrames)
+        val blankMean = blankAreas.average(); val sampleMean = sampleAreas.average()
         val sd = if (sampleAreas.size > 1) {
-            val m = sampleMean
-            sqrt(sampleAreas.sumOf { (it - m) * (it - m) } / (sampleAreas.size - 1))
+            sqrt(sampleAreas.sumOf { (it - sampleMean) * (it - sampleMean) } / (sampleAreas.size - 1))
         } else 0.0
-
-        val meanSample = meanTotal(sampleFrames)
-        val meanBlank = meanTotal(blankFrames)
+        val meanSample = meanTotal(sampleFrames); val meanBlank = meanTotal(blankFrames)
         val n = minOf(meanSample.size, meanBlank.size)
         val diff = FloatArray(n) { i -> meanSample[i] - meanBlank[i] }
-
         return SampleAnalysisResult(
-            blankMeanArea = blankMean,
-            sampleMeanArea = sampleMean,
-            correctedArea = corrected,
-            sampleSD = sd,
-            replicates = sampleFrames.size,
-            windowStartPx = lo,
-            windowEndPx = hi,
-            correctedSpectrum = downsample(diff),
-            blankSpectrum = downsample(meanBlank)
+            blankMean, sampleMean, sampleMean - blankMean, sd, sampleFrames.size, lo, hi,
+            downsample(diff), downsample(meanBlank)
         )
     }
 
@@ -92,8 +56,7 @@ object SampleAnalyzer {
         val n = frames.minOf { it.total().size }
         val out = FloatArray(n)
         for (f in frames) { val t = f.total(); for (i in 0 until n) out[i] += t[i] }
-        val k = frames.size.toFloat()
-        for (i in 0 until n) out[i] /= k
+        val k = frames.size.toFloat(); for (i in 0 until n) out[i] /= k
         return out
     }
 
@@ -112,19 +75,13 @@ object SampleAnalyzer {
     }
 }
 
-/**
- * Step 4: ordinary least-squares concentration regression with
- * iGEM-grade quality warnings.
- */
+/** Step 4: OLS regression with iGEM-grade warnings. */
 object ConcentrationRegressor {
-
     fun fit(points: List<Pair<Double, Double>>): RegressionResult? {
         if (points.size < 2) return null
         val n = points.size
-        val sx = points.sumOf { it.first }
-        val sy = points.sumOf { it.second }
-        val sxx = points.sumOf { it.first * it.first }
-        val sxy = points.sumOf { it.first * it.second }
+        val sx = points.sumOf { it.first }; val sy = points.sumOf { it.second }
+        val sxx = points.sumOf { it.first * it.first }; val sxy = points.sumOf { it.first * it.second }
         val denom = n * sxx - sx * sx
         if (denom == 0.0) return null
         val slope = (n * sxy - sx * sy) / denom

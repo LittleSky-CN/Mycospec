@@ -1,6 +1,9 @@
 package org.fungalsentinel.app.ui.settings
 
 import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -8,8 +11,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +26,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.FssaApplication
 import org.fungalsentinel.app.R
+import org.fungalsentinel.app.analysis.SpdLoader
+import org.fungalsentinel.app.ui.components.HelpTopBar
+import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.util.LanguageManager
 import kotlin.math.roundToInt
 
@@ -47,24 +51,26 @@ fun SettingsScreen(
     var wR by remember { mutableStateOf(wavelengthR) }
     var wG by remember { mutableStateOf(wavelengthG) }
     var wB by remember { mutableStateOf(wavelengthB) }
-    var halfScreen by remember { mutableStateOf(halfScreenEnabled) }   // 修复 b y
+    var halfScreen by remember { mutableStateOf(halfScreenEnabled) }
     var ratio by remember { mutableFloatStateOf(coverRatio) }
     var blank by remember { mutableStateOf(blankMode) }
-    var protection by remember { mutableStateOf(calibrationProtection) } // 修复 rem ember
+    var protection by remember { mutableStateOf(calibrationProtection) }
 
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp
     val screenHeight = configuration.screenHeightDp.dp
 
     val context = LocalContext.current
-    // 防御 ①：空安全转换，绝不因 Manifest 问题闪退
+    // Defensive cast: never crash if Application type mismatches
     val app = context.applicationContext as? FssaApplication
     val logSize by app?.logSize?.collectAsState(initial = 0L)
         ?: remember { mutableStateOf(0L) }
 
-    // 防御 ③：语言状态读取包裹保护
+    // ── Language state ──
     var currentLang by remember {
-        mutableStateOf(runCatching { LanguageManager.get(context) }.getOrDefault(LanguageManager.SYSTEM))
+        mutableStateOf(
+            runCatching { LanguageManager.get(context) }.getOrDefault(LanguageManager.SYSTEM)
+        )
     }
     val selectLanguage: (String) -> Unit = { code ->
         runCatching { LanguageManager.set(context, code) }
@@ -72,15 +78,39 @@ fun SettingsScreen(
         (context as? Activity)?.recreate()
     }
 
+    // ── SPD import state ──
+    var spdSourceName by remember {
+        mutableStateOf(
+            if (SpdLoader.customFile(context).exists()) SpdLoader.CUSTOM_NAME
+            else "true_spd.csv (bundled)"
+        )
+    }
+    val spdImporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            val err = SpdLoader.installCustom(context, it)
+            if (err == null) {
+                spdSourceName = SpdLoader.CUSTOM_NAME
+                Toast.makeText(context, "SPD CSV installed", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    val tutorial = TutorialHost(
+        stepId = "settings",
+        titleRes = R.string.tutorial_settings_title,
+        bodyRes = R.string.tutorial_settings_body
+    )
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            HelpTopBar(
+                title = stringResource(R.string.settings_title),
+                tutorial = tutorial,
+                onBack = onBack
             )
         }
     ) { padding ->
@@ -92,6 +122,7 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
+            // ── Language ─
             SettingsSection(stringResource(R.string.settings_language)) {
                 LanguageRadio(LanguageManager.SYSTEM, stringResource(R.string.language_system), currentLang, selectLanguage)
                 LanguageRadio("en", stringResource(R.string.language_english), currentLang, selectLanguage)
@@ -100,12 +131,14 @@ fun SettingsScreen(
                 LanguageRadio("ny", stringResource(R.string.language_chichewa), currentLang, selectLanguage)
             }
 
+            // ── Wavelengths ──
             SettingsSection(stringResource(R.string.settings_wavelength)) {
                 WavelengthInput("R (nm)", wR) { wR = it; onWavelengthChange(wR, wG, wB) }
                 WavelengthInput("G (nm)", wG) { wG = it; onWavelengthChange(wR, wG, wB) }
                 WavelengthInput("B (nm)", wB) { wB = it; onWavelengthChange(wR, wG, wB) }
             }
 
+            // ── SPD source ──
             SettingsSection(stringResource(R.string.settings_spd)) {
                 Text(
                     text = stringResource(R.string.settings_spd_desc),
@@ -113,11 +146,18 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { /* TODO: import SPD CSV */ }) {
+                Text(
+                    text = "Current source: $spdSourceName",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { spdImporter.launch("text/*") }) {
                     Text(stringResource(R.string.settings_import_spd))
                 }
             }
 
+            // ── Half-screen (full-height preview for debugging) ──
             SettingsSection(stringResource(R.string.settings_half_screen)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -154,7 +194,9 @@ fun SettingsScreen(
                                 .width((screenWidth - coverWidth).dp)
                                 .background(MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center
-                        ) { Text(text = "UI", fontWeight = FontWeight.Bold) }
+                        ) {
+                            Text(text = "UI", fontWeight = FontWeight.Bold)
+                        }
                         Box(
                             modifier = Modifier
                                 .offset { IntOffset(screenWidth - coverWidth, 0) }
@@ -165,18 +207,23 @@ fun SettingsScreen(
                                     detectDragGestures { change, dragAmount ->
                                         change.consume()
                                         val newCoverPx = coverWidth - dragAmount.x.roundToInt()
-                                        ratio = (newCoverPx.toFloat() / screenWidth).coerceIn(0.1f, 0.9f)
+                                        ratio = (newCoverPx.toFloat() / screenWidth)
+                                            .coerceIn(0.1f, 0.9f)
                                         onHalfScreenChange(halfScreen, ratio)
                                     }
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = "Covered\n${(ratio * 100).roundToInt()}%", color = Color.Gray)
+                            Text(
+                                text = "Covered\n${(ratio * 100).roundToInt()}%",
+                                color = Color.Gray
+                            )
                         }
                     }
                 }
             }
 
+            // ── Blank mode ──
             SettingsSection(stringResource(R.string.settings_blank_mode)) {
                 Text(
                     text = stringResource(R.string.settings_blank_mode_desc),
@@ -198,6 +245,7 @@ fun SettingsScreen(
                 }
             }
 
+            // ── Calibration protection ──
             SettingsSection(stringResource(R.string.settings_calibration_protection)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -214,7 +262,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 防御 ②：仅当 Application 具备日志能力时显示，避免 NoSuchMethod 闪退
+            // ── Diagnostic log (only when Application exposes it) ──
             app?.let { application ->
                 SettingsSection("Diagnostic log / 诊断日志") {
                     Text(
@@ -226,12 +274,16 @@ fun SettingsScreen(
                     OutlinedButton(
                         onClick = { application.shareLog(context) },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Save diagnostic log (${logSize / 1024} KB)") }
+                    ) {
+                        Text("Save diagnostic log (${logSize / 1024} KB)")
+                    }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = { application.clearLog() },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Clear diagnostic log") }
+                    ) {
+                        Text("Clear diagnostic log")
+                    }
                 }
             }
 
@@ -267,7 +319,10 @@ private fun WavelengthInput(label: String, value: String, onValueChange: (String
 
 @Composable
 private fun LanguageRadio(code: String, label: String, current: String, onSelect: (String) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
         RadioButton(selected = current == code, onClick = { onSelect(code) })
         Text(text = label, style = MaterialTheme.typography.bodyLarge)
     }

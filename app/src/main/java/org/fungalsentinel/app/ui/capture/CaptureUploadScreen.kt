@@ -14,7 +14,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.RawOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,8 +35,19 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import org.fungalsentinel.app.R
+import org.fungalsentinel.app.ui.components.TutorialButton
 import java.io.File
 
+/**
+ * Reusable capture/upload component.
+ *
+ * Three input channels:
+ *  1. Capture  -> full-screen inline Camera2 RAW overlay (works on first tap)
+ *  2. Gallery  -> decodable images (JPEG/PNG)
+ *  3. Files    -> DNG/RAW via SAF, copied into app-private storage
+ *
+ * @param onHelp optional callback that opens the contextual help dialog
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaptureUploadScreen(
@@ -41,28 +56,34 @@ fun CaptureUploadScreen(
     minCaptures: Int = 1,
     maxCaptures: Int = 5,
     capturedImages: List<Uri>,
-    onLaunchCamera: () -> Unit = {},   // reserved hook; internal overlay handles capture
+    onLaunchCamera: () -> Unit = {},   // reserved external hook; internal overlay is default
     onImagesChanged: (List<Uri>) -> Unit,
     onConfirm: () -> Unit,
     onBack: () -> Unit,
+    onHelp: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var showCamera by remember { mutableStateOf(false) }
 
+    // Merge helper: never exceed maxCaptures
     val addUris: (List<Uri>) -> Unit = { incoming ->
         if (incoming.isNotEmpty()) {
             val remaining = maxCaptures - capturedImages.size
-            if (remaining > 0) onImagesChanged(capturedImages + incoming.take(remaining))
+            if (remaining > 0) {
+                onImagesChanged(capturedImages + incoming.take(remaining))
+            }
         }
     }
 
+    // Channel 2: gallery picker
     val galleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
+        contract = ActivityResultContracts.GetMultipleContents()
     ) { uris -> addUris(uris) }
 
+    // Channel 3: SAF document picker (sees DNG/RAW), imported to private storage
     val filesLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()
+        contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         addUris(uris.mapNotNull { CaptureImporter.import(context, it) })
     }
@@ -73,6 +94,7 @@ fun CaptureUploadScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
+            // ── Top bar ──
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
@@ -81,7 +103,6 @@ fun CaptureUploadScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    // FIX: named arguments
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleLarge,
@@ -98,14 +119,21 @@ fun CaptureUploadScreen(
                 Text(
                     text = "${capturedImages.size} / $maxCaptures",
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (capturedImages.size >= minCaptures)
+                    color = if (capturedImages.size >= minCaptures) {
                         MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
                 )
+                // Contextual help entry (wired by each step screen)
+                if (onHelp != null) {
+                    TutorialButton(onClick = onHelp)
+                }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            // ── Thumbnail strip ──
             if (capturedImages.isNotEmpty()) {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -114,16 +142,19 @@ fun CaptureUploadScreen(
                     itemsIndexed(capturedImages) { index, uri ->
                         val isDng = uri.toString().endsWith(".dng", true) ||
                                 uri.path?.endsWith(".dng", true) == true
+
                         Box(
                             modifier = Modifier
                                 .size(80.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .border(
-                                    1.dp, MaterialTheme.colorScheme.outline,
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outline,
                                     RoundedCornerShape(8.dp)
                                 )
                         ) {
                             if (isDng) {
+                                // Coil cannot decode RAW: show a clear placeholder
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -137,7 +168,6 @@ fun CaptureUploadScreen(
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(24.dp)
                                         )
-                                        // FIX: named arguments
                                         Text(
                                             text = "DNG",
                                             color = Color.White,
@@ -154,6 +184,8 @@ fun CaptureUploadScreen(
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
+
+                            // Delete button
                             IconButton(
                                 onClick = { onImagesChanged(capturedImages - uri) },
                                 modifier = Modifier
@@ -168,6 +200,8 @@ fun CaptureUploadScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
+
+                            // Index badge
                             Text(
                                 text = "${index + 1}",
                                 color = Color.White,
@@ -180,9 +214,10 @@ fun CaptureUploadScreen(
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
+            // ── Action buttons: Capture / Gallery / Files(DNG) ──
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -194,7 +229,7 @@ fun CaptureUploadScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.CameraAlt, contentDescription = null)
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.capture_photo))
                 }
                 OutlinedButton(
@@ -204,13 +239,18 @@ fun CaptureUploadScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.upload_gallery))
                 }
                 OutlinedButton(
                     onClick = {
                         filesLauncher.launch(
-                            arrayOf("image/*", "image/x-adobe-dng", "image/dng", "application/octet-stream")
+                            arrayOf(
+                                "image/*",
+                                "image/x-adobe-dng",
+                                "image/dng",
+                                "application/octet-stream"
+                            )
                         )
                     },
                     enabled = capturedImages.size < maxCaptures,
@@ -218,13 +258,14 @@ fun CaptureUploadScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.FolderOpen, contentDescription = null)
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.upload_files))
                 }
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(modifier = Modifier.weight(1f))
 
+            // ── Hint ─
             if (capturedImages.isEmpty()) {
                 Text(
                     text = stringResource(R.string.capture_hint, minCaptures, maxCaptures),
@@ -237,6 +278,7 @@ fun CaptureUploadScreen(
                 )
             }
 
+            // ── Confirm ──
             Button(
                 onClick = onConfirm,
                 enabled = capturedImages.size >= minCaptures,
@@ -252,6 +294,7 @@ fun CaptureUploadScreen(
             }
         }
 
+        // Full-screen inline camera overlay (no navigation => no state loss)
         if (showCamera) {
             InlineCameraOverlay(
                 onCaptured = { uri ->
@@ -264,12 +307,19 @@ fun CaptureUploadScreen(
     }
 }
 
+/**
+ * Copies an external SAF document into app-private storage and returns a
+ * stable FileProvider URI, so later re-analysis never loses permission.
+ */
 object CaptureImporter {
     fun import(context: Context, source: Uri): Uri? = runCatching {
         val resolver = context.contentResolver
+
+        // Best-effort persistable permission (harmless if unsupported)
         runCatching {
             resolver.takePersistableUriPermission(source, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+
         val mime = resolver.getType(source).orEmpty()
         val name = source.lastPathSegment.orEmpty()
         val isDng = name.endsWith(".dng", true) || mime.contains("dng", true)
@@ -278,11 +328,14 @@ object CaptureImporter {
             mime.contains("png", true) -> "png"
             else -> "jpg"
         }
+
         val dir = File(context.filesDir, "captures").apply { mkdirs() }
         val target = File(dir, "import_${System.currentTimeMillis()}.${ext}")
+
         resolver.openInputStream(source)?.use { input ->
             target.outputStream().use { output -> input.copyTo(output) }
         } ?: return null
+
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target)
     }.getOrNull()
 }

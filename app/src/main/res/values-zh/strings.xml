@@ -1,116 +1,102 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MycoSpec</string>
-
-    <!-- Home -->
     <string name="home_welcome">MycoSpec\n便携光谱分析仪</string>
     <string name="home_new_project">新项目</string>
     <string name="home_new_project_desc">开始完整的校准与分析流程</string>
-    <string name="home_dng_camera">DNG 拍照模式</string>
-    <string name="home_dng_camera_desc">拍摄 RAW DNG 照片并保存到相册</string>
+    <string name="home_dng_camera">DNG 相机</string>
+    <string name="home_dng_camera_desc">拍摄 RAW DNG 照片并存入相册</string>
     <string name="home_history">历史记录</string>
-    <string name="home_history_desc">查看、导出或删除过去的实验</string>
+    <string name="home_history_desc">查看、继续、导出或删除过往实验</string>
     <string name="home_settings">设置</string>
-    <string name="home_settings_desc">波长参数、SPD、半屏模式、空白样模式</string>
-
-    <!-- Project -->
+    <string name="home_settings_desc">波长、SPD、半屏、空白模式</string>
     <string name="new_project_title">新项目</string>
     <string name="new_project_name_label">项目名称</string>
     <string name="new_project_create">创建项目并继续</string>
     <string name="new_project_name_empty">请输入项目名称</string>
-
-    <!-- Capture Component -->
     <string name="capture_photo">拍照</string>
     <string name="upload_gallery">相册</string>
-    <string name="capture_hint">本批次需拍摄 %1$d–%2$d 张图片</string>
+    <string name="upload_files">文件 / DNG</string>
+    <string name="capture_hint">本批次需拍摄 %1$d–%2$d 张图像</string>
     <string name="confirm_captures">确认 %1$d 张图片</string>
-
-    <!-- Steps -->
-    <string name="step1_title">Step 1：波长校准</string>
-    <string name="step1_description">拍摄 R/G/B 定位帧，将传感器像素映射到实际波长。</string>
+    <string name="step1_title">步骤 1：波长校准</string>
+    <string name="step1_description">拍摄 R/G/B 定位帧，将传感器像素映射到波长。</string>
     <string name="step1_capture_title">定位拍摄</string>
-    <string name="step1_capture_subtitle">三色光源面向手机</string>
+    <string name="step1_capture_subtitle">RGB 光源置于手机前</string>
     <string name="step1_start_capture">开始定位拍摄</string>
-    <string name="step2_title">Step 2：光谱响应</string>
-    <string name="step2_description">使用已知 SPD 的标准光源校正相机 R/G/B 通道灵敏度。</string>
+    <string name="step2_title">步骤 2：光谱响应</string>
+    <string name="step2_description">使用已表征光源校正相机 R/G/B 通道灵敏度。</string>
     <string name="step2_capture_title">SPD 拍摄</string>
-    <string name="step2_capture_subtitle">白光光源面向手机</string>
+    <string name="step2_capture_subtitle">白光光源置于手机前</string>
     <string name="step2_start_capture">开始 SPD 拍摄</string>
-    <string name="step3_title">Step 3：样品分析</string>
-    <string name="step3_description">拍摄空白和样品帧，测量荧光积分面积。</string>
-    <string name="step3_capture_blank_title">空白对照拍摄</string>
+    <string name="step3_title">步骤 3：样品分析</string>
+    <string name="step3_description">拍摄空白与样品帧，测量荧光积分面积。</string>
+    <string name="step3_capture_blank_title">空白拍摄</string>
     <string name="step3_capture_sample_title">样品拍摄</string>
-    <string name="step3_start_capture">开始样品拍摄</string>
-    <string name="step4_title">Step 4：标准曲线</string>
-    <string name="step4_description">从标准浓度组构建浓度–荧光面积回归曲线。</string>
-    <string name="step4_start_capture">添加标准组</string>
+    <string name="step4_title">步骤 4：标准曲线</string>
+    <string name="step4_description">使用标准组建立浓度–荧光回归曲线。</string>
     <string name="step4_concentration_label">标准浓度</string>
     <string name="step4_unit_label">单位</string>
     <string name="step4_build_curve">构建曲线</string>
-
-    <!-- Result -->
+    <string name="next_step">下一步</string>
     <string name="result_title">分析结果</string>
-    <string name="result_regression">回归公式</string>
+    <string name="result_regression">回归</string>
     <string name="result_r2">R²</string>
     <string name="result_predicted">预测浓度</string>
-    <string name="result_finish">完成项目并保存到历史</string>
-    <string name="result_back_home">返回首页</string>
-
-    <!-- DNG Camera -->
-    <string name="dng_title">DNG 拍照模式</string>
+    <string name="result_finish">完成项目并存入历史</string>
+    <string name="result_back_home">返回主页</string>
+    <string name="dng_title">DNG 相机</string>
     <string name="dng_capture">拍摄 RAW</string>
-    <string name="dng_saved">DNG 已保存到相册</string>
-
-    <!-- History -->
+    <string name="dng_saved">DNG 已存入相册</string>
     <string name="history_title">历史记录</string>
     <string name="history_empty">暂无实验记录</string>
-    <string name="history_export">导出 ZIP</string>
-    <string name="history_delete">删除</string>
-
-    <!-- Settings -->
     <string name="settings_title">设置</string>
     <string name="settings_wavelength">波长参数</string>
     <string name="settings_spd">SPD 参数</string>
-    <string name="settings_spd_desc">导入自定义 SPD CSV（wavelength_nm, intensity）或使用内置 true_spd.csv。</string>
+    <string name="settings_spd_desc">导入自定义 SPD CSV（wavelength_nm, intensity），或使用内置 true_spd.csv。</string>
     <string name="settings_import_spd">导入自定义 SPD CSV</string>
     <string name="settings_half_screen">半屏模式</string>
     <string name="settings_half_screen_toggle">启用半屏模式</string>
     <string name="settings_half_screen_preview">拖动边界调整遮挡区域：</string>
-    <string name="settings_blank_mode">空白样采集模式</string>
-    <string name="settings_blank_mode_desc">单次：所有步骤共用一次空白。全面：每个标准组单独采集空白。</string>
+    <string name="settings_blank_mode">空白采集模式</string>
+    <string name="settings_blank_mode_desc">单次：所有步骤共用一个空白。全面：每个标准组单独空白。</string>
     <string name="blank_mode_single">单次空白</string>
-    <string name="blank_mode_full">全面（逐组）</string>
+    <string name="blank_mode_full">全面（按组）</string>
     <string name="settings_calibration_protection">校准保护</string>
-    <string name="settings_calibration_protection_desc">当 G 验证误差 > 10 nm 时阻止后续步骤。</string>
-
-    <!-- Tutorial -->
+    <string name="settings_calibration_protection_desc">当 G 验证误差超过 10 nm 时阻断后续步骤。</string>
     <string name="tutorial_skip">跳过</string>
     <string name="tutorial_got_it">知道了</string>
-    <string name="tutorial_button_desc">显示教程</string>
-    <string name="tutorial_home_title">欢迎使用MycoSpec</string>
-    <string name="tutorial_home_body">本软件需要与硬件配套，可以测定样品的荧光浓度，并且推断你所检测的样品中是否存在霉变风险。</string>
+    <string name="tutorial_button_desc">显示帮助</string>
+    <string name="tutorial_home_title">欢迎使用 MycoSpec</string>
+    <string name="tutorial_home_body">本应用配合专用硬件，测量荧光浓度并评估样品的霉变风险。</string>
     <string name="tutorial_project_title">组装硬件</string>
-    <string name="tutorial_project_body">请按照图上操作组装硬件并将手机放置于其上。</string>
+    <string name="tutorial_project_body">按图示组装硬件，并将手机放置在其上方。</string>
     <string name="tutorial_step1_title">波长校准</string>
-    <string name="tutorial_step1_body">请向样品孔中加入校准套件，并将波长校准部分（三色光源）面向手机。加入后，请拍摄1–5张图片。</string>
+    <string name="tutorial_step1_body">将校准套件插入样品口，使波长校准段（RGB 光源）朝向手机，然后拍摄 1–5 张图像。</string>
     <string name="tutorial_step2_title">光谱响应校准</string>
-    <string name="tutorial_step2_body">请向样品孔中加入校准套件，并将光源校准部分（白光光源）面向手机。加入后，请拍摄1–5张图片。</string>
-    <string name="tutorial_step3_title">样品采集</string>
-    <string name="tutorial_step3_body">请向样品孔中加入你的样品/空白对照并拍摄1–5张图片。</string>
+    <string name="tutorial_step2_body">将校准套件插入样品口，使光源校准段（白光）朝向手机，然后拍摄 1–5 张图像。</string>
+    <string name="tutorial_step3_title">样品拍摄</string>
+    <string name="tutorial_step3_body">将样品或空白插入样品口，拍摄 1–5 张图像。</string>
     <string name="tutorial_step4_title">标准曲线</string>
-    <string name="tutorial_step4_body">为了构建标准曲线，请分别向样品孔中加入你的标准样品/空白对照并输入其浓度。</string>
-
-    <!-- General -->
-    <string name="next_step">下一步</string>
-    <string name="back">返回</string>
-    <string name="cancel">取消</string>
-    <string name="confirm">确认</string>
-    <string name="delete">删除</string>
-    <string name="upload_files">文件 / DNG</string>
-    <string name="settings_language">Language / 语言</string>
-    <string name="language_system">Follow system / 跟随系统</string>
+    <string name="tutorial_step4_body">构建标准曲线时，将每个标准品及其空白插入样品口，并输入对应浓度。</string>
+    <string name="settings_language">语言</string>
+    <string name="language_system">跟随系统</string>
     <string name="language_english">English</string>
     <string name="language_chinese">中文</string>
     <string name="language_spanish">Español</string>
     <string name="language_chichewa">Chichewa</string>
+    <string name="tutorial_capture_title">拍摄帮助</string>
+    <string name="tutorial_capture_body">使用“拍照”拍摄 1–5 张 RAW 帧，或从相册/文件（DNG）导入。各帧之间保持手机、狭缝、光栅、ISO 与焦距不变。点击缩略图上的 × 可删除。</string>
+    <string name="tutorial_report_title">报告帮助</string>
+    <string name="tutorial_report_body">报告汇总全部计算结果：第 1 页波长映射与 G 验证，第 2 页光谱响应与融合曲线，第 3 页扣空白样品面积，第 4 页浓度回归。每批数据变化后自动更新。</string>
+    <string name="tutorial_result_title">结果帮助</string>
+    <string name="tutorial_result_body">查看回归公式、R² 与预测浓度。“完成”将项目存入历史；低 R² 或负预测会提示曲线不可靠。</string>
+    <string name="tutorial_dng_title">DNG 相机帮助</string>
+    <string name="tutorial_dng_body">独立 RAW 相机：每次拍摄将 DNG 保存到相册目录 Pictures/FungalSentinel，用于项目之外的证据帧采集。</string>
+    <string name="tutorial_history_title">历史帮助</string>
+    <string name="tutorial_history_body">项目页：点击“进行中”的项目可继续实验。预设页：查看、重命名、编辑或删除已保存的校准。导出生成 ZIP 存档。</string>
+    <string name="tutorial_settings_title">设置帮助</string>
+    <string name="tutorial_settings_body">配置语言、定位波长、SPD 来源、半屏遮挡、空白模式与校准保护。修改会立即作用于新的计算。</string>
+    <string name="tutorial_parameters_title">参数帮助</string>
+    <string name="tutorial_parameters_body">调整拍摄参数：曝光 10–3000 ms、ISO 50–1600、焦距 0–5 D（0 为无穷远）与白平衡。同一实验内请保持固定。</string>
 </resources>

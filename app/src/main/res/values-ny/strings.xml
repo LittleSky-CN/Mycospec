@@ -7,7 +7,7 @@
     <string name="home_dng_camera">Kamera ya DNG</string>
     <string name="home_dng_camera_desc">Tengani zithunzi za RAW DNG ndi kusunga ku zithunzi</string>
     <string name="home_history">Mbiri</string>
-    <string name="home_history_desc">Onani, tumizani kapena chotsani mayeso apitawa</string>
+    <string name="home_history_desc">Onani, pitirizani, tumizani kapena chotsani mayeso apitawa</string>
     <string name="home_settings">Makonda</string>
     <string name="home_settings_desc">Kutalika kwa mafunde, SPD, theka la sikirini, njira ya blank</string>
     <string name="new_project_title">Pulojekiti yatsopano</string>
@@ -33,13 +33,12 @@
     <string name="step3_description">Tengani zithunzi za blank ndi za chitsanzo kuti muyeze malo a fluropure.</string>
     <string name="step3_capture_blank_title">Zithunzi za blank</string>
     <string name="step3_capture_sample_title">Zithunzi za chitsanzo</string>
-    <string name="step3_start_capture">Yambani kujambula chitsanzo</string>
     <string name="step4_title">Gawo 4: Khoti la muyezo</string>
     <string name="step4_description">Pangani khoti la kuchuluka–fluropure pogwiritsa ntchito magulu a muyezo.</string>
-    <string name="step4_start_capture">Onjezerani gulu la muyezo</string>
     <string name="step4_concentration_label">Kuchuluka kwa muyezo</string>
     <string name="step4_unit_label">Chuyezo</string>
     <string name="step4_build_curve">Pangani khoti</string>
+    <string name="next_step">Gawo lotsatira</string>
     <string name="result_title">Zotsatira za kusanthula</string>
     <string name="result_regression">Rigreshoni</string>
     <string name="result_r2">R²</string>
@@ -51,8 +50,6 @@
     <string name="dng_saved">DNG yasungidwa ku zithunzi</string>
     <string name="history_title">Mbiri</string>
     <string name="history_empty">Palibe mayeso panobe</string>
-    <string name="history_export">Tumizani ZIP</string>
-    <string name="history_delete">Chotsani</string>
     <string name="settings_title">Makonda</string>
     <string name="settings_wavelength">Ma paramita a kutalika kwa mafunde</string>
     <string name="settings_spd">Ma paramita a SPD</string>
@@ -82,15 +79,24 @@
     <string name="tutorial_step3_body">Ikani chitsanzo chanu kapena blank pa dzenje la chitsanzo ndi kutenga zithunzi 1–5.</string>
     <string name="tutorial_step4_title">Khoti la muyezo</string>
     <string name="tutorial_step4_body">Popanga khoti la muyezo, ikani chitsanzo chilichonse cha muyezo ndi blank yake pa dzenje la chitsanzo ndi kulemba kuchuluka kwake.</string>
-    <string name="next_step">Gawo lotsatira</string>
-    <string name="back">Bwererani</string>
-    <string name="cancel">Lekani</string>
-    <string name="confirm">Tsimikizani</string>
-    <string name="delete">Chotsani</string>
     <string name="settings_language">Chilankhulo</string>
     <string name="language_system">Tsatirani makonda a foni</string>
     <string name="language_english">English</string>
     <string name="language_chinese">中文</string>
     <string name="language_spanish">Español</string>
     <string name="language_chichewa">Chichewa</string>
+    <string name="tutorial_capture_title">Thandizo la kujambula</string>
+    <string name="tutorial_capture_body">Gwiritsani Jambulani kuti mutenge zithunzi 1–5 za RAW, kapena lowetsani kuchokera ku Zithunzi / Mafayilo (DNG). Musasinthe foni, dzenje, grating, ISO ndi focus pakati pa zithunzi. Dinani × pa chithunzi kuti muchotse.</string>
+    <string name="tutorial_report_title">Thandizo la lipoti</string>
+    <string name="tutorial_report_body">Lipoti limasonkhanitsa zotsatira zonse: tsamba 1 kufanana kwa mafunde ndi kutsimikiza kwa G; tsamba 2 kuyankha kwa mafunde ndi khoti lolumikizidwa; tsamba 3 malo a chitsanzo ochotsedwa blank; tsamba 4 rigreshoni ya kuchuluka. Zimasinthidwa pambuyo pa gulu lililonse.</string>
+    <string name="tutorial_result_title">Thandizo la zotsatira</string>
+    <string name="tutorial_result_body">Onani njira ya rigreshoni, R² ndi kuchuluka koyerekezedwa. Malizani umasunga pulojekiti ku Mbiri; R² yotsika kapena zotsatira zoyipa zichenjeza kuti khoti silikhulupirika.</string>
+    <string name="tutorial_dng_title">Thandizo la kamera ya DNG</string>
+    <string name="tutorial_dng_body">Kamera ya DNG yodziyimira: kudina kulikonse kumasunga DNG ku Pictures/FungalSentinel mu zithunzi. Igwiritseni ntchito posonkhanitsa zithunzi za umboni kunja kwa pulojekiti.</string>
+    <string name="tutorial_history_title">Thandizo la mbiri</string>
+    <string name="tutorial_history_body">Mapulojekiti: dinani pulojekiti yomwe ikuyenda kuti mupitirize pomwe munasiya. Ma tabu a preset: onani, sinthani dzina, konzani kapena chotsani makalibureshoni osungidwa. Kutumiza kumapanga fayilo ya ZIP.</string>
+    <string name="tutorial_settings_title">Thandizo la makonda</string>
+    <string name="tutorial_settings_body">Konzani chilankhulo, kutalika kwa mafunde oyezera, gwero la SPD, theka la sikirini, njira ya blank ndi chitetezo cha kalibureshoni. Zosintha zimagwira ntchito pa zowerengera zatsopano.</string>
+    <string name="tutorial_parameters_title">Thandizo la ma paramita</string>
+    <string name="tutorial_parameters_body">Sinthani ma paramita ojambulira: kuwala 10–3000 ms, ISO 50–1600, focus 0–5 D (0 = kopanda malire) ndi balance ya white. Zisasinthe pa yeso limodzi.</string>
 </resources>

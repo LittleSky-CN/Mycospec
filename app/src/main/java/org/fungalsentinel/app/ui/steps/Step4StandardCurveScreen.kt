@@ -6,7 +6,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
@@ -22,11 +21,17 @@ import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.capture.CaptureUploadScreen
 import org.fungalsentinel.app.ui.components.HalfScreenLayout
+import org.fungalsentinel.app.ui.components.HelpTopBar
 import org.fungalsentinel.app.ui.components.StepIndicator
-import org.fungalsentinel.app.ui.components.TutorialOverlay
+import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 import org.fungalsentinel.app.viewmodel.StandardGroupInput
 
+/**
+ * Step 4 — Standard curve.
+ * Committed groups live in the ViewModel (auto-saved, survive navigation).
+ * Only the group currently being edited is local state.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Step4StandardCurveScreen(
@@ -36,7 +41,6 @@ fun Step4StandardCurveScreen(
     projectViewModel: ProjectViewModel,
     isHalfScreen: Boolean = false
 ) {
-    // Committed standard groups live in the ViewModel -> survive navigation
     val uiState by projectViewModel.uiState.collectAsState()
     val standardGroups = uiState.standardGroups
 
@@ -53,7 +57,7 @@ fun Step4StandardCurveScreen(
     val concValid = editingConc.toDoubleOrNull() != null
     val canAdd = concValid && editingBlank.isNotEmpty() && editingSample.isNotEmpty()
 
-    TutorialOverlay(
+    val tutorial = TutorialHost(
         stepId = "step4_standard",
         titleRes = R.string.tutorial_step4_title,
         bodyRes = R.string.tutorial_step4_body
@@ -67,10 +71,10 @@ fun Step4StandardCurveScreen(
                 minCaptures = 1,
                 maxCaptures = 5,
                 capturedImages = editingBlank,
-                onLaunchCamera = { /* TODO: Camera2 RAW preview */ },
                 onImagesChanged = { editingBlank = it },
                 onConfirm = { showBlankCapture = false },
                 onBack = { showBlankCapture = false },
+                onHelp = { tutorial.show() },
                 modifier = innerModifier
             )
         } else if (showSampleCapture) {
@@ -80,23 +84,20 @@ fun Step4StandardCurveScreen(
                 minCaptures = 1,
                 maxCaptures = 5,
                 capturedImages = editingSample,
-                onLaunchCamera = { /* TODO: Camera2 RAW preview */ },
                 onImagesChanged = { editingSample = it },
                 onConfirm = { showSampleCapture = false },
                 onBack = { showSampleCapture = false },
+                onHelp = { tutorial.show() },
                 modifier = innerModifier
             )
         } else {
             Scaffold(
                 modifier = innerModifier,
                 topBar = {
-                    TopAppBar(
-                        title = { Text(stringResource(R.string.step4_title)) },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                            }
-                        }
+                    HelpTopBar(
+                        title = stringResource(R.string.step4_title),
+                        tutorial = tutorial,
+                        onBack = onBack
                     )
                 }
             ) { padding ->
@@ -111,7 +112,7 @@ fun Step4StandardCurveScreen(
                     StepIndicator(currentStep = 4, totalSteps = 4)
 
                     Text(
-                        stringResource(R.string.step4_description),
+                        text = stringResource(R.string.step4_description),
                         style = MaterialTheme.typography.bodyLarge
                     )
 
@@ -130,9 +131,7 @@ fun Step4StandardCurveScreen(
                                 )
                             ) {
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -152,6 +151,7 @@ fun Step4StandardCurveScreen(
                                             projectViewModel.setStandardGroups(
                                                 standardGroups.filter { it.id != group.id }
                                             )
+                                            curveBuilt = false
                                         }
                                     ) {
                                         Icon(Icons.Default.Delete, contentDescription = "Delete")
@@ -182,9 +182,7 @@ fun Step4StandardCurveScreen(
                                 },
                                 label = { Text(stringResource(R.string.step4_concentration_label)) },
                                 isError = concError,
-                                supportingText = {
-                                    if (concError) Text("Invalid number")
-                                },
+                                supportingText = { if (concError) Text("Invalid number") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
@@ -206,16 +204,12 @@ fun Step4StandardCurveScreen(
                                     onClick = { showBlankCapture = true },
                                     enabled = concValid && editingBlank.size < 5,
                                     modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Blank (${editingBlank.size})")
-                                }
+                                ) { Text("Blank (${editingBlank.size})") }
                                 Button(
                                     onClick = { showSampleCapture = true },
                                     enabled = concValid && editingSample.size < 5,
                                     modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Sample (${editingSample.size})")
-                                }
+                                ) { Text("Sample (${editingSample.size})") }
                             }
 
                             Button(
@@ -251,9 +245,9 @@ fun Step4StandardCurveScreen(
                         }
                     }
 
-                    if (standardGroups.size in 1..1) {
+                    if (standardGroups.size == 1) {
                         Text(
-                            "Add at least 2 concentration groups to build the curve (3+ recommended).",
+                            text = "Add at least 2 concentration groups to build the curve (3+ recommended).",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -261,20 +255,16 @@ fun Step4StandardCurveScreen(
 
                     if (curveBuilt) {
                         Text(
-                            "Curve built. Open Report (Page 4) to view regression, R² and prediction.",
+                            text = "Curve built. Open Report (Page 4) for regression, R² and prediction.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // ── Report button ──
+                    // ── Report ──
                     Button(
                         onClick = onOpenReport,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.secondary
                         )
@@ -291,20 +281,16 @@ fun Step4StandardCurveScreen(
                             curveBuilt = true
                         },
                         enabled = standardGroups.size >= 2,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
                         Text(stringResource(R.string.step4_build_curve))
                     }
 
-                    // ── Next button ──
+                    // ── Next ──
                     if (standardGroups.size >= 2) {
                         Button(
                             onClick = onNext,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
+                            modifier = Modifier.fillMaxWidth().height(56.dp)
                         ) {
                             Text(stringResource(R.string.next_step))
                             Spacer(Modifier.width(8.dp))

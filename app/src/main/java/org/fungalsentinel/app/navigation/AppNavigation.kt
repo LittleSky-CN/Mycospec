@@ -25,6 +25,10 @@ import org.fungalsentinel.app.ui.steps.Step4StandardCurveScreen
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 import org.fungalsentinel.app.viewmodel.SettingsViewModel
 
+/**
+ * Central route table.
+ * NOTE: route constants must NOT contain trailing spaces (previous bug).
+ */
 object Routes {
     const val HOME = "home"
     const val NEW_PROJECT = "new_project"
@@ -46,6 +50,7 @@ fun AppNavigation(navController: NavHostController) {
     val settings by settingsViewModel.settings.collectAsState()
     val projectState by projectViewModel.uiState.collectAsState()
 
+    // History data source: Room flow -> Compose state
     val context = LocalContext.current
     val app = context.applicationContext as FssaApplication
     val dao = app.database.projectDao()
@@ -53,6 +58,7 @@ fun AppNavigation(navController: NavHostController) {
     val scope = rememberCoroutineScope()
 
     NavHost(navController = navController, startDestination = Routes.HOME) {
+
         composable(Routes.HOME) {
             HomeScreen(
                 onNewProject = { navController.navigate(Routes.NEW_PROJECT) },
@@ -73,6 +79,7 @@ fun AppNavigation(navController: NavHostController) {
             )
         }
 
+        // FIX: each step now routes to its OWN screen (old build sent all to Step1)
         composable(Routes.STEP1) {
             Step1WavelengthScreen(
                 onNext = { navController.navigate(Routes.STEP2) },
@@ -121,10 +128,14 @@ fun AppNavigation(navController: NavHostController) {
                 predictedConcentration = projectState.reportData.predictedConcentration.toDoubleOrNull(),
                 onFinish = {
                     projectViewModel.finishProject()
-                    navController.navigate(Routes.HOME) { popUpTo(Routes.HOME) { inclusive = true } }
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.HOME) { inclusive = true }
+                    }
                 },
                 onHome = {
-                    navController.navigate(Routes.HOME) { popUpTo(Routes.HOME) { inclusive = true } }
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.HOME) { inclusive = true }
+                    }
                 }
             )
         }
@@ -146,6 +157,7 @@ fun AppNavigation(navController: NavHostController) {
                 projectViewModel = projectViewModel,
                 onBack = { navController.popBackStack() },
                 onOpenProject = { project ->
+                    // Resume: restore captures/groups, recompute, jump to first incomplete step
                     projectViewModel.openProject(project.id) { step ->
                         val route = when (step) {
                             1 -> Routes.STEP1
@@ -159,7 +171,7 @@ fun AppNavigation(navController: NavHostController) {
                 onDelete = { project ->
                     scope.launch { dao.deleteProject(project) }
                 },
-                onExport = { /* TODO: ZIP export */ }
+                onExport = { /* TODO: ZIP export (manifest/result/profiles/standards/spd/raw) */ }
             )
         }
 

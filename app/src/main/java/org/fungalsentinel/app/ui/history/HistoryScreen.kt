@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
@@ -18,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.data.model.ProjectEntity
 import org.fungalsentinel.app.data.preset.PresetEntity
+import org.fungalsentinel.app.ui.components.HelpTopBar
+import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -38,19 +39,21 @@ fun HistoryScreen(
 
     var tab by remember { mutableIntStateOf(0) }
     var editingPreset by remember { mutableStateOf<PresetEntity?>(null) }
-    var deletePresetTarget by remember { mutableStateOf<PresetEntity?>(null) }
-
+    var deleteTarget by remember { mutableStateOf<PresetEntity?>(null) }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+
+    val tutorial = TutorialHost(
+        stepId = "history",
+        titleRes = R.string.tutorial_history_title,
+        bodyRes = R.string.tutorial_history_body
+    )
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.history_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            HelpTopBar(
+                title = stringResource(R.string.history_title),
+                tutorial = tutorial,
+                onBack = onBack
             )
         }
     ) { padding ->
@@ -90,13 +93,17 @@ fun HistoryScreen(
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                         Text(
-                                            if (project.status == "IN_PROGRESS")
+                                            if (project.status == "IN_PROGRESS") {
                                                 "In progress — tap to continue"
-                                            else "Finished",
+                                            } else {
+                                                "Finished"
+                                            },
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = if (project.status == "IN_PROGRESS")
+                                            color = if (project.status == "IN_PROGRESS") {
                                                 MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
                                         )
                                     }
                                     Row {
@@ -117,19 +124,20 @@ fun HistoryScreen(
                     presets = wlPresets,
                     emptyText = "No wavelength presets yet. Save one from Step 1.",
                     onEdit = { editingPreset = it },
-                    onDelete = { deletePresetTarget = it }
+                    onDelete = { deleteTarget = it }
                 )
 
                 2 -> PresetList(
                     presets = spdPresets,
                     emptyText = "No SPD presets yet. Save one from Step 2.",
                     onEdit = { editingPreset = it },
-                    onDelete = { deletePresetTarget = it }
+                    onDelete = { deleteTarget = it }
                 )
             }
         }
     }
 
+    // ── Edit preset dialog ──
     editingPreset?.let { preset ->
         key(preset.id) {
             PresetEditDialog(
@@ -143,18 +151,21 @@ fun HistoryScreen(
         }
     }
 
-    deletePresetTarget?.let { preset ->
+    // ── Delete confirm dialog ──
+    deleteTarget?.let { preset ->
         AlertDialog(
-            onDismissRequest = { deletePresetTarget = null },
+            onDismissRequest = { deleteTarget = null },
             title = { Text("Delete preset") },
             text = { Text("Delete \"${preset.name}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     projectViewModel.deletePreset(preset.id)
-                    deletePresetTarget = null
+                    deleteTarget = null
                 }) { Text("Delete") }
             },
-            dismissButton = { TextButton(onClick = { deletePresetTarget = null }) { Text("Cancel") } }
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text("Cancel") }
+            }
         )
     }
 }
@@ -186,10 +197,13 @@ private fun PresetList(
                             Text(p.name, fontWeight = FontWeight.Bold)
                             Text(p.deviceModel, style = MaterialTheme.typography.bodySmall)
                             Text(
-                                if (p.type == "WAVELENGTH")
-                                    "slope=${p.slope?.let { String.format("%.4f", it) } ?: "—"} intercept=${p.intercept?.let { String.format("%.2f", it) } ?: "—"}"
-                                else
-                                    "R=${p.coeffR?.let { String.format("%.4f", it) } ?: "—"} B=${p.coeffB?.let { String.format("%.4f", it) } ?: "—"}",
+                                if (p.type == "WAVELENGTH") {
+                                    "slope=${p.slope?.let { String.format("%.4f", it) } ?: "—"} " +
+                                            "intercept=${p.intercept?.let { String.format("%.2f", it) } ?: "—"}"
+                                } else {
+                                    "R=${p.coeffR?.let { String.format("%.4f", it) } ?: "—"} " +
+                                            "B=${p.coeffB?.let { String.format("%.4f", it) } ?: "—"}"
+                                },
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }

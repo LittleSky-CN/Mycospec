@@ -2,8 +2,6 @@ package org.fungalsentinel.app.ui.project
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -11,7 +9,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
-import org.fungalsentinel.app.ui.components.TutorialOverlay
+import org.fungalsentinel.app.ui.components.HelpTopBar
+import org.fungalsentinel.app.ui.components.TutorialHost
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -22,7 +21,7 @@ fun NewProjectScreen(
     var projectName by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
 
-    TutorialOverlay(
+    val tutorial = TutorialHost(
         stepId = "new_project",
         titleRes = R.string.tutorial_project_title,
         bodyRes = R.string.tutorial_project_body
@@ -30,13 +29,10 @@ fun NewProjectScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.new_project_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            HelpTopBar(
+                title = stringResource(R.string.new_project_title),
+                tutorial = tutorial,
+                onBack = onBack
             )
         }
     ) { padding ->

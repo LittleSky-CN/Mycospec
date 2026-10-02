@@ -3,34 +3,31 @@ package org.fungalsentinel.app.ui.parameters
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
+import org.fungalsentinel.app.ui.components.HelpTopBar
+import org.fungalsentinel.app.ui.components.TutorialHost
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParametersScreen(onBack: () -> Unit) {
-    // TODO: 接入 CameraManager 的参数控制
     var exposureMs by remember { mutableStateOf("100") }
     var iso by remember { mutableStateOf("100") }
     var focusD by remember { mutableStateOf("0") }
     var wbTemp by remember { mutableStateOf("Auto") }
 
+    val tutorial = TutorialHost(
+        stepId = "parameters",
+        titleRes = R.string.tutorial_parameters_title,
+        bodyRes = R.string.tutorial_parameters_body
+    )
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Parameters") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back")
-                    }
-                }
-            )
+            HelpTopBar(title = "Parameters", tutorial = tutorial, onBack = onBack)
         }
     ) { padding ->
         Column(
@@ -42,29 +39,26 @@ fun ParametersScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             OutlinedTextField(
-                value = exposureMs,
-                onValueChange = { exposureMs = it },
-                label = { Text("Exposure (ms)") },
-                modifier = Modifier.fillMaxWidth()
+                exposureMs, { exposureMs = it },
+                label = { Text("Exposure (ms, 10–3000)") },
+                singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = iso,
-                onValueChange = { iso = it },
-                label = { Text("ISO") },
-                modifier = Modifier.fillMaxWidth()
+                iso, { iso = it },
+                label = { Text("ISO (50–1600)") },
+                singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = focusD,
-                onValueChange = { focusD = it },
-                label = { Text("Focus (D, 0=∞)") },
-                modifier = Modifier.fillMaxWidth()
+                focusD, { focusD = it },
+                label = { Text("Focus (D, 0 = ∞)") },
+                singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = wbTemp,
-                onValueChange = { wbTemp = it },
-                label = { Text("White Balance (K or Auto)") },
-                modifier = Modifier.fillMaxWidth()
+                wbTemp, { wbTemp = it },
+                label = { Text("White balance (K or Auto)") },
+                singleLine = true, modifier = Modifier.fillMaxWidth()
             )
+            // TODO: push to CameraManager.updateParams() when a capture session is active
         }
     }
 }

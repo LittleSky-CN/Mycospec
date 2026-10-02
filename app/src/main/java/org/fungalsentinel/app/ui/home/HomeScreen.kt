@@ -1,15 +1,20 @@
 package org.fungalsentinel.app.ui.home
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -17,7 +22,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.components.HalfScreenLayout
-import org.fungalsentinel.app.ui.components.TutorialOverlay
+import org.fungalsentinel.app.ui.components.HelpTopBar
+import org.fungalsentinel.app.ui.components.TutorialHost
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,11 +34,11 @@ fun HomeScreen(
     onSettings: () -> Unit,
     isHalfScreen: Boolean = false
 ) {
-    var showTutorial by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    TutorialOverlay(
+    // FIX: the controller makes the top-bar ⓘ button actually open the dialog
+    val tutorial = TutorialHost(
         stepId = "home",
         titleRes = R.string.tutorial_home_title,
         bodyRes = R.string.tutorial_home_body
@@ -42,34 +48,27 @@ fun HomeScreen(
         Scaffold(
             modifier = innerModifier,
             topBar = {
-                TopAppBar(
-                    title = { Text("MycoSpec", fontWeight = FontWeight.Bold) },
-                    actions = {
-                        IconButton(onClick = { showTutorial = true }) {
-                            Icon(Icons.Default.Info, contentDescription = "Tutorial")
-                        }
-                    }
-                )
+                HelpTopBar(title = "MycoSpec", tutorial = tutorial)
             }
         ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = stringResource(R.string.home_welcome),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    textAlign = TextAlign.Center
                 )
+                Spacer(modifier = Modifier.height(16.dp))
 
                 if (isLandscape) {
-                    // 横屏：两列布局
+                    // Landscape: two columns so nothing is clipped
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -78,37 +77,70 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            HomeCard(Icons.Default.Add, stringResource(R.string.home_new_project),
-                                stringResource(R.string.home_new_project_desc), onNewProject)
-                            HomeCard(Icons.Default.CameraAlt, stringResource(R.string.home_dng_camera),
-                                stringResource(R.string.home_dng_camera_desc), onDngCamera)
+                            HomeCard(
+                                icon = Icons.Default.Add,
+                                title = stringResource(R.string.home_new_project),
+                                subtitle = stringResource(R.string.home_new_project_desc),
+                                onClick = onNewProject
+                            )
+                            HomeCard(
+                                icon = Icons.Default.CameraAlt,
+                                title = stringResource(R.string.home_dng_camera),
+                                subtitle = stringResource(R.string.home_dng_camera_desc),
+                                onClick = onDngCamera
+                            )
                         }
                         Column(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            HomeCard(Icons.Default.History, stringResource(R.string.home_history),
-                                stringResource(R.string.home_history_desc), onHistory)
-                            HomeCard(Icons.Default.Settings, stringResource(R.string.home_settings),
-                                stringResource(R.string.home_settings_desc), onSettings)
+                            HomeCard(
+                                icon = Icons.Default.History,
+                                title = stringResource(R.string.home_history),
+                                subtitle = stringResource(R.string.home_history_desc),
+                                onClick = onHistory
+                            )
+                            HomeCard(
+                                icon = Icons.Default.Settings,
+                                title = stringResource(R.string.home_settings),
+                                subtitle = stringResource(R.string.home_settings_desc),
+                                onClick = onSettings
+                            )
                         }
                     }
                 } else {
-                    // 竖屏：单列布局
+                    // Portrait: single column
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        HomeCard(Icons.Default.Add, stringResource(R.string.home_new_project),
-                            stringResource(R.string.home_new_project_desc), onNewProject)
-                        HomeCard(Icons.Default.CameraAlt, stringResource(R.string.home_dng_camera),
-                            stringResource(R.string.home_dng_camera_desc), onDngCamera)
-                        HomeCard(Icons.Default.History, stringResource(R.string.home_history),
-                            stringResource(R.string.home_history_desc), onHistory)
-                        HomeCard(Icons.Default.Settings, stringResource(R.string.home_settings),
-                            stringResource(R.string.home_settings_desc), onSettings)
+                        HomeCard(
+                            icon = Icons.Default.Add,
+                            title = stringResource(R.string.home_new_project),
+                            subtitle = stringResource(R.string.home_new_project_desc),
+                            onClick = onNewProject
+                        )
+                        HomeCard(
+                            icon = Icons.Default.CameraAlt,
+                            title = stringResource(R.string.home_dng_camera),
+                            subtitle = stringResource(R.string.home_dng_camera_desc),
+                            onClick = onDngCamera
+                        )
+                        HomeCard(
+                            icon = Icons.Default.History,
+                            title = stringResource(R.string.home_history),
+                            subtitle = stringResource(R.string.home_history_desc),
+                            onClick = onHistory
+                        )
+                        HomeCard(
+                            icon = Icons.Default.Settings,
+                            title = stringResource(R.string.home_settings),
+                            subtitle = stringResource(R.string.home_settings_desc),
+                            onClick = onSettings
+                        )
                     }
                 }
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }
@@ -117,7 +149,7 @@ fun HomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     subtitle: String,
     onClick: () -> Unit

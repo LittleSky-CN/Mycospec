@@ -3,7 +3,6 @@ package org.fungalsentinel.app.ui.dng
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +15,8 @@ import org.fungalsentinel.app.R
 import org.fungalsentinel.app.camera.CameraManager
 import org.fungalsentinel.app.camera.CameraPreviewView
 import org.fungalsentinel.app.camera.RawCaptureProcessor
+import org.fungalsentinel.app.ui.components.HelpTopBar
+import org.fungalsentinel.app.ui.components.TutorialHost
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,14 +24,21 @@ fun DngCameraScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val cameraManager = remember { CameraManager(context) }
     val captureProcessor = remember { RawCaptureProcessor(context) }
+    val isReady by cameraManager.isReady.collectAsState()
     var lastSavedFile by remember { mutableStateOf<String?>(null) }
 
-    // ← 修复：将字符串资源提升到 LaunchedEffect 外部
+    // Resolve strings outside LaunchedEffect (Compose rule)
     val savedMessage = stringResource(R.string.dng_saved)
     val failedMessage = "Failed to save to gallery"
 
+    val tutorial = TutorialHost(
+        stepId = "dng_camera",
+        titleRes = R.string.tutorial_dng_title,
+        bodyRes = R.string.tutorial_dng_body
+    )
+
     LaunchedEffect(Unit) {
-        cameraManager.onDngSaved = { file, _ ->  // ← 修复：使用 _ 忽略未使用的 metadata
+        cameraManager.onDngSaved = { file, _ ->
             val uri = captureProcessor.saveToGallery(file, "DNG_Camera", "RAW")
             if (uri != null) {
                 lastSavedFile = file.name
@@ -39,7 +47,6 @@ fun DngCameraScreen(onBack: () -> Unit) {
                 Toast.makeText(context, failedMessage, Toast.LENGTH_SHORT).show()
             }
         }
-
         cameraManager.onError = { error ->
             Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
         }
@@ -51,16 +58,10 @@ fun DngCameraScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.dng_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                }
+            HelpTopBar(
+                title = stringResource(R.string.dng_title),
+                tutorial = tutorial,
+                onBack = onBack
             )
         }
     ) { padding ->
@@ -87,10 +88,13 @@ fun DngCameraScreen(onBack: () -> Unit) {
                     text = lastSavedFile ?: "No captures yet",
                     style = MaterialTheme.typography.bodySmall
                 )
-                Button(onClick = { cameraManager.captureRaw() }) {
+                Button(
+                    onClick = { cameraManager.captureRaw() },
+                    enabled = isReady
+                ) {
                     Icon(Icons.Default.CameraAlt, null)
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.dng_capture))
+                    Text(if (isReady) stringResource(R.string.dng_capture) else "Starting…")
                 }
             }
         }
