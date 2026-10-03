@@ -24,6 +24,7 @@ import org.fungalsentinel.app.ui.steps.Step3SampleScreen
 import org.fungalsentinel.app.ui.steps.Step4StandardCurveScreen
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 import org.fungalsentinel.app.viewmodel.SettingsViewModel
+import org.fungalsentinel.app.ui.settings.HalfScreenPreviewScreen
 
 /**
  * Central route table.
@@ -41,6 +42,8 @@ object Routes {
     const val DNG_CAMERA = "dng_camera"
     const val HISTORY = "history"
     const val SETTINGS = "settings"
+
+    const val HALF_PREVIEW = "half_preview"
 }
 
 @Composable
@@ -175,6 +178,16 @@ fun AppNavigation(navController: NavHostController) {
             )
         }
 
+        composable(Routes.HALF_PREVIEW) {
+            HalfScreenPreviewScreen(
+                coverRatio = settings.coverRatio,
+                onRatioChange = { ratio ->
+                    settingsViewModel.updateHalfScreen(settings.halfScreenEnabled, ratio)
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 wavelengthR = settings.wavelengthR,
@@ -188,7 +201,13 @@ fun AppNavigation(navController: NavHostController) {
                 onHalfScreenChange = { enabled, ratio -> settingsViewModel.updateHalfScreen(enabled, ratio) },
                 onBlankModeChange = { settingsViewModel.updateBlankMode(it) },
                 onCalibrationProtectionChange = { settingsViewModel.updateCalibrationProtection(it) },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                autoExposure = settings.autoExposure,
+                exposureMs = settings.exposureMs,
+                onAutoExposureChange = { settingsViewModel.updateAutoExposure(it) },
+                onExposureChange = { settingsViewModel.updateExposureMs(it) },
+                onOpenPreview = { navController.navigate(Routes.HALF_PREVIEW) },
+
             )
         }
     }

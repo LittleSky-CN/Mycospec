@@ -99,4 +99,12 @@
     <string name="tutorial_settings_body">Configura idioma, longitudes de onda de posicionamiento, fuente SPD, cobertura de media pantalla, modo de blanco y protección de calibración. Los cambios se aplican a los cálculos nuevos.</string>
     <string name="tutorial_parameters_title">Ayuda de parámetros</string>
     <string name="tutorial_parameters_body">Ajusta los parámetros de captura: exposición 10–3000 ms, ISO 50–1600, enfoque 0–5 D (0 = infinito) y balance de blancos. Manténlos fijos durante un experimento.</string>
+    <string name="settings_open_preview">Abrir vista previa de media pantalla</string>
+    <string name="half_preview_title">Vista previa de media pantalla</string>
+    <string name="half_preview_hint">Cubra el sensor de luz frontal para probar el disparo; arrastre el deslizador inferior para mover el límite.</string>
+    <string name="half_preview_covered">Cubierto</string>
+    <string name="half_preview_uncovered">Descubierto</string>
+    <string name="settings_exposure">Exposición</string>
+    <string name="settings_auto_exposure">Exposición automática (AE)</string>
+    <string name="settings_exposure_time">Tiempo de exposición</string>
 </resources>

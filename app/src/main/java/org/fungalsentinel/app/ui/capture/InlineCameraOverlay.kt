@@ -31,6 +31,17 @@ fun InlineCameraOverlay(onCaptured: (Uri) -> Unit, onBack: () -> Unit) {
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted) { Toast.makeText(context, "Camera permission denied", Toast.LENGTH_SHORT).show(); onBack() }
     }
+    // Apply exposure settings (AE toggle / manual time) from DataStore
+    LaunchedEffect(Unit) {
+        org.fungalsentinel.app.data.AppPreferences.getSettings(context).collect { s ->
+            cameraManager.updateParams(
+                org.fungalsentinel.app.camera.CameraParams(
+                    autoExposure = s.autoExposure,
+                    exposureMs = s.exposureMs
+                )
+            )
+        }
+    }
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             permissionLauncher.launch(Manifest.permission.CAMERA)

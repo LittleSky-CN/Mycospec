@@ -99,4 +99,12 @@
     <string name="tutorial_settings_body">Konzani chilankhulo, kutalika kwa mafunde oyezera, gwero la SPD, theka la sikirini, njira ya blank ndi chitetezo cha kalibureshoni. Zosintha zimagwira ntchito pa zowerengera zatsopano.</string>
     <string name="tutorial_parameters_title">Thandizo la ma paramita</string>
     <string name="tutorial_parameters_body">Sinthani ma paramita ojambulira: kuwala 10–3000 ms, ISO 50–1600, focus 0–5 D (0 = kopanda malire) ndi balance ya white. Zisasinthe pa yeso limodzi.</string>
+    <string name="settings_open_preview">Tsegulani chionetsero cha theka la sikirini</string>
+    <string name="half_preview_title">Chionetsero cha theka la sikirini</string>
+    <string name="half_preview_hint">Phimbani sensa ya kuwala kutsogolo kuti muyese kuyambika; kokani silaala ya pansi kuti musunthe mpaka.</string>
+    <string name="half_preview_covered">Yaphimbidwa</string>
+    <string name="half_preview_uncovered">Yatsegulidwa</string>
+    <string name="settings_exposure">Kuwala</string>
+    <string name="settings_auto_exposure">Kuwala kokha (AE)</string>
+    <string name="settings_exposure_time">Nthawi ya kuwala</string>
 </resources>

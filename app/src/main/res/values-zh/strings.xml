@@ -99,4 +99,12 @@
     <string name="tutorial_settings_body">配置语言、定位波长、SPD 来源、半屏遮挡、空白模式与校准保护。修改会立即作用于新的计算。</string>
     <string name="tutorial_parameters_title">参数帮助</string>
     <string name="tutorial_parameters_body">调整拍摄参数：曝光 10–3000 ms、ISO 50–1600、焦距 0–5 D（0 为无穷远）与白平衡。同一实验内请保持固定。</string>
+    <string name="settings_open_preview">打开半屏预览</string>
+    <string name="half_preview_title">半屏预览</string>
+    <string name="half_preview_hint">遮住前置光线传感器测试触发；拖动下方滑块移动边界。</string>
+    <string name="half_preview_covered">已遮挡</string>
+    <string name="half_preview_uncovered">未遮挡</string>
+    <string name="settings_exposure">曝光</string>
+    <string name="settings_auto_exposure">自动曝光（AE）</string>
+    <string name="settings_exposure_time">曝光时长</string>
 </resources>

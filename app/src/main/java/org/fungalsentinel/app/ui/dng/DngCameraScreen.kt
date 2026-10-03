@@ -36,7 +36,17 @@ fun DngCameraScreen(onBack: () -> Unit) {
         titleRes = R.string.tutorial_dng_title,
         bodyRes = R.string.tutorial_dng_body
     )
-
+    // Apply exposure settings (AE toggle / manual time) from DataStore
+    LaunchedEffect(Unit) {
+        org.fungalsentinel.app.data.AppPreferences.getSettings(context).collect { s ->
+            cameraManager.updateParams(
+                org.fungalsentinel.app.camera.CameraParams(
+                    autoExposure = s.autoExposure,
+                    exposureMs = s.exposureMs
+                )
+            )
+        }
+    }
     LaunchedEffect(Unit) {
         cameraManager.onDngSaved = { file, _ ->
             val uri = captureProcessor.saveToGallery(file, "DNG_Camera", "RAW")

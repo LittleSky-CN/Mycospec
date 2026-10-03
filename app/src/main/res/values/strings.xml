@@ -99,4 +99,12 @@
     <string name="tutorial_settings_body">Configure language, positioning wavelengths, SPD source, half-screen cover, blank mode and calibration protection. Changes apply to new calculations immediately.</string>
     <string name="tutorial_parameters_title">Parameters Help</string>
     <string name="tutorial_parameters_body">Adjust capture parameters: exposure 10–3000 ms, ISO 50–1600, focus 0–5 D (0 = infinity) and white balance. Keep them fixed during one experiment.</string>
+    <string name="settings_open_preview">Open half-screen preview</string>
+    <string name="half_preview_title">Half-screen preview</string>
+    <string name="half_preview_hint">Cover the front light sensor to test the trigger; drag the slider below to move the boundary.</string>
+    <string name="half_preview_covered">Covered</string>
+    <string name="half_preview_uncovered">Uncovered</string>
+    <string name="settings_exposure">Exposure</string>
+    <string name="settings_auto_exposure">Auto exposure (AE)</string>
+    <string name="settings_exposure_time">Exposure time</string>
 </resources>

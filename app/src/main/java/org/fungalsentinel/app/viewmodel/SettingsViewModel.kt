@@ -16,33 +16,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     init {
         viewModelScope.launch {
-            AppPreferences.getSettings(application).collect {
-                _settings.value = it
-            }
+            AppPreferences.getSettings(application).collect { _settings.value = it }
         }
     }
 
-    fun updateWavelengths(r: String, g: String, b: String) {
-        viewModelScope.launch {
-            AppPreferences.updateWavelengths(getApplication(), r, g, b)
-        }
+    private fun update(transform: (AppSettings) -> AppSettings) {
+        val new = transform(_settings.value)
+        _settings.value = new
+        viewModelScope.launch { AppPreferences.saveSettings(getApplication(), new) }
     }
 
-    fun updateHalfScreen(enabled: Boolean, ratio: Float) {
-        viewModelScope.launch {
-            AppPreferences.updateHalfScreen(getApplication(), enabled, ratio)
-        }
-    }
-
-    fun updateBlankMode(mode: String) {
-        viewModelScope.launch {
-            AppPreferences.updateBlankMode(getApplication(), mode)
-        }
-    }
-
-    fun updateCalibrationProtection(enabled: Boolean) {
-        viewModelScope.launch {
-            AppPreferences.updateCalibrationProtection(getApplication(), enabled)
-        }
-    }
+    fun updateWavelengths(r: String, g: String, b: String) = update { it.copy(wavelengthR = r, wavelengthG = g, wavelengthB = b) }
+    fun updateHalfScreen(enabled: Boolean, ratio: Float) = update { it.copy(halfScreenEnabled = enabled, coverRatio = ratio) }
+    fun updateBlankMode(mode: String) = update { it.copy(blankMode = mode) }
+    fun updateCalibrationProtection(enabled: Boolean) = update { it.copy(calibrationProtection = enabled) }
+    fun updateAutoExposure(enabled: Boolean) = update { it.copy(autoExposure = enabled) }
+    fun updateExposureMs(ms: Long) = update { it.copy(exposureMs = ms) }
 }
