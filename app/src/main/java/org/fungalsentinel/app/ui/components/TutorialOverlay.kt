@@ -46,7 +46,12 @@ fun TutorialHost(stepId: String, titleRes: Int, bodyRes: Int, imageRes: Int? = n
     val context = LocalContext.current; val scope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }
     val alreadyShown by TutorialPrefs.isShown(context, stepId).collectAsState(initial = true)
-    LaunchedEffect(alreadyShown) { if (autoShowOnFirstLaunch && !alreadyShown) showDialog = true }
+    LaunchedEffect(alreadyShown) {
+        if (autoShowOnFirstLaunch && !alreadyShown) {
+            kotlinx.coroutines.delay(400)   // let the first frame land before the dialog window is added
+            showDialog = true
+        }
+    }
     val controller = remember { TutorialController() }
     controller.onShow = { showDialog = true }
     if (showDialog) {
