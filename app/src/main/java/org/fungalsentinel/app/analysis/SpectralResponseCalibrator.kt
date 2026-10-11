@@ -7,78 +7,78 @@ import org.json.JSONObject
 import java.io.File
 import java.io.InputStreamReader
 import kotlin.math.abs
+import kotlin.math.exp
 
 data class SpdCalibrationResult(
     val wavelengths: FloatArray,
     val respR: FloatArray, val respG: FloatArray, val respB: FloatArray,
+    val posR: FloatArray, val posG: FloatArray, val posB: FloatArray,
     val corrR: FloatArray, val corrG: FloatArray, val corrB: FloatArray,
-    val wR: FloatArray, val wG: FloatArray, val wB: FloatArray,
-    val fused: FloatArray, val mask: BooleanArray,
+    val wB: FloatArray, val wG: FloatArray, val wR: FloatArray,
+    val fused: FloatArray,
+    val mask: BooleanArray,
     val effectiveBandNm: Pair<Float, Float>,
     val maskedCount: Int, val totalCount: Int, val thresholdRatio: Float,
-    val handoffBG: Float?, val handoffGR: Float?,
-    val weightsAt450: Triple<Float, Float, Float>,
-    val weightsAt520: Triple<Float, Float, Float>,
-    val weightsAt600: Triple<Float, Float, Float>,
+    val handoffBG: Float, val handoffGR: Float,
+    val logisticWidthNm: Float,
+    val agreementPct: Float,
     val peakRespR: Pair<Float, Float>, val peakRespG: Pair<Float, Float>, val peakRespB: Pair<Float, Float>,
-    val robustR: Pair<Float, Int>, val robustG: Pair<Float, Int>, val robustB: Pair<Float, Int>,
     val fusedPeak: Pair<Float, Float>,
     val exposureSeconds: Double, val frames: Int, val spdSource: String
 )
 
 /**
- * FSSA v1.4.3: resp_c = Lamp_c/SPD_true (dual mask, NO smoothing, NO normalization),
- * C_c = Pos_c/resp_c on INDEPENDENT positioning data, w_c = resp_c/Σresp,
- * F = Σ w_c·C_c (single continuous curve). JSON-serializable for presets.
- * Aligned with Python calibration.py SpectralResponseCalibrator.
+ * FSSA v1.4.4 parity (core/fusion.py + details_window.py):
+ *  resp_c = Lamp_c / (SPD_true + 1e-6), dual-masked, NO smoothing/normalization
+ *  Corrected_c = Pos_c / resp_c  (guarded division > 1e-6; INDEPENDENT numerator)
+ *  weights: logistic handoff relay, width 15 nm, w_B+w_G+w_R = 1 pointwise
+ *  Fused = w_B·Corr_B + w_G·Corr_G + w_R·Corr_R (single C0-continuous curve)
+ *  5% floor is NOT used here (display/fusion path); it remains only in Step 3 quantification.
  */
 object SpectralResponseCalibrator {
-    private const val EPSILON = 1e-6f
+    private const val EPS = 1e-6f
+    private const val LOGISTIC_WIDTH_NM = 15.0f
+    private const val DEFAULT_HBG = 483.0f
+    private const val DEFAULT_HGR = 577.0f
+
+    private fun logistic(x: Float): Float {
+        val t = x.coerceIn(-500f, 500f).toDouble()
+        return (1.0 / (1.0 + exp(-t))).toFloat()
+    }
 
     fun calibrate(
         lampFrames: List<FrameProfile>, posFrames: List<FrameProfile>,
         spdTrue: List<Pair<Double, Double>>, slope: Double, intercept: Double, spdSource: String,
         bandNm: ClosedFloatingPointRange<Double> = 430.0..660.0,
-        thresholdRatio: Float = 0.1f, floorFraction: Float = 0.05f
+        thresholdRatio: Float = 0.1f
     ): SpdCalibrationResult? {
         if (lampFrames.isEmpty() || posFrames.isEmpty() || spdTrue.size < 2) return null
         val n = minOf(lampFrames[0].redProfile.size, posFrames[0].redProfile.size)
         if (n < 10) return null
 
-        // Pixel -> wavelength (Python: pixel_to_wavelength)
-        val lam = FloatArray(n) { i -> ((i - intercept) / slope).toFloat() }
-
-        // Negative slope handling: reverse if wavelengths[0] > wavelengths[-1]
-        val reversed = lam[0] > lam[n - 1]
-        val lamOrdered = if (reversed) lam.reversed().toFloatArray() else lam
+        val lamRaw = FloatArray(n) { i -> ((i - intercept) / slope).toFloat() }
+        val reversed = lamRaw[0] > lamRaw[n - 1]
+        val lam = if (reversed) lamRaw.reversed().toFloatArray() else lamRaw
 
         fun avgNorm(frames: List<FrameProfile>, sel: (FrameProfile) -> FloatArray): FloatArray {
             val out = FloatArray(n)
             for (f in frames) {
                 val p = sel(f)
-                val m = minOf(n, p.size)
-                for (i in 0 until m) out[i] += p[i]
+                for (i in 0 until minOf(n, p.size)) out[i] += p[i]
             }
             val k = frames.size.toFloat()
             for (i in 0 until n) out[i] /= k
             return out
         }
-        val lampR = avgNorm(lampFrames) { it.redProfile }
-        val lampG = avgNorm(lampFrames) { it.greenProfile }
-        val lampB = avgNorm(lampFrames) { it.blueProfile }
-        val posR = avgNorm(posFrames) { it.redProfile }
-        val posG = avgNorm(posFrames) { it.greenProfile }
-        val posB = avgNorm(posFrames) { it.blueProfile }
+        fun ord(a: FloatArray) = if (reversed) a.reversed().toFloatArray() else a
 
-        // Reverse lamp/pos if needed
-        val lampROrd = if (reversed) lampR.reversed().toFloatArray() else lampR
-        val lampGOrd = if (reversed) lampG.reversed().toFloatArray() else lampG
-        val lampBOrd = if (reversed) lampB.reversed().toFloatArray() else lampB
-        val posROrd = if (reversed) posR.reversed().toFloatArray() else posR
-        val posGOrd = if (reversed) posG.reversed().toFloatArray() else posG
-        val posBOrd = if (reversed) posB.reversed().toFloatArray() else posB
+        val lampR = ord(avgNorm(lampFrames) { it.redProfile })
+        val lampG = ord(avgNorm(lampFrames) { it.greenProfile })
+        val lampB = ord(avgNorm(lampFrames) { it.blueProfile })
+        val posR = ord(avgNorm(posFrames) { it.redProfile })
+        val posG = ord(avgNorm(posFrames) { it.greenProfile })
+        val posB = ord(avgNorm(posFrames) { it.blueProfile })
 
-        // SPD interpolation (Python: scipy.interpolate.interp1d with fill_value=0.0)
         val sorted = spdTrue.sortedBy { it.first }
         val maxSpd = sorted.maxOf { it.second }
         if (maxSpd <= 0.0) return null
@@ -90,116 +90,107 @@ object SpectralResponseCalibrator {
             return if (x1 == x0) y0 else y0 + (y1 - y0) * (l - x0) / (x1 - x0)
         }
 
-        // Dual mask: wavelength range + SPD threshold
         val mask = BooleanArray(n) { i ->
-            val l = lamOrdered[i].toDouble()
+            val l = lam[i].toDouble()
             l in bandNm && spdAt(l) > thresholdRatio * maxSpd
         }
         val maskedCount = mask.count { it }
         if (maskedCount < 10) return null
 
-        // Per-channel absolute response: resp_c = Lamp_c / (SPD_true + epsilon)
+        // resp_c = Lamp_c / (SPD_true + eps), zeroed outside mask
         val respR = FloatArray(n); val respG = FloatArray(n); val respB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
-            val s = spdAt(lamOrdered[i].toDouble()).toFloat() + EPSILON
-            respR[i] = lampROrd[i] / s
-            respG[i] = lampGOrd[i] / s
-            respB[i] = lampBOrd[i] / s
+            val s = spdAt(lam[i].toDouble()).toFloat() + EPS
+            respR[i] = lampR[i] / s; respG[i] = lampG[i] / s; respB[i] = lampB[i] / s
         }
 
-        fun peakOf(arr: FloatArray): Pair<Float, Float> {
-            var best = 0f; var bl = 0f
-            for (i in 0 until n) if (mask[i] && arr[i] > best) { best = arr[i]; bl = lamOrdered[i] }
-            return best to bl
+        // v1.4.4 handoffs = response-curve crossing points
+        var hBG = DEFAULT_HBG; var best = Float.POSITIVE_INFINITY
+        for (i in 0 until n) if (mask[i] && respB[i] > 0f && respG[i] > 0f) {
+            val d = abs(respB[i] - respG[i])
+            if (d < best) { best = d; hBG = lam[i] }
         }
-        val pkR = peakOf(respR); val pkG = peakOf(respG); val pkB = peakOf(respB)
+        var hGR = DEFAULT_HGR; best = Float.POSITIVE_INFINITY
+        for (i in 0 until n) if (mask[i] && respG[i] > 0f && respR[i] > 0f && lam[i] > hBG + 20f) {
+            val d = abs(respG[i] - respR[i])
+            if (d < best) { best = d; hGR = lam[i] }
+        }
 
-        // 5% relative floor
-        val floorR = floorFraction * pkR.first
-        val floorG = floorFraction * pkG.first
-        val floorB = floorFraction * pkB.first
+        // logistic relay weights (pointwise, sum = 1)
+        val wB = FloatArray(n); val wG = FloatArray(n); val wR = FloatArray(n)
+        for (i in 0 until n) {
+            if (!mask[i]) continue
+            val t1 = logistic((lam[i] - hBG) / LOGISTIC_WIDTH_NM)
+            val t2 = logistic((lam[i] - hGR) / LOGISTIC_WIDTH_NM)
+            wB[i] = 1f - t1; wG[i] = t1 * (1f - t2); wR[i] = t2
+        }
 
-        // Corrected channels on INDEPENDENT positioning data: C_c = Pos_c / resp_c
+        // corrected on INDEPENDENT positioning data, guarded division (_safe_div)
         val corrR = FloatArray(n); val corrG = FloatArray(n); val corrB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
-            corrR[i] = posROrd[i] / maxOf(respR[i], floorR)
-            corrG[i] = posGOrd[i] / maxOf(respG[i], floorG)
-            corrB[i] = posBOrd[i] / maxOf(respB[i], floorB)
+            if (respR[i] > EPS) corrR[i] = posR[i] / respR[i]
+            if (respG[i] > EPS) corrG[i] = posG[i] / respG[i]
+            if (respB[i] > EPS) corrB[i] = posB[i] / respB[i]
         }
 
-        // Per-wavelength weights: w_c = resp_c / Σresp
-        val wR = FloatArray(n); val wG = FloatArray(n); val wB = FloatArray(n)
-        for (i in 0 until n) {
-            if (!mask[i]) continue
-            val sum = respR[i] + respG[i] + respB[i]
-            if (sum <= 0f) continue
-            wR[i] = respR[i] / sum; wG[i] = respG[i] / sum; wB[i] = respB[i] / sum
+        // single continuous fused curve
+        val fused = FloatArray(n) { wB[it] * corrB[it] + wG[it] * corrG[it] + wR[it] * corrR[it] }
+
+        // cross-channel agreement: mean pairwise |Δ| / mean(fused>0)
+        var devSum = 0.0; var cnt = 0
+        for (i in 0 until n) if (mask[i]) {
+            devSum += (abs(corrB[i] - corrG[i]) + abs(corrG[i] - corrR[i]) + abs(corrB[i] - corrR[i])).toDouble() / 3.0
+            cnt++
         }
+        var fPosSum = 0.0; var fPosCnt = 0
+        for (i in 0 until n) if (mask[i] && fused[i] > 0f) { fPosSum += fused[i]; fPosCnt++ }
+        val meanFusedPos = if (fPosCnt > 0) fPosSum / fPosCnt else 0.0
+        val agreementPct =
+            if (cnt > 0 && meanFusedPos > 1e-9) ((devSum / cnt) / meanFusedPos * 100.0).toFloat() else 0f
 
-        // Fused curve: F = Σ w_c·C_c
-        val fused = FloatArray(n) { wR[it] * corrR[it] + wG[it] * corrG[it] + wB[it] * corrB[it] }
-
-        // Handoff wavelengths
-        val order = (0 until n).filter { mask[it] }.sortedBy { lamOrdered[it] }
-        var hBG: Float? = null; var hGR: Float? = null
-        for (i in order) {
-            if (hBG == null && wG[i] > wB[i]) hBG = lamOrdered[i]
-            if (hGR == null && wR[i] > wG[i]) hGR = lamOrdered[i]
+        fun peakOf(arr: FloatArray): Pair<Float, Float> {
+            var b = 0f; var bl = 0f
+            for (i in 0 until n) if (mask[i] && arr[i] > b) { b = arr[i]; bl = lam[i] }
+            return b to bl
         }
-
-        fun weightsAt(t: Float): Triple<Float, Float, Float> {
-            val i = order.minByOrNull { abs(lamOrdered[it] - t) } ?: return Triple(0f, 0f, 0f)
-            return Triple(wR[i], wG[i], wB[i])
-        }
-
-        // Robustness: mean |C_c - F| / max|F| where w_c > 0.5
-        var maxF = 0f
-        for (i in 0 until n) if (mask[i] && fused[i] > maxF) maxF = fused[i]
-        fun robust(w: FloatArray, c: FloatArray): Pair<Float, Int> {
-            var sum = 0.0; var cnt = 0
-            for (i in 0 until n) if (mask[i] && w[i] > 0.5f) { sum += abs(c[i] - fused[i]); cnt++ }
-            return (if (cnt > 0 && maxF > 0f) (100.0 * sum / cnt / maxF).toFloat() else 0f) to cnt
-        }
-
         var fPeak = 0f; var fPeakL = 0f
-        for (i in 0 until n) if (mask[i] && fused[i] > fPeak) { fPeak = fused[i]; fPeakL = lamOrdered[i] }
+        for (i in 0 until n) if (mask[i] && fused[i] > fPeak) { fPeak = fused[i]; fPeakL = lam[i] }
 
-        val exposure = lampFrames.map { it.exposureSeconds }.filter { it > 0 }.average().let { if (it.isNaN()) 0.0 else it }
+        val order = (0 until n).filter { mask[it] }.sortedBy { lam[it] }
+        val exposure = lampFrames.map { it.exposureSeconds }.filter { it > 0 }
+            .average().let { if (it.isNaN()) 0.0 else it }
 
         return SpdCalibrationResult(
-            lamOrdered, respR, respG, respB, corrR, corrG, corrB, wR, wG, wB, fused, mask,
-            (order.firstOrNull()?.let { lamOrdered[it] } ?: 0f) to (order.lastOrNull()?.let { lamOrdered[it] } ?: 0f),
-            maskedCount, n, thresholdRatio, hBG, hGR,
-            weightsAt(450f), weightsAt(520f), weightsAt(600f),
-            pkR, pkG, pkB, robust(wR, corrR), robust(wG, corrG), robust(wB, corrB),
+            lam, respR, respG, respB, posR, posG, posB, corrR, corrG, corrB,
+            wB, wG, wR, fused, mask,
+            (order.firstOrNull()?.let { lam[it] } ?: 0f) to (order.lastOrNull()?.let { lam[it] } ?: 0f),
+            maskedCount, n, thresholdRatio, hBG, hGR, LOGISTIC_WIDTH_NM, agreementPct,
+            peakOf(respR), peakOf(respG), peakOf(respB),
             fPeak to fPeakL, exposure, lampFrames.size, spdSource
         )
     }
 
     fun toJson(r: SpdCalibrationResult): String = runCatching {
         val o = JSONObject()
-        o.put("version", 1)
+        o.put("version", 2)
         fun ja(a: FloatArray) = JSONArray().apply { for (v in a) put(v.toDouble()) }
         o.put("wavelengths", ja(r.wavelengths))
         o.put("respR", ja(r.respR)); o.put("respG", ja(r.respG)); o.put("respB", ja(r.respB))
+        o.put("posR", ja(r.posR)); o.put("posG", ja(r.posG)); o.put("posB", ja(r.posB))
         o.put("corrR", ja(r.corrR)); o.put("corrG", ja(r.corrG)); o.put("corrB", ja(r.corrB))
-        o.put("wR", ja(r.wR)); o.put("wG", ja(r.wG)); o.put("wB", ja(r.wB))
+        o.put("wB", ja(r.wB)); o.put("wG", ja(r.wG)); o.put("wR", ja(r.wR))
         o.put("fused", ja(r.fused))
         o.put("mask", JSONArray().apply { for (m in r.mask) put(if (m) 1 else 0) })
         o.put("bandLo", r.effectiveBandNm.first.toDouble()); o.put("bandHi", r.effectiveBandNm.second.toDouble())
         o.put("maskedCount", r.maskedCount); o.put("totalCount", r.totalCount)
         o.put("thresholdRatio", r.thresholdRatio.toDouble())
-        o.put("handoffBG", r.handoffBG?.toDouble() ?: JSONObject.NULL)
-        o.put("handoffGR", r.handoffGR?.toDouble() ?: JSONObject.NULL)
-        fun jt(t: Triple<Float, Float, Float>) = JSONArray().put(t.first.toDouble()).put(t.second.toDouble()).put(t.third.toDouble())
-        o.put("w450", jt(r.weightsAt450)); o.put("w520", jt(r.weightsAt520)); o.put("w600", jt(r.weightsAt600))
+        o.put("handoffBG", r.handoffBG.toDouble()); o.put("handoffGR", r.handoffGR.toDouble())
+        o.put("logisticWidth", r.logisticWidthNm.toDouble())
+        o.put("agreementPct", r.agreementPct.toDouble())
         fun jp(p: Pair<Float, Float>) = JSONArray().put(p.first.toDouble()).put(p.second.toDouble())
         o.put("peakR", jp(r.peakRespR)); o.put("peakG", jp(r.peakRespG)); o.put("peakB", jp(r.peakRespB))
-        o.put("robR", jp(r.robustR.first to r.robustR.second.toFloat()))
-        o.put("robG", jp(r.robustG.first to r.robustG.second.toFloat()))
-        o.put("robB", jp(r.robustB.first to r.robustB.second.toFloat()))
         o.put("fusedPeak", jp(r.fusedPeak))
         o.put("exposure", r.exposureSeconds); o.put("frames", r.frames); o.put("spdSource", r.spdSource)
         o.toString()
@@ -207,24 +198,30 @@ object SpectralResponseCalibrator {
 
     fun fromJson(s: String): SpdCalibrationResult? = runCatching {
         val o = JSONObject(s)
-        if (o.optInt("version", 0) != 1) return null
-        fun fa(k: String) = FloatArray(o.getJSONArray(k).length()) { o.getJSONArray(k).getDouble(it).toFloat() }
+        fun fa(k: String): FloatArray =
+            if (o.has(k)) FloatArray(o.getJSONArray(k).length()) { o.getJSONArray(k).getDouble(it).toFloat() }
+            else FloatArray(0)
         fun pa(k: String): Pair<Float, Float> { val a = o.getJSONArray(k); return a.getDouble(0).toFloat() to a.getDouble(1).toFloat() }
-        fun tri(k: String): Triple<Float, Float, Float> { val a = o.getJSONArray(k); return Triple(a.getDouble(0).toFloat(), a.getDouble(1).toFloat(), a.getDouble(2).toFloat()) }
         val ma = o.getJSONArray("mask")
+        val version = o.optInt("version", 1)
+        val empty = FloatArray(0)
         SpdCalibrationResult(
             fa("wavelengths"), fa("respR"), fa("respG"), fa("respB"),
-            fa("corrR"), fa("corrG"), fa("corrB"), fa("wR"), fa("wG"), fa("wB"), fa("fused"),
+            if (version >= 2) fa("posR") else empty,
+            if (version >= 2) fa("posG") else empty,
+            if (version >= 2) fa("posB") else empty,
+            fa("corrR"), fa("corrG"), fa("corrB"),
+            fa("wB").let { if (it.isNotEmpty()) it else fa("wR").let { _ -> FloatArray(0) } },
+            fa("wG"), if (version >= 2) fa("wR") else fa("wR"),
+            fa("fused"),
             BooleanArray(ma.length()) { ma.getInt(it) == 1 },
             o.getDouble("bandLo").toFloat() to o.getDouble("bandHi").toFloat(),
             o.getInt("maskedCount"), o.getInt("totalCount"), o.getDouble("thresholdRatio").toFloat(),
-            if (o.isNull("handoffBG")) null else o.getDouble("handoffBG").toFloat(),
-            if (o.isNull("handoffGR")) null else o.getDouble("handoffGR").toFloat(),
-            tri("w450"), tri("w520"), tri("w600"),
+            if (version >= 2) o.getDouble("handoffBG").toFloat() else (if (o.isNull("handoffBG")) DEFAULT_HBG else o.getDouble("handoffBG").toFloat()),
+            if (version >= 2) o.getDouble("handoffGR").toFloat() else (if (o.isNull("handoffGR")) DEFAULT_HGR else o.getDouble("handoffGR").toFloat()),
+            if (version >= 2) o.getDouble("logisticWidth").toFloat() else LOGISTIC_WIDTH_NM,
+            if (version >= 2) o.getDouble("agreementPct").toFloat() else 0f,
             pa("peakR"), pa("peakG"), pa("peakB"),
-            pa("robR").let { it.first to it.second.toInt() },
-            pa("robG").let { it.first to it.second.toInt() },
-            pa("robB").let { it.first to it.second.toInt() },
             pa("fusedPeak"), o.getDouble("exposure"), o.getInt("frames"), o.optString("spdSource", "preset")
         )
     }.getOrNull()

@@ -14,21 +14,23 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.components.HelpTopBar
 import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 import java.util.Locale
 
 /**
- * Four-page analysis report (aligned with full_report.pdf layout):
- *  Page 1 wavelength calibration, Page 2 SPD response & v1.4 fusion,
- *  Page 3 sample analysis, Page 4 concentration regression.
+ * Four-page analysis report (v1.4.4 layout):
+ * Page 1 wavelength calibration, Page 2 SPD response + logistic fusion (4a–4d),
+ * Page 3 sample analysis, Page 4 concentration regression.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,8 +43,8 @@ fun ReportScreen(
 
     val tutorial = TutorialHost(
         stepId = "report",
-        titleRes = org.fungalsentinel.app.R.string.tutorial_report_title,
-        bodyRes = org.fungalsentinel.app.R.string.tutorial_report_body
+        titleRes = R.string.tutorial_report_title,
+        bodyRes = R.string.tutorial_report_body
     )
 
     Scaffold(
@@ -117,46 +119,56 @@ fun ReportScreen(
                 QualityBadge(r.wavelengthQuality)
             }
 
-            // ═══════ PAGE 2 — SPD response & per-wavelength fusion ═══════
-            PageCard(page = 2, title = "Step 2: Spectral Response & Fusion") {
+            // ═══════ PAGE 2 — SPD response & logistic fusion (v1.4.4) ═══════
+            PageCard(page = 2, title = "Step 2: Spectral Response & Fusion (v1.4.4)") {
                 if (r.spdLambda.isNotEmpty()) {
-                    FigureLabel("Figure 4: Camera absolute response resp_c(λ) = Lamp_c/SPD_true (masked)")
+                    if (r.spdPosR.isNotEmpty()) {
+                        FigureLabel("Figure 4a: Positioning LEDs — RAW measured (independent data)")
+                        MultiLineChartX(r.spdLambda, listOf(
+                            r.spdPosR to Color(0xFFFF5C5C),
+                            r.spdPosG to Color(0xFF5CFF5C),
+                            r.spdPosB to Color(0xFF5CA8FF)
+                        ), widths = listOf(1.5f, 1.5f, 1.5f))
+                    }
+                    FigureLabel("Figure 4b: SPD-corrected (thin) + ONE pointwise-fused curve (thick)")
                     MultiLineChartX(r.spdLambda, listOf(
-                        r.spdRespR to Color.Red,
-                        r.spdRespG to Color(0xFF2E7D32),
-                        r.spdRespB to Color.Blue
-                    ))
-                    FigureLabel("Figure 5: SPD-corrected channels C_c(λ) + fused F(λ)")
+                        r.spdCorrR to Color(0xFFFF5C5C),
+                        r.spdCorrG to Color(0xFF5CFF5C),
+                        r.spdCorrB to Color(0xFF5CA8FF),
+                        r.spdFused to Color(0xFFF5F5C0)
+                    ), widths = listOf(1.2f, 1.2f, 1.2f, 3f))
+                    FigureLabel("Figure 4c: Camera absolute response = Lamp_c / SPD_true (masked)")
                     MultiLineChartX(r.spdLambda, listOf(
-                        r.spdCorrR to Color.Red,
-                        r.spdCorrG to Color(0xFF2E7D32),
-                        r.spdCorrB to Color.Blue,
-                        r.spdFused to Color.Black
+                        r.spdRespR to Color(0xFFFF5C5C),
+                        r.spdRespG to Color(0xFF5CFF5C),
+                        r.spdRespB to Color(0xFF5CA8FF)
                     ))
-                    FigureLabel("Figure 6: Per-wavelength channel weights (w_R+w_G+w_B = 1)")
+                    FigureLabel("Figure 4d: Logistic channel weights (sum = 1) with handoffs")
                     MultiLineChartX(r.spdLambda, listOf(
-                        r.spdWR to Color.Red,
-                        r.spdWG to Color(0xFF2E7D32),
-                        r.spdWB to Color.Blue
-                    ))
+                        r.spdWB to Color(0xFF5CA8FF),
+                        r.spdWG to Color(0xFF5CFF5C),
+                        r.spdWR to Color(0xFFFF5C5C)
+                    ), widths = listOf(2.5f, 2.5f, 2.5f),
+                        vLines = listOf(r.spdHandoffBG, r.spdHandoffGR))
                     Spacer(Modifier.height(8.dp))
                 }
                 SectionTitle("SPD Response & Fusion Parameters")
                 ReportLine("Status / source", "${r.spdStatus} · ${r.spdSource}")
                 ReportLine("Frames / Exposure", "${r.spdFrames} / ${r.spdExposure}")
                 ReportLine("[Effective Band]", "${r.spdEffectiveBand} | masked px ${r.spdMasked} | ratio 0.1")
-                ReportLine("[Channel Handoff]", r.spdHandoffs)
-                ReportLine("[Weights @450/520/600 nm]", r.spdWeightsRef)
-                ReportLine("[Response Peaks (absolute)]", r.spdPeaks)
-                ReportLine("[Robustness mean|C−F|/max|F|, w>0.5]", r.spdRobustness)
+                ReportLine("[Handoff Wavelengths]", r.spdHandoffs)
+                ReportLine("[Cross-channel Agreement]", r.spdAgreement)
                 ReportLine("[Fused Curve Peak]", r.spdFusedPeak)
+                ReportLine("[Response Peaks (absolute)]", r.spdPeaks)
+                ReportLine("[RAW Positioning Peaks]", r.spdRawPeaks)
+                ReportLine("[Corrected Positioning Peaks]", r.spdCorrPeaks)
                 ReportLine("[Method]", r.spdMethodNote)
             }
 
             // ═══════ PAGE 3 — Sample analysis ═══════
             PageCard(page = 3, title = "Step 3: Sample Analysis") {
                 if (r.sampleSpectrum.isNotEmpty()) {
-                    FigureLabel("Figure 7: Blank-subtracted spectrum vs Blank")
+                    FigureLabel("Figure 7: Blank-subtracted & SPD-corrected spectrum vs Blank")
                     ProfileChart(r.sampleSpectrum, r.blankSpectrum, emptyList())
                     Text(
                         "Green = corrected sample, Red = blank",
@@ -165,13 +177,13 @@ fun ReportScreen(
                     Spacer(Modifier.height(8.dp))
                 }
                 SectionTitle("Sample Analysis Parameters")
-                ReportLine("Analysis channel", "${r.sampleFluorophore} → ${r.sampleIntegratedArea.substringAfter("ch=").substringBefore(",")}")
+                ReportLine("Target fluorophore", "${r.sampleFluorophore} (${r.sampleBand})")
+                ReportLine("Analysis channel", r.sampleIntegratedArea.substringAfter("ch=").substringBefore(","))
                 ReportLine("SPD correction", r.sampleIntegratedArea.substringAfter("resp=").substringBefore(")"))
                 ReportLine("[Peak Wavelength]", r.samplePeakNm)
                 ReportLine("[Peak Intensity]", r.samplePeakIntensity)
                 ReportLine("[FWHM]", r.sampleFwhm)
                 ReportLine("[Centroid]", r.sampleCentroid)
-                ReportLine("Target fluorophore", "${r.sampleFluorophore} (${r.sampleBand})")
                 ReportLine("Integration window", r.integrationWindow)
                 ReportLine("Blank mean area", r.blankMeanArea)
                 ReportLine("Sample mean area", r.sampleMeanArea)
@@ -283,32 +295,46 @@ private fun ProfileChart(red: List<Float>, green: List<Float>, blue: List<Float>
             }
             drawPath(path, color, style = Stroke(width = 2f))
         }
-        line(red, Color.Red)
-        line(green, Color(0xFF2E7D32))
-        line(blue, Color.Blue)
+        line(red, Color(0xFFFF5C5C))
+        line(green, Color(0xFF5CFF5C))
+        line(blue, Color(0xFF5CA8FF))
     }
 }
 
+/** Multi-series chart with optional per-series stroke widths and vertical marker lines. */
 @Composable
 private fun MultiLineChartX(
     x: List<Float>,
     series: List<Pair<List<Float>, Color>>,
-    height: Dp = 150.dp
+    height: Dp = 150.dp,
+    widths: List<Float> = emptyList(),
+    vLines: List<Float> = emptyList()
 ) {
     Canvas(Modifier.fillMaxWidth().height(height)) {
         val ys = series.flatMap { it.first }
         if (x.size < 2 || ys.isEmpty()) return@Canvas
         val yMax = ys.maxOrNull()?.coerceAtLeast(1e-6f) ?: 1f
-        for ((data, color) in series) {
-            if (data.size < 2) continue
+        if (vLines.isNotEmpty()) {
+            val xMin = x.minOrNull() ?: 0f
+            val xMax = x.maxOrNull() ?: 1f
+            val span = (xMax - xMin).coerceAtLeast(1e-6f)
+            val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+            for (v in vLines) {
+                val px = (v - xMin) / span * size.width
+                drawLine(Color(0xFF9E9E9E), Offset(px, 0f), Offset(px, size.height), 1.5f, pathEffect = dash)
+            }
+        }
+        series.forEachIndexed { si, (data, color) ->
+            if (data.size < 2) return@forEachIndexed
+            val w = widths.getOrElse(si) { 2f }
             val path = Path()
-            val n = minOf(data.size, x.size)
-            for (i in 0 until n) {
-                val px = i.toFloat() / (n - 1) * size.width
+            val nn = minOf(data.size, x.size)
+            for (i in 0 until nn) {
+                val px = i.toFloat() / (nn - 1) * size.width
                 val py = size.height - (data[i] / yMax) * size.height * 0.95f
                 if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
             }
-            drawPath(path, color, style = Stroke(width = 2f))
+            drawPath(path, color, style = Stroke(width = w))
         }
     }
 }
@@ -339,10 +365,10 @@ private fun FitChart(
                 Offset(px(xMax), py((slope * xMax + intercept).toFloat())),
                 2f
             )
-            drawCircle(Color.Blue, 6f, Offset(px(wlB.toFloat()), py(pxB)))
-            drawCircle(Color.Red, 6f, Offset(px(wlR.toFloat()), py(pxR)))
+            drawCircle(Color(0xFF5CA8FF), 6f, Offset(px(wlB.toFloat()), py(pxB)))
+            drawCircle(Color(0xFFFF5C5C), 6f, Offset(px(wlR.toFloat()), py(pxR)))
             drawCircle(
-                Color(0xFF2E7D32), 6f,
+                Color(0xFF5CFF5C), 6f,
                 Offset(px(wlG.toFloat()), py(pxG)),
                 style = Stroke(2f)
             )
@@ -383,7 +409,7 @@ private fun CurveChart(
         )
         points.forEach { p ->
             drawCircle(
-                Color(0xFF1565C0), 6f,
+                Color(0xFF5CA8FF), 6f,
                 Offset(px(p.first.toFloat()), py(p.second.toFloat()))
             )
         }

@@ -39,7 +39,7 @@ data class StandardGroupInput(
 )
 
 data class ReportData(
-    // Page 1
+    // ── Page 1 ──
     val wavelengthQuality: String = "—",
     val wavelengthGError: String = "— nm",
     val mappingFormula: String = "—",
@@ -65,7 +65,7 @@ data class ReportData(
     val wlR: Double = 622.5,
     val wlG: Double = 522.5,
     val wlB: Double = 462.5,
-    // Page 2 (v1.4.3 fusion)
+    // ── Page 2 (v1.4.4 fusion) ──
     val spdStatus: String = "Pending",
     val spdSource: String = "true_spd.csv (bundled)",
     val spdCoeffR: String = "—",
@@ -76,23 +76,29 @@ data class ReportData(
     val spdEffectiveBand: String = "—",
     val spdMasked: String = "—",
     val spdHandoffs: String = "—",
-    val spdWeightsRef: String = "—",
-    val spdPeaks: String = "—",
-    val spdRobustness: String = "—",
+    val spdAgreement: String = "—",
     val spdFusedPeak: String = "—",
-    val spdMethodNote: String = "Independent-data correction; per-channel ops; no smoothing; 5% floor",
+    val spdPeaks: String = "—",
+    val spdRawPeaks: String = "—",
+    val spdCorrPeaks: String = "—",
+    val spdMethodNote: String = "Numerator = Pos (independent LEDs); pointwise ops only; logistic handoff weights (15 nm)",
+    val spdHandoffBG: Float = 483f,
+    val spdHandoffGR: Float = 577f,
     val spdLambda: List<Float> = emptyList(),
+    val spdPosR: List<Float> = emptyList(),
+    val spdPosG: List<Float> = emptyList(),
+    val spdPosB: List<Float> = emptyList(),
     val spdRespR: List<Float> = emptyList(),
     val spdRespG: List<Float> = emptyList(),
     val spdRespB: List<Float> = emptyList(),
     val spdCorrR: List<Float> = emptyList(),
     val spdCorrG: List<Float> = emptyList(),
     val spdCorrB: List<Float> = emptyList(),
-    val spdWR: List<Float> = emptyList(),
-    val spdWG: List<Float> = emptyList(),
     val spdWB: List<Float> = emptyList(),
+    val spdWG: List<Float> = emptyList(),
+    val spdWR: List<Float> = emptyList(),
     val spdFused: List<Float> = emptyList(),
-    // Page 3
+    // ── Page 3 ──
     val sampleFluorophore: String = "—",
     val sampleBand: String = "—",
     val blankMeanArea: String = "—",
@@ -108,7 +114,7 @@ data class ReportData(
     val samplePeakIntensity: String = "—",
     val sampleFwhm: String = "—",
     val sampleCentroid: String = "—",
-    // Page 4
+    // ── Page 4 ──
     val standardRows: List<String> = emptyList(),
     val regressionFormula: String = "—",
     val regressionR2: String = "—",
@@ -516,7 +522,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ═══════════ page-2 helpers ═══════════
+    // ═══════════ page-2 helpers (v1.4.4) ═══════════
     private fun setSpdStatus(s: String) {
         _uiState.value = _uiState.value.copy(
             reportData = _uiState.value.reportData.copy(spdStatus = s)
@@ -528,12 +534,14 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             reportData = _uiState.value.reportData.copy(
                 spdStatus = "Pending", spdCoeffR = "—", spdCoeffB = "—", spdResponse = "—",
                 spdFrames = 0, spdExposure = "—", spdEffectiveBand = "—", spdMasked = "—",
-                spdHandoffs = "—", spdWeightsRef = "—", spdPeaks = "—", spdRobustness = "—",
-                spdFusedPeak = "—",
+                spdHandoffs = "—", spdAgreement = "—", spdFusedPeak = "—", spdPeaks = "—",
+                spdRawPeaks = "—", spdCorrPeaks = "—",
+                spdHandoffBG = 483f, spdHandoffGR = 577f,
                 spdLambda = emptyList(),
+                spdPosR = emptyList(), spdPosG = emptyList(), spdPosB = emptyList(),
                 spdRespR = emptyList(), spdRespG = emptyList(), spdRespB = emptyList(),
                 spdCorrR = emptyList(), spdCorrG = emptyList(), spdCorrB = emptyList(),
-                spdWR = emptyList(), spdWG = emptyList(), spdWB = emptyList(),
+                spdWB = emptyList(), spdWG = emptyList(), spdWR = emptyList(),
                 spdFused = emptyList()
             )
         )
@@ -541,43 +549,51 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     private fun applySpdResult(res: SpdCalibrationResult) {
         val k = maxOf(1, res.wavelengths.size / 180)
-        fun sample(a: FloatArray): List<Float> = a.filterIndexed { i, _ -> i % k == 0 }
-        fun w(t: Triple<Float, Float, Float>) =
-            String.format(Locale.US, "(%.3f, %.3f, %.3f)", t.first, t.second, t.third)
+        fun sample(a: FloatArray): List<Float> =
+            if (a.isEmpty()) emptyList() else a.filterIndexed { i, _ -> i % k == 0 }
+        fun peakLine(arr: FloatArray, fmt: String): String {
+            if (arr.isEmpty()) return "—"
+            var best = 0f; var bl = 0f
+            for (i in arr.indices) {
+                if (res.mask.getOrElse(i) { false } && arr[i] > best) {
+                    best = arr[i]; bl = res.wavelengths.getOrElse(i) { 0f }
+                }
+            }
+            if (best <= 0f) return "—"
+            return String.format(Locale.US, "$fmt@%.1f", best, bl)
+        }
         _uiState.value = _uiState.value.copy(
             reportData = _uiState.value.reportData.copy(
                 spdStatus = "Calibrated (${res.frames} lamp frame(s))",
                 spdSource = res.spdSource,
                 spdCoeffR = String.format(Locale.US, "%.0f a.u./SPD @ %.1f nm", res.peakRespR.first, res.peakRespR.second),
                 spdCoeffB = String.format(Locale.US, "%.0f a.u./SPD @ %.1f nm", res.peakRespB.first, res.peakRespB.second),
-                spdResponse = "Fused continuous curve F(λ) available",
+                spdResponse = "Fused continuous curve F(λ) available (Report Page 2)",
                 spdFrames = res.frames,
                 spdExposure = if (res.exposureSeconds > 0) String.format(Locale.US, "%.4f s", res.exposureSeconds) else "—",
                 spdEffectiveBand = String.format(Locale.US, "%.1f–%.1f nm", res.effectiveBandNm.first, res.effectiveBandNm.second),
                 spdMasked = "${res.maskedCount}/${res.totalCount}",
-                spdHandoffs = buildString {
-                    res.handoffBG?.let { append(String.format(Locale.US, "B→G: %.1f nm   ", it)) }
-                    res.handoffGR?.let { append(String.format(Locale.US, "G→R: %.1f nm", it)) }
-                    if (isEmpty()) append("—")
-                },
-                spdWeightsRef = "@450 ${w(res.weightsAt450)}  @520 ${w(res.weightsAt520)}  @600 ${w(res.weightsAt600)}",
+                spdHandoffs = String.format(
+                    Locale.US, "B→G: %.1f nm   G→R: %.1f nm   (logistic width %.0f nm)",
+                    res.handoffBG, res.handoffGR, res.logisticWidthNm
+                ),
+                spdAgreement = String.format(Locale.US, "mean pairwise |Δ| = %.2f%% of fused mean", res.agreementPct),
+                spdFusedPeak = String.format(Locale.US, "%.4f a.u./s @ %.1f nm", res.fusedPeak.first, res.fusedPeak.second),
                 spdPeaks = String.format(
                     Locale.US, "R %.0f@%.1f  G %.0f@%.1f  B %.0f@%.1f",
                     res.peakRespR.first, res.peakRespR.second,
                     res.peakRespG.first, res.peakRespG.second,
                     res.peakRespB.first, res.peakRespB.second
                 ),
-                spdRobustness = String.format(
-                    Locale.US, "R %.2f%%(%d)  G %.2f%%(%d)  B %.2f%%(%d)",
-                    res.robustR.first, res.robustR.second,
-                    res.robustG.first, res.robustG.second,
-                    res.robustB.first, res.robustB.second
-                ),
-                spdFusedPeak = String.format(Locale.US, "%.4f a.u./s @ %.1f nm", res.fusedPeak.first, res.fusedPeak.second),
+                spdRawPeaks = "R ${peakLine(res.posR, "%.1f")}  G ${peakLine(res.posG, "%.1f")}  B ${peakLine(res.posB, "%.1f")}",
+                spdCorrPeaks = "R ${peakLine(res.corrR, "%.4f")}  G ${peakLine(res.corrG, "%.4f")}  B ${peakLine(res.corrB, "%.4f")}",
+                spdHandoffBG = res.handoffBG,
+                spdHandoffGR = res.handoffGR,
                 spdLambda = sample(res.wavelengths),
+                spdPosR = sample(res.posR), spdPosG = sample(res.posG), spdPosB = sample(res.posB),
                 spdRespR = sample(res.respR), spdRespG = sample(res.respG), spdRespB = sample(res.respB),
                 spdCorrR = sample(res.corrR), spdCorrG = sample(res.corrG), spdCorrB = sample(res.corrB),
-                spdWR = sample(res.wR), spdWG = sample(res.wG), spdWB = sample(res.wB),
+                spdWB = sample(res.wB), spdWG = sample(res.wG), spdWR = sample(res.wR),
                 spdFused = sample(res.fused)
             )
         )
