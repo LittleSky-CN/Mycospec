@@ -165,6 +165,12 @@ fun ReportScreen(
                     Spacer(Modifier.height(8.dp))
                 }
                 SectionTitle("Sample Analysis Parameters")
+                ReportLine("Analysis channel", "${r.sampleFluorophore} → ${r.sampleIntegratedArea.substringAfter("ch=").substringBefore(",")}")
+                ReportLine("SPD correction", r.sampleIntegratedArea.substringAfter("resp=").substringBefore(")"))
+                ReportLine("[Peak Wavelength]", r.samplePeakNm)
+                ReportLine("[Peak Intensity]", r.samplePeakIntensity)
+                ReportLine("[FWHM]", r.sampleFwhm)
+                ReportLine("[Centroid]", r.sampleCentroid)
                 ReportLine("Target fluorophore", "${r.sampleFluorophore} (${r.sampleBand})")
                 ReportLine("Integration window", r.integrationWindow)
                 ReportLine("Blank mean area", r.blankMeanArea)

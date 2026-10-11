@@ -27,11 +27,14 @@ data class SpdCalibrationResult(
 )
 
 /**
- * FSSA v1.4: resp_c = Lamp_c/SPD_true (dual mask, no smoothing, 5% floor),
+ * FSSA v1.4.3: resp_c = Lamp_c/SPD_true (dual mask, NO smoothing, NO normalization),
  * C_c = Pos_c/resp_c on INDEPENDENT positioning data, w_c = resp_c/Σresp,
  * F = Σ w_c·C_c (single continuous curve). JSON-serializable for presets.
+ * Aligned with Python calibration.py SpectralResponseCalibrator.
  */
 object SpectralResponseCalibrator {
+    private const val EPSILON = 1e-6f
+
     fun calibrate(
         lampFrames: List<FrameProfile>, posFrames: List<FrameProfile>,
         spdTrue: List<Pair<Double, Double>>, slope: Double, intercept: Double, spdSource: String,
@@ -41,15 +44,23 @@ object SpectralResponseCalibrator {
         if (lampFrames.isEmpty() || posFrames.isEmpty() || spdTrue.size < 2) return null
         val n = minOf(lampFrames[0].redProfile.size, posFrames[0].redProfile.size)
         if (n < 10) return null
+
+        // Pixel -> wavelength (Python: pixel_to_wavelength)
         val lam = FloatArray(n) { i -> ((i - intercept) / slope).toFloat() }
+
+        // Negative slope handling: reverse if wavelengths[0] > wavelengths[-1]
+        val reversed = lam[0] > lam[n - 1]
+        val lamOrdered = if (reversed) lam.reversed().toFloatArray() else lam
+
         fun avgNorm(frames: List<FrameProfile>, sel: (FrameProfile) -> FloatArray): FloatArray {
             val out = FloatArray(n)
             for (f in frames) {
-                val p = sel(f); val e = if (f.exposureSeconds > 0) f.exposureSeconds.toFloat() else 1f
+                val p = sel(f)
                 val m = minOf(n, p.size)
-                for (i in 0 until m) out[i] += p[i] / e
+                for (i in 0 until m) out[i] += p[i]
             }
-            val k = frames.size.toFloat(); for (i in 0 until n) out[i] /= k
+            val k = frames.size.toFloat()
+            for (i in 0 until n) out[i] /= k
             return out
         }
         val lampR = avgNorm(lampFrames) { it.redProfile }
@@ -58,6 +69,16 @@ object SpectralResponseCalibrator {
         val posR = avgNorm(posFrames) { it.redProfile }
         val posG = avgNorm(posFrames) { it.greenProfile }
         val posB = avgNorm(posFrames) { it.blueProfile }
+
+        // Reverse lamp/pos if needed
+        val lampROrd = if (reversed) lampR.reversed().toFloatArray() else lampR
+        val lampGOrd = if (reversed) lampG.reversed().toFloatArray() else lampG
+        val lampBOrd = if (reversed) lampB.reversed().toFloatArray() else lampB
+        val posROrd = if (reversed) posR.reversed().toFloatArray() else posR
+        val posGOrd = if (reversed) posG.reversed().toFloatArray() else posG
+        val posBOrd = if (reversed) posB.reversed().toFloatArray() else posB
+
+        // SPD interpolation (Python: scipy.interpolate.interp1d with fill_value=0.0)
         val sorted = spdTrue.sortedBy { it.first }
         val maxSpd = sorted.maxOf { it.second }
         if (maxSpd <= 0.0) return null
@@ -68,30 +89,47 @@ object SpectralResponseCalibrator {
             val (x0, y0) = sorted[lo]; val (x1, y1) = sorted[hi]
             return if (x1 == x0) y0 else y0 + (y1 - y0) * (l - x0) / (x1 - x0)
         }
-        val mask = BooleanArray(n) { i -> val l = lam[i].toDouble(); l in bandNm && spdAt(l) > thresholdRatio * maxSpd }
+
+        // Dual mask: wavelength range + SPD threshold
+        val mask = BooleanArray(n) { i ->
+            val l = lamOrdered[i].toDouble()
+            l in bandNm && spdAt(l) > thresholdRatio * maxSpd
+        }
         val maskedCount = mask.count { it }
         if (maskedCount < 10) return null
+
+        // Per-channel absolute response: resp_c = Lamp_c / (SPD_true + epsilon)
         val respR = FloatArray(n); val respG = FloatArray(n); val respB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
-            val s = spdAt(lam[i].toDouble())
-            if (s <= 0.0) continue
-            respR[i] = lampR[i] / s.toFloat(); respG[i] = lampG[i] / s.toFloat(); respB[i] = lampB[i] / s.toFloat()
+            val s = spdAt(lamOrdered[i].toDouble()).toFloat() + EPSILON
+            respR[i] = lampROrd[i] / s
+            respG[i] = lampGOrd[i] / s
+            respB[i] = lampBOrd[i] / s
         }
+
         fun peakOf(arr: FloatArray): Pair<Float, Float> {
             var best = 0f; var bl = 0f
-            for (i in 0 until n) if (mask[i] && arr[i] > best) { best = arr[i]; bl = lam[i] }
+            for (i in 0 until n) if (mask[i] && arr[i] > best) { best = arr[i]; bl = lamOrdered[i] }
             return best to bl
         }
         val pkR = peakOf(respR); val pkG = peakOf(respG); val pkB = peakOf(respB)
-        val floorR = floorFraction * pkR.first; val floorG = floorFraction * pkG.first; val floorB = floorFraction * pkB.first
+
+        // 5% relative floor
+        val floorR = floorFraction * pkR.first
+        val floorG = floorFraction * pkG.first
+        val floorB = floorFraction * pkB.first
+
+        // Corrected channels on INDEPENDENT positioning data: C_c = Pos_c / resp_c
         val corrR = FloatArray(n); val corrG = FloatArray(n); val corrB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
-            corrR[i] = posR[i] / maxOf(respR[i], floorR)
-            corrG[i] = posG[i] / maxOf(respG[i], floorG)
-            corrB[i] = posB[i] / maxOf(respB[i], floorB)
+            corrR[i] = posROrd[i] / maxOf(respR[i], floorR)
+            corrG[i] = posGOrd[i] / maxOf(respG[i], floorG)
+            corrB[i] = posBOrd[i] / maxOf(respB[i], floorB)
         }
+
+        // Per-wavelength weights: w_c = resp_c / Σresp
         val wR = FloatArray(n); val wG = FloatArray(n); val wB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
@@ -99,17 +137,24 @@ object SpectralResponseCalibrator {
             if (sum <= 0f) continue
             wR[i] = respR[i] / sum; wG[i] = respG[i] / sum; wB[i] = respB[i] / sum
         }
+
+        // Fused curve: F = Σ w_c·C_c
         val fused = FloatArray(n) { wR[it] * corrR[it] + wG[it] * corrG[it] + wB[it] * corrB[it] }
-        val order = (0 until n).filter { mask[it] }.sortedBy { lam[it] }
+
+        // Handoff wavelengths
+        val order = (0 until n).filter { mask[it] }.sortedBy { lamOrdered[it] }
         var hBG: Float? = null; var hGR: Float? = null
         for (i in order) {
-            if (hBG == null && wG[i] > wB[i]) hBG = lam[i]
-            if (hGR == null && wR[i] > wG[i]) hGR = lam[i]
+            if (hBG == null && wG[i] > wB[i]) hBG = lamOrdered[i]
+            if (hGR == null && wR[i] > wG[i]) hGR = lamOrdered[i]
         }
+
         fun weightsAt(t: Float): Triple<Float, Float, Float> {
-            val i = order.minByOrNull { abs(lam[it] - t) } ?: return Triple(0f, 0f, 0f)
+            val i = order.minByOrNull { abs(lamOrdered[it] - t) } ?: return Triple(0f, 0f, 0f)
             return Triple(wR[i], wG[i], wB[i])
         }
+
+        // Robustness: mean |C_c - F| / max|F| where w_c > 0.5
         var maxF = 0f
         for (i in 0 until n) if (mask[i] && fused[i] > maxF) maxF = fused[i]
         fun robust(w: FloatArray, c: FloatArray): Pair<Float, Int> {
@@ -117,12 +162,15 @@ object SpectralResponseCalibrator {
             for (i in 0 until n) if (mask[i] && w[i] > 0.5f) { sum += abs(c[i] - fused[i]); cnt++ }
             return (if (cnt > 0 && maxF > 0f) (100.0 * sum / cnt / maxF).toFloat() else 0f) to cnt
         }
+
         var fPeak = 0f; var fPeakL = 0f
-        for (i in 0 until n) if (mask[i] && fused[i] > fPeak) { fPeak = fused[i]; fPeakL = lam[i] }
+        for (i in 0 until n) if (mask[i] && fused[i] > fPeak) { fPeak = fused[i]; fPeakL = lamOrdered[i] }
+
         val exposure = lampFrames.map { it.exposureSeconds }.filter { it > 0 }.average().let { if (it.isNaN()) 0.0 else it }
+
         return SpdCalibrationResult(
-            lam, respR, respG, respB, corrR, corrG, corrB, wR, wG, wB, fused, mask,
-            (order.firstOrNull()?.let { lam[it] } ?: 0f) to (order.lastOrNull()?.let { lam[it] } ?: 0f),
+            lamOrdered, respR, respG, respB, corrR, corrG, corrB, wR, wG, wB, fused, mask,
+            (order.firstOrNull()?.let { lamOrdered[it] } ?: 0f) to (order.lastOrNull()?.let { lamOrdered[it] } ?: 0f),
             maskedCount, n, thresholdRatio, hBG, hGR,
             weightsAt(450f), weightsAt(520f), weightsAt(600f),
             pkR, pkG, pkB, robust(wR, corrR), robust(wG, corrG), robust(wB, corrB),
@@ -182,7 +230,6 @@ object SpectralResponseCalibrator {
     }.getOrNull()
 }
 
-/** SPD source: custom imported CSV first, then bundled assets/true_spd.csv. */
 object SpdLoader {
     const val CUSTOM_NAME = "custom_spd.csv"
     fun customFile(context: Context) = File(context.filesDir, "spd/$CUSTOM_NAME")
@@ -190,7 +237,7 @@ object SpdLoader {
     fun installCustom(context: Context, uri: Uri): String? = runCatching {
         val parsed = context.contentResolver.openInputStream(uri)?.use { parseReader(InputStreamReader(it)) }
             ?: return "Cannot open file"
-        if (parsed.size < 10) return "CSV too short (need wavelength_nm,intensity rows)"
+        if (parsed.size < 10) return "CSV too short"
         val dir = File(context.filesDir, "spd").apply { mkdirs() }
         context.contentResolver.openInputStream(uri)?.use { inp ->
             File(dir, CUSTOM_NAME).outputStream().use { out -> inp.copyTo(out) }

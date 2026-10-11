@@ -1,6 +1,8 @@
 package org.fungalsentinel.app.analysis
 
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 data class WavelengthCalibrationResult(
     val quality: String, val slope: Double, val intercept: Double,
@@ -12,7 +14,10 @@ data class WavelengthCalibrationResult(
     val frames: Int
 )
 
-/** Step 1: auto X-ROI, dynamic peak windows, B+R two-point fit, G validation. */
+/**
+ * Step 1: auto X-ROI, dynamic peak windows, B+R two-point fit, G validation.
+ * Aligned with Python find_peak_auto + TwoPointValidation.
+ */
 object WavelengthCalibrator {
     fun calibrate(frames: List<FrameProfile>, wlR: Double, wlG: Double, wlB: Double): WavelengthCalibrationResult? {
         if (frames.isEmpty()) return null
@@ -27,8 +32,10 @@ object WavelengthCalibrator {
         val slope = (pR - pB) / (wlR - wlB)
         if (slope == 0.0 || slope.isNaN() || slope.isInfinite()) return null
         val intercept = pR - slope * wlR
-        val residual = pG - (slope * wlG + intercept)
-        val errorNm = residual / slope
+        val predictedG = slope * wlG + intercept
+        val residualPx = pG - predictedG  // measured - predicted
+        // Python convention: wavelength_error = -residual_px / slope
+        val errorNm = -residualPx / slope
         val a = abs(errorNm)
         val quality = when {
             a <= 2.5 -> "PASS"
@@ -38,7 +45,7 @@ object WavelengthCalibrator {
         val exposure = frames.map { it.exposureSeconds }.filter { it > 0 }
             .average().let { if (it.isNaN()) 0.0 else it }
         return WavelengthCalibrationResult(
-            quality, slope, intercept, residual, errorNm, rs, re, pR, pG, pB,
+            quality, slope, intercept, residualPx, errorNm, rs, re, pR, pG, pB,
             exposure, f0.width, f0.height,
             downsample(r), downsample(g), downsample(b), frames.size
         )
@@ -55,26 +62,50 @@ object WavelengthCalibrator {
         return s to e
     }
 
+    /** Python find_peak_auto: moving_average(11), baseline(10th percentile), FWHM ±45px, baseline-corrected centroid */
     private fun centroid(p: FloatArray): Int {
         if (p.isEmpty()) return -1
-        val sm = smooth(p, 5)
-        var max = 0f; var mi = 0
-        for (i in sm.indices) if (sm[i] > max) { max = sm[i]; mi = i }
-        if (max <= 0f) return -1
-        val half = max * 0.5f
-        var s = mi; while (s > 0 && sm[s - 1] > half) s--
-        var e = mi; while (e < sm.lastIndex && sm[e + 1] > half) e++
-        var num = 0.0; var den = 0.0
-        for (i in s..e) { val w = (sm[i] - half).coerceAtLeast(0f).toDouble(); num += w * i; den += w }
-        return if (den > 0) (num / den).toInt() else mi
+        val n = p.size
+        val smooth = movingAverage(p, 11)
+        val validLo = 50; val validHi = n - 50
+        if (validLo >= validHi) return -1
+        val validSlice = smooth.sliceArray(validLo until validHi)
+        val sorted = validSlice.sorted()
+        val baseline = sorted[(sorted.size * 0.10).toInt().coerceAtMost(sorted.lastIndex)]
+        val corrected = FloatArray(n) { i -> max(0f, smooth[i] - baseline) }
+        var yMax = validLo
+        var maxY = 0f
+        for (i in validLo until validHi) {
+            if (corrected[i] > maxY) { maxY = corrected[i]; yMax = i }
+        }
+        if (maxY <= 0f) return -1
+        val half = 0.5f * maxY
+        var left = yMax; var right = yMax
+        while (left > validLo && corrected[left] > half) left--
+        while (right < validHi - 1 && corrected[right] > half) right++
+        val lo = max(validLo, left - 45)
+        val hi = min(validHi, right + 46)
+        // Baseline-corrected centroid
+        var sumW = 0.0; var sumWI = 0.0
+        for (i in lo..hi) {
+            val w = max(0f, p[i] - baseline).toDouble()
+            sumW += w; sumWI += w * i
+        }
+        return if (sumW > 0) (sumWI / sumW).toInt() else yMax
     }
 
-    private fun smooth(p: FloatArray, k: Int): FloatArray {
-        val out = FloatArray(p.size); val half = k / 2
+    private fun movingAverage(p: FloatArray, window: Int): FloatArray {
+        if (window <= 1) return p.copyOf()
+        val w = if (window % 2 == 0) window + 1 else window
+        val half = w / 2
+        val out = FloatArray(p.size)
         for (i in p.indices) {
-            var s = 0f; var c = 0
-            for (j in (i - half)..(i + half)) if (j in p.indices) { s += p[j]; c++ }
-            out[i] = if (c > 0) s / c else 0f
+            var sum = 0f; var cnt = 0
+            for (j in (i - half)..(i + half)) {
+                val idx = j.coerceIn(0, p.lastIndex)
+                sum += p[idx]; cnt++
+            }
+            out[i] = sum / cnt
         }
         return out
     }

@@ -9,20 +9,28 @@ import android.os.Build
 import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.max
+import kotlin.math.min
 
 data class FrameProfile(
     val width: Int, val height: Int,
     val redProfile: FloatArray, val greenProfile: FloatArray, val blueProfile: FloatArray,
-    val columnEnergy: FloatArray, val exposureSeconds: Double, val sourceKind: String
+    val columnEnergy: FloatArray, val exposureSeconds: Double, val sourceKind: String,
+    val xRoiStart: Int, val xRoiEnd: Int
 )
 
 /**
  * Extracts 1-D channel profiles (dispersion axis = Y) from JPEG/PNG or uncompressed DNG.
- * Hardened: every external input path is guarded; a bad file can never crash the app.
+ * Aligned with Python image_processing.py v1.4.3:
+ * - Black level subtraction (64.0) BEFORE exposure normalization
+ * - 99.5th percentile X-ROI detection with moving-average smoothing
+ * - ROI column MEAN (not sum) to preserve spectral resolution
+ * - Bilinear demosaicing for DNG (approximating cv2.COLOR_BayerRG2RGB)
  */
 object FrameProfileExtractor {
     private const val MAX_FILE_BYTES = 80_000_000
     private const val MAX_PIXELS = 40_000_000L
+    private const val BLACK_LEVEL = 64.0f
 
     fun extract(context: Context, uri: Uri): FrameProfile? = runCatching {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
@@ -33,8 +41,50 @@ object FrameProfileExtractor {
 
     private fun readExposure(bytes: ByteArray): Double = runCatching {
         android.media.ExifInterface(ByteArrayInputStream(bytes))
-            .getAttribute(android.media.ExifInterface.TAG_EXPOSURE_TIME)?.toDoubleOrNull() ?: 0.0
-    }.getOrDefault(0.0)
+            .getAttribute(android.media.ExifInterface.TAG_EXPOSURE_TIME)?.toDoubleOrNull() ?: 1.0
+    }.getOrDefault(1.0)
+
+    /** 99.5th percentile X-ROI detection (Python: auto_detect_x_roi) */
+    private fun autoDetectXRoi(colProfile: FloatArray, width: Int): Pair<Int, Int> {
+        if (colProfile.isEmpty()) return (width * 0.35).toInt() to (width * 0.65).toInt()
+        val windowSize = max(11, width / 300 * 2 + 1)
+        val smoothed = movingAverage(colProfile, windowSize)
+        val sorted = smoothed.sorted()
+        val base = sorted[(sorted.size * 0.20).toInt().coerceAtMost(sorted.lastIndex)]
+        val peak = smoothed.maxOrNull() ?: return (width * 0.35).toInt() to (width * 0.65).toInt()
+        if (peak <= base) return (width * 0.35).toInt() to (width * 0.65).toInt()
+        val threshold = base + 0.35f * (peak - base)
+        var start: Int? = null
+        val segments = mutableListOf<Pair<Int, Int>>()
+        for (i in smoothed.indices) {
+            if (smoothed[i] > threshold && start == null) start = i
+            if ((smoothed[i] <= threshold || i == smoothed.lastIndex) && start != null) {
+                segments.add(start to if (smoothed[i] <= threshold) i else i + 1)
+                start = null
+            }
+        }
+        if (segments.isEmpty()) return (width * 0.35).toInt() to (width * 0.65).toInt()
+        val longest = segments.maxByOrNull { it.second - it.first } ?: return (width * 0.35).toInt() to (width * 0.65).toInt()
+        return max(0, longest.first - 80) to min(width, longest.second + 80)
+    }
+
+    private fun movingAverage(x: FloatArray, window: Int): FloatArray {
+        if (window <= 1) return x.copyOf()
+        val w = if (window % 2 == 0) window + 1 else window
+        val half = w / 2
+        val padded = FloatArray(x.size + 2 * half)
+        for (i in 0 until half) padded[i] = x[0]
+        for (i in 0 until x.size) padded[half + i] = x[i]
+        for (i in 0 until half) padded[half + x.size + i] = x[x.lastIndex]
+        val kernel = FloatArray(w) { 1f / w }
+        val out = FloatArray(x.size)
+        for (i in 0 until x.size) {
+            var sum = 0f
+            for (j in 0 until w) sum += padded[i + j] * kernel[j]
+            out[i] = sum
+        }
+        return out
+    }
 
     private fun profileFromBitmap(bytes: ByteArray, exposure: Double): FrameProfile? = runCatching {
         val decoded: Bitmap? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -45,50 +95,148 @@ object FrameProfileExtractor {
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         }
         decoded ?: return null
-        val bm = if (decoded.config == Bitmap.Config.HARDWARE) {
+        val bm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            decoded.config == Bitmap.Config.HARDWARE
+        ) {
             val soft = decoded.copy(Bitmap.Config.ARGB_8888, false)
             decoded.recycle()
             soft
         } else decoded
         val w = bm.width; val h = bm.height
         if (w <= 0 || h <= 0 || w.toLong() * h > MAX_PIXELS) { bm.recycle(); return null }
-        val rP = FloatArray(h); val gP = FloatArray(h); val bP = FloatArray(h); val colE = FloatArray(w)
+
+        // Pass 1: column energy for ROI detection (with black level subtraction)
+        val colE = FloatArray(w)
         val row = IntArray(w)
         for (y in 0 until h) {
             bm.getPixels(row, 0, w, 0, y, w, 1)
             for (x in 0 until w) {
                 val c = row[x]
-                val r = (c shr 16) and 0xFF; val g = (c shr 8) and 0xFF; val b = c and 0xFF
-                rP[y] += r.toFloat(); gP[y] += g.toFloat(); bP[y] += b.toFloat()
-                colE[x] += (r + g + b) / 3f
+                val r = ((c shr 16) and 0xFF).toFloat() - BLACK_LEVEL
+                val g = ((c shr 8) and 0xFF).toFloat() - BLACK_LEVEL
+                val b = (c and 0xFF).toFloat() - BLACK_LEVEL
+                colE[x] += max(0f, r) + max(0f, g) + max(0f, b)
             }
         }
+        val (rs, re) = autoDetectXRoi(colE, w)
+        val roiW = (re - rs + 1).coerceAtLeast(1)
+
+        // Pass 2: ROI-restricted column MEAN per channel (Python: mean(axis=1))
+        val rP = FloatArray(h); val gP = FloatArray(h); val bP = FloatArray(h)
+        for (y in 0 until h) {
+            bm.getPixels(row, 0, w, 0, y, w, 1)
+            for (x in rs..re) {
+                val c = row[x]
+                val r = ((c shr 16) and 0xFF).toFloat() - BLACK_LEVEL
+                val g = ((c shr 8) and 0xFF).toFloat() - BLACK_LEVEL
+                val b = (c and 0xFF).toFloat() - BLACK_LEVEL
+                rP[y] += max(0f, r)
+                gP[y] += max(0f, g)
+                bP[y] += max(0f, b)
+            }
+            val expNorm = if (exposure > 0) exposure.toFloat() else 1f
+            rP[y] = (rP[y] / roiW) / expNorm
+            gP[y] = (gP[y] / roiW) / expNorm
+            bP[y] = (bP[y] / roiW) / expNorm
+        }
         bm.recycle()
-        FrameProfile(w, h, rP, gP, bP, colE, exposure, "bitmap")
+        FrameProfile(w, h, rP, gP, bP, colE, exposure, "bitmap", rs, re)
     }.getOrNull()
 
     private data class RawGrid(val width: Int, val height: Int, val samples: IntArray)
 
     private fun profileFromDng(bytes: ByteArray, exposure: Double): FrameProfile? = runCatching {
         val grid = TiffReader(bytes).readRaw() ?: return null
-        val rP = FloatArray(grid.height); val gP = FloatArray(grid.height); val bP = FloatArray(grid.height)
-        val colE = FloatArray(grid.width)
-        for (y in 0 until grid.height) {
-            val base = y * grid.width; val ry = y and 1
-            for (x in 0 until grid.width) {
-                val v = grid.samples[base + x]; val cx = x and 1
-                colE[x] += v.toFloat()
+        // Bilinear demosaicing (approximating cv2.COLOR_BayerRG2RGB)
+        val rgb = demosaicBilinear(grid)
+        val w = grid.width; val h = grid.height
+
+        // Column energy for ROI detection
+        val colE = FloatArray(w)
+        for (y in 0 until h) {
+            val base = y * w
+            for (x in 0 until w) {
+                val idx = base * 3 + x * 3
+                colE[x] += max(0f, rgb[idx] - BLACK_LEVEL) +
+                        max(0f, rgb[idx + 1] - BLACK_LEVEL) +
+                        max(0f, rgb[idx + 2] - BLACK_LEVEL)
+            }
+        }
+        val (rs, re) = autoDetectXRoi(colE, w)
+        val roiW = (re - rs + 1).coerceAtLeast(1)
+
+        // ROI-restricted column MEAN per channel
+        val rP = FloatArray(h); val gP = FloatArray(h); val bP = FloatArray(h)
+        val expNorm = if (exposure > 0) exposure.toFloat() else 1f
+        for (y in 0 until h) {
+            val base = y * w
+            for (x in rs..re) {
+                val idx = base * 3 + x * 3
+                rP[y] += max(0f, rgb[idx] - BLACK_LEVEL)
+                gP[y] += max(0f, rgb[idx + 1] - BLACK_LEVEL)
+                bP[y] += max(0f, rgb[idx + 2] - BLACK_LEVEL)
+            }
+            rP[y] = (rP[y] / roiW) / expNorm
+            gP[y] = (gP[y] / roiW) / expNorm
+            bP[y] = (bP[y] / roiW) / expNorm
+        }
+        FrameProfile(w, h, rP, gP, bP, colE, exposure, "dng", rs, re)
+    }.getOrNull()
+
+    /** Simple bilinear demosaicing for RGGB Bayer pattern */
+    private fun demosaicBilinear(grid: RawGrid): FloatArray {
+        val w = grid.width; val h = grid.height
+        val rgb = FloatArray(w * h * 3)
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val idx = (y * w + x) * 3
+                val ry = y and 1; val cx = x and 1
+                // RGGB: (0,0)=R, (0,1)=G, (1,0)=G, (1,1)=B
+                val rawVal = grid.samples[y * w + x].toFloat()
                 when {
-                    ry == 0 && cx == 0 -> rP[y] += v.toFloat()
-                    ry == 1 && cx == 1 -> bP[y] += v.toFloat()
-                    else -> gP[y] += v.toFloat()
+                    ry == 0 && cx == 0 -> { // R site
+                        rgb[idx] = rawVal
+                        rgb[idx + 1] = avgNeighbors(grid, x, y, w, h, isGreen = true)
+                        rgb[idx + 2] = avgNeighbors(grid, x, y, w, h, isBlue = true)
+                    }
+                    ry == 0 && cx == 1 -> { // G site (top row)
+                        rgb[idx] = avgNeighbors(grid, x, y, w, h, isRed = true)
+                        rgb[idx + 1] = rawVal
+                        rgb[idx + 2] = avgNeighbors(grid, x, y, w, h, isBlue = true)
+                    }
+                    ry == 1 && cx == 0 -> { // G site (left col)
+                        rgb[idx] = avgNeighbors(grid, x, y, w, h, isRed = true)
+                        rgb[idx + 1] = rawVal
+                        rgb[idx + 2] = avgNeighbors(grid, x, y, w, h, isBlue = true)
+                    }
+                    else -> { // B site
+                        rgb[idx] = avgNeighbors(grid, x, y, w, h, isRed = true)
+                        rgb[idx + 1] = avgNeighbors(grid, x, y, w, h, isGreen = true)
+                        rgb[idx + 2] = rawVal
+                    }
                 }
             }
         }
-        for (y in 1 until grid.height step 2) rP[y] = rP[y - 1]
-        for (y in 0 until grid.height step 2) if (y + 1 < grid.height) bP[y] = bP[y + 1]
-        FrameProfile(grid.width, grid.height, rP, gP, bP, colE, exposure, "dng")
-    }.getOrNull()
+        return rgb
+    }
+
+    private fun avgNeighbors(grid: RawGrid, x: Int, y: Int, w: Int, h: Int,
+                             isRed: Boolean = false, isGreen: Boolean = false, isBlue: Boolean = false): Float {
+        var sum = 0f; var cnt = 0
+        for (dy in -1..1) for (dx in -1..1) {
+            if (dx == 0 && dy == 0) continue
+            val nx = x + dx; val ny = y + dy
+            if (nx !in 0 until w || ny !in 0 until h) continue
+            val nry = ny and 1; val ncx = nx and 1
+            val isR = (nry == 0 && ncx == 0)
+            val isG = (nry == 0 && ncx == 1) || (nry == 1 && ncx == 0)
+            val isB = (nry == 1 && ncx == 1)
+            if ((isRed && isR) || (isGreen && isG) || (isBlue && isB)) {
+                sum += grid.samples[ny * w + nx].toFloat(); cnt++
+            }
+        }
+        return if (cnt > 0) sum / cnt else 0f
+    }
 
     private class TiffReader(private val b: ByteArray) {
         private val order = if (b[0] == 0x49.toByte()) ByteOrder.LITTLE_ENDIAN else ByteOrder.BIG_ENDIAN
