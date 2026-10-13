@@ -1,41 +1,41 @@
 package org.fungalsentinel.app.ui.steps
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.capture.CaptureUploadScreen
-import org.fungalsentinel.app.ui.components.HalfScreenLayout
-import org.fungalsentinel.app.ui.components.HelpTopBar
-import org.fungalsentinel.app.ui.components.StepIndicator
-import org.fungalsentinel.app.ui.components.TutorialHost
+import org.fungalsentinel.app.ui.components.*
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 
-/**
- * Fluorophore options with integration ranges (FSSA v1.3.4 aligned).
- * NOTE: en-dash ranges fixed (previous build had mojibake strings).
- */
-enum class Fluorophore(val displayName: String, val integrationRangeNm: String) {
-    YPET("Ypet", "500–530 nm"),
-    EGFP("EGFP", "500–540 nm"),
-    MCHERRY("mCherry", "590–630 nm"),
-    CFP("CFP", "460–490 nm"),
-    MTURQUOISE2("mTurquoise2", "460–490 nm")
+enum class Fluorophore(val displayName: String, val bandNm: String) {
+    YPET("Ypet", "500-530 nm"),
+    EGFP("EGFP", "500-540 nm"),
+    MCHERRY("mCherry", "590-630nm"),
+    CFP("CFP", "460-490 nm"),
+    MTURQUOISE2("mTurquoise2", "460-490 nm")
 }
 
 /**
- * Step 3 — Sample analysis (blank + unknown sample).
- * Integration window is derived from the Step 1 mapping; results -> Report Page 3.
+ * Step 3 — concept-mockup layout:
+ * header → green note box → white status box →
+ * Row [ vertical step indicator | Column( fluorophore row, blank row, sample row, buttons ) ]
+ * The indicator owns the left column so controls never collide with it in landscape.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,10 +50,24 @@ fun Step3SampleScreen(
     val uiState by projectViewModel.uiState.collectAsState()
     val blankCaptures = uiState.blankCaptures
     val sampleCaptures = uiState.sampleCaptures
+    val report = uiState.reportData
 
     var selectedFluorophore by remember { mutableStateOf(Fluorophore.EGFP) }
     var showBlankCapture by remember { mutableStateOf(false) }
     var showSampleCapture by remember { mutableStateOf(false) }
+    var fluorophoreExpanded by remember { mutableStateOf(false) }
+
+    val computed = report.step3Status.startsWith("COMPUTED")
+
+    val status = report.step3Status
+    val token = status.substringBefore('|')
+    val message = status.substringAfter('|', status)
+    val statusColor = when (token) {
+        "FAILED", "BLOCKED" -> MaterialTheme.colorScheme.error
+        "COMPUTED", "PRESET" -> Color(0xFF5CFF5C)
+        "PROCESSING" -> Color(0xFF5CA8FF)
+        else -> Color(0xFFF5F5C0)
+    }
 
     val tutorial = TutorialHost(
         stepId = "step3_sample",
@@ -61,7 +75,6 @@ fun Step3SampleScreen(
         bodyRes = R.string.tutorial_step3_body
     )
 
-    // Push default fluorophore once so Report has a band before user changes it
     LaunchedEffect(Unit) {
         projectViewModel.setFluorophore(selectedFluorophore.name)
     }
@@ -70,7 +83,7 @@ fun Step3SampleScreen(
         if (showBlankCapture) {
             CaptureUploadScreen(
                 title = stringResource(R.string.step3_capture_blank_title),
-                subtitle = "Blank control (no target fluorophore)",
+                subtitle = stringResource(R.string.step3_capture_blank_title),
                 minCaptures = 1,
                 maxCaptures = 5,
                 capturedImages = blankCaptures,
@@ -83,7 +96,7 @@ fun Step3SampleScreen(
         } else if (showSampleCapture) {
             CaptureUploadScreen(
                 title = stringResource(R.string.step3_capture_sample_title),
-                subtitle = "Unknown sample",
+                subtitle = stringResource(R.string.step3_capture_sample_title),
                 minCaptures = 1,
                 maxCaptures = 5,
                 capturedImages = sampleCaptures,
@@ -94,184 +107,179 @@ fun Step3SampleScreen(
                 modifier = innerModifier
             )
         } else {
-            Scaffold(
-                modifier = innerModifier,
-                topBar = {
-                    HelpTopBar(
-                        title = stringResource(R.string.step3_title),
-                        tutorial = tutorial,
-                        onBack = onBack
+            Column(
+                modifier = innerModifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 品红标题条直接显示内容（无 Step x 前缀）
+                NeonHeader("STEP3:", stringResource(R.string.step3_short), onBack, tutorial)
+
+                NeonOutlineBox(MaterialTheme.colorScheme.secondary) {
+                    Text(
+                        text = if (blankMode == "FULL") stringResource(R.string.note_blank_full)
+                        else stringResource(R.string.note_blank_single),
+                        color = Color(0xFFF5F5C0),
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
-            ) { padding ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+
+                NeonOutlineBox(Color.White) {
+                    Text(
+                        text = message,
+                        color = statusColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // ── 概念图结构：左进度条独立列，右控件列，互不干扰 ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    StepIndicator(currentStep = 3, totalSteps = 4)
+                    NeonStepIndicator(current = 3)
 
-                    Text(
-                        text = stringResource(R.string.step3_description),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
-                    // Blank mode note (Settings-driven)
-                    Text(
-                        text = if (blankMode == "FULL") {
-                            "Blank mode: FULL — Step 4 captures a separate blank per standard group."
-                        } else {
-                            "Blank mode: SINGLE — one shared blank workflow; Step 4 still captures per-group blanks."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    // ── Fluorophore selector ──
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                "Target fluorophore",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            var expanded by remember { mutableStateOf(false) }
-                            ExposedDropdownMenuBox(
-                                expanded = expanded,
-                                onExpandedChange = { expanded = !expanded }
+                        // Target fluorophore
+                        NeonRowBlock {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                OutlinedTextField(
-                                    value = "${selectedFluorophore.displayName} (${selectedFluorophore.integrationRangeNm})",
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = {
-                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .menuAnchor()
+                                Text(
+                                    stringResource(R.string.lbl_target_fluorophore),
+                                    color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp
                                 )
-                                ExposedDropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false }
+                                ExposedDropdownMenuBox(
+                                    expanded = fluorophoreExpanded,
+                                    onExpandedChange = { fluorophoreExpanded = !fluorophoreExpanded }
                                 ) {
-                                    Fluorophore.values().forEach { fluorophore ->
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text("${fluorophore.displayName} — ${fluorophore.integrationRangeNm}")
-                                            },
-                                            onClick = {
-                                                selectedFluorophore = fluorophore
-                                                projectViewModel.setFluorophore(fluorophore.name)
-                                                expanded = false
-                                            }
-                                        )
+                                    Box(
+                                        modifier = Modifier
+                                            .background(Color(0xFFF5F5C0), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                            .menuAnchor()
+                                            .clickable { fluorophoreExpanded = true }
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                "${selectedFluorophore.displayName} (${selectedFluorophore.bandNm})",
+                                                color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                                            )
+                                            Icon(Icons.Default.ArrowDropDown, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                    DropdownMenu(
+                                        expanded = fluorophoreExpanded,
+                                        onDismissRequest = { fluorophoreExpanded = false },
+                                        modifier = Modifier.background(Color(0xFFF5F5C0))
+                                    ) {
+                                        Fluorophore.values().forEach { f ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        "${f.displayName} (${f.bandNm})",
+                                                        color = Color.Black,
+                                                        fontWeight = if (f == selectedFluorophore) FontWeight.Bold else FontWeight.Normal,
+                                                        fontSize = 13.sp
+                                                    )
+                                                },
+                                                onClick = {
+                                                    selectedFluorophore = f
+                                                    projectViewModel.setFluorophore(f.name)
+                                                    fluorophoreExpanded = false
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // ── Blank batch card ──
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text("Blank captures", fontWeight = FontWeight.Bold)
-                                Text(
-                                    text = "${blankCaptures.size} / 5",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                        // Blank captures
+                        NeonRowBlock {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(stringResource(R.string.lbl_blank_captures), color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("${blankCaptures.size}/5", color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Button(
+                                    onClick = { showBlankCapture = true },
+                                    enabled = blankCaptures.size < 5,
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFF5F5C0), contentColor = Color.Black,
+                                        disabledContainerColor = Color(0xFFF5F5C0).copy(alpha = 0.4f)
+                                    ),
+                                    modifier = Modifier.height(36.dp)
+                                ) { Text(stringResource(R.string.act_capture), fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                             }
-                            Button(
-                                onClick = { showBlankCapture = true },
-                                enabled = blankCaptures.size < 5
-                            ) { Text("Capture") }
                         }
-                    }
 
-                    // ── Sample batch card ──
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text("Sample captures", fontWeight = FontWeight.Bold)
-                                Text(
-                                    text = "${sampleCaptures.size} / 5",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                        // Sample captures
+                        NeonRowBlock {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(stringResource(R.string.lbl_sample_captures), color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("${sampleCaptures.size}/5", color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Button(
+                                    onClick = { showSampleCapture = true },
+                                    enabled = sampleCaptures.size < 5,
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFF5F5C0), contentColor = Color.Black,
+                                        disabledContainerColor = Color(0xFFF5F5C0).copy(alpha = 0.4f)
+                                    ),
+                                    modifier = Modifier.height(36.dp)
+                                ) { Text(stringResource(R.string.act_capture), fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                             }
-                            Button(
-                                onClick = { showSampleCapture = true },
-                                enabled = sampleCaptures.size < 5
-                            ) { Text("Capture") }
+                        }
+
+                        // Common buttons (same right-column group as Step1/2)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            NeonYellowButton(stringResource(R.string.act_view_report), onOpenReport, modifier = Modifier.weight(1f))
+                            NeonYellowButton(stringResource(R.string.next_step), onNext, enabled = computed, modifier = Modifier.weight(1f))
                         }
                     }
-
-                    if (blankCaptures.isNotEmpty() && sampleCaptures.isNotEmpty()) {
-                        Text(
-                            text = "Analysis computed. Open Report (Page 3) for integrated area, SD and spectrum.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    // ── Report ──
-                    Button(
-                        onClick = onOpenReport,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Icon(Icons.Default.Assessment, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("View Report")
-                    }
-
-                    // ── Next ──
-                    if (blankCaptures.isNotEmpty() && sampleCaptures.isNotEmpty()) {
-                        Button(
-                            onClick = onNext,
-                            modifier = Modifier.fillMaxWidth().height(56.dp)
-                        ) {
-                            Text(stringResource(R.string.next_step))
-                            Spacer(Modifier.width(8.dp))
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
-                        }
-                    }
-
-                    Spacer(Modifier.height(32.dp))
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun NeonRowBlock(content: @Composable RowScope.() -> Unit) {
+    Box {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .offset(x = 3.dp, y = 3.dp)
+                .background(Color(0xFF8F8F8F), RoundedCornerShape(8.dp))
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.tertiary, RoundedCornerShape(8.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+            content = content
+        )
     }
 }

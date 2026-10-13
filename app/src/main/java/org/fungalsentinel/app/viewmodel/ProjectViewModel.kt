@@ -1,6 +1,7 @@
 package org.fungalsentinel.app.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.net.Uri
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
@@ -14,7 +15,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.fungalsentinel.app.FssaApplication
+import org.fungalsentinel.app.R
 import org.fungalsentinel.app.analysis.ConcentrationRegressor
+import org.fungalsentinel.app.analysis.FrameProfile
 import org.fungalsentinel.app.analysis.FrameProfileExtractor
 import org.fungalsentinel.app.analysis.SampleAnalyzer
 import org.fungalsentinel.app.analysis.SpdCalibrationResult
@@ -29,6 +32,7 @@ import org.fungalsentinel.app.data.model.StandardGroupEntity
 import org.fungalsentinel.app.data.preset.PresetEntity
 import org.fungalsentinel.app.data.preset.PresetTypes
 import java.util.Locale
+import kotlin.math.roundToInt
 
 data class StandardGroupInput(
     val id: Int,
@@ -39,7 +43,7 @@ data class StandardGroupInput(
 )
 
 data class ReportData(
-    // ── Page 1 ──
+    // ── Page 1 (v1.4.5 estimator) ──
     val wavelengthQuality: String = "—",
     val wavelengthGError: String = "— nm",
     val mappingFormula: String = "—",
@@ -51,9 +55,11 @@ data class ReportData(
     val slope: Double? = null,
     val intercept: Double? = null,
     val gErrorNm: Double? = null,
-    val peakR: Int? = null,
-    val peakG: Int? = null,
-    val peakB: Int? = null,
+    val peakR: Double? = null,
+    val peakG: Double? = null,
+    val peakB: Double? = null,
+    val peakWindows: List<Pair<Int, Int>> = emptyList(),
+    val peakDiagnostics: String = "—",
     val roiStart: Int? = null,
     val roiEnd: Int? = null,
     val sensorWidth: Int? = null,
@@ -65,7 +71,7 @@ data class ReportData(
     val wlR: Double = 622.5,
     val wlG: Double = 522.5,
     val wlB: Double = 462.5,
-    // ── Page 2 (v1.4.4 fusion) ──
+    // ── Page 2 (v1.4.4 logistic fusion, mask-cropped) ──
     val spdStatus: String = "Pending",
     val spdSource: String = "true_spd.csv (bundled)",
     val spdCoeffR: String = "—",
@@ -122,7 +128,12 @@ data class ReportData(
     val curveSlope: Double? = null,
     val curveIntercept: Double? = null,
     val curvePoints: List<Pair<Double, Double>> = emptyList(),
-    val curveWarnings: List<String> = emptyList()
+    val curveWarnings: List<String> = emptyList(),
+    // ── Real status tracking ("TOKEN|localized message") ──
+    val step1Status: String = "IDLE",
+    val step2Status: String = "IDLE",
+    val step3Status: String = "IDLE",
+    val step4Status: String = "IDLE"
 )
 
 data class ProjectUiState(
@@ -156,6 +167,38 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             AppPreferences.getSettings(application).collect { _settings.value = it }
         }
+        // Localized idle defaults
+        _uiState.value = _uiState.value.copy(
+            reportData = _uiState.value.reportData.copy(
+                step1Status = "IDLE|" + str(R.string.st_idle1),
+                step2Status = "IDLE|" + str(R.string.st_idle2),
+                step3Status = "IDLE|" + str(R.string.st_idle3),
+                step4Status = "IDLE|" + str(R.string.st_idle4)
+            )
+        )
+    }
+
+    // ═══════════ helpers ═══════════
+    private fun str(id: Int, vararg a: Any): String = getApplication<Application>().getString(id, *a)
+    private fun setStep1(s: String) { _uiState.value = _uiState.value.copy(reportData = _uiState.value.reportData.copy(step1Status = s)) }
+    private fun setStep2(s: String) { _uiState.value = _uiState.value.copy(reportData = _uiState.value.reportData.copy(step2Status = s)) }
+    private fun setStep3(s: String) { _uiState.value = _uiState.value.copy(reportData = _uiState.value.reportData.copy(step3Status = s)) }
+    private fun setStep4(s: String) { _uiState.value = _uiState.value.copy(reportData = _uiState.value.reportData.copy(step4Status = s)) }
+
+    private class DecodeBatch(val frames: List<FrameProfile>, val total: Int, val failed: List<String>)
+
+    private fun note(b: DecodeBatch): String =
+        if (b.failed.isEmpty()) str(R.string.st_decoded, b.total, b.total)
+        else str(R.string.st_decoded, b.frames.size, b.total) + " (" +
+                str(R.string.st_undecodable, b.failed.joinToString(", ")) + ")"
+
+    private fun decode(ctx: Context, uris: List<Uri>): DecodeBatch {
+        val ok = mutableListOf<FrameProfile>(); val bad = mutableListOf<String>()
+        uris.forEachIndexed { i, u ->
+            val p = FrameProfileExtractor.extract(ctx, u)
+            if (p != null) ok.add(p) else bad.add("#${i + 1}")
+        }
+        return DecodeBatch(ok, uris.size, bad)
     }
 
     // ═══════════ lifecycle ═══════════
@@ -191,6 +234,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
                 _uiState.value = ProjectUiState(project, pos, spd, blank, sample, groups)
+                if (pos.isNotEmpty()) setStep1("PROCESSING|" + str(R.string.st_processing_frames, pos.size))
+                if (spd.isNotEmpty()) setStep2("PROCESSING|" + str(R.string.st_processing_frames, spd.size))
+                if (blank.isNotEmpty() || sample.isNotEmpty()) setStep3("PROCESSING|" + str(R.string.st_processing_frames, blank.size + sample.size))
                 analyzePositioning()
                 if (spd.isNotEmpty()) analyzeSpd()
                 analyzeSample()
@@ -205,12 +251,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ═══════════ setters: state + auto-save + immediate analysis ═══════════
+    // ═══════════ setters ═══════════
     fun setPositioningCaptures(uris: List<Uri>) {
         _uiState.value = _uiState.value.copy(positioningCaptures = uris)
+        setStep1("PROCESSING|" + str(R.string.st_processing_frames, uris.size))
         viewModelScope.launch(Dispatchers.IO) {
-            persistAll()
-            analyzePositioning()
+            persistAll(); analyzePositioning()
             if (_uiState.value.spdCaptures.isNotEmpty()) analyzeSpd()
             analyzeSample()
         }
@@ -218,16 +264,19 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun setSpdCaptures(uris: List<Uri>) {
         _uiState.value = _uiState.value.copy(spdCaptures = uris)
+        setStep2("PROCESSING|" + str(R.string.st_processing_frames, uris.size))
         viewModelScope.launch(Dispatchers.IO) { persistAll(); analyzeSpd() }
     }
 
     fun setBlankCaptures(uris: List<Uri>) {
         _uiState.value = _uiState.value.copy(blankCaptures = uris)
+        setStep3("PROCESSING|" + str(R.string.st_processing_frames, uris.size))
         viewModelScope.launch(Dispatchers.IO) { persistAll(); analyzeSample() }
     }
 
     fun setSampleCaptures(uris: List<Uri>) {
         _uiState.value = _uiState.value.copy(sampleCaptures = uris)
+        setStep3("PROCESSING|" + str(R.string.st_processing_frames, uris.size))
         viewModelScope.launch(Dispatchers.IO) { persistAll(); analyzeSample() }
     }
 
@@ -258,28 +307,40 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val st = _uiState.value
-                val slope = st.reportData.slope ?: return@launch
-                val intercept = st.reportData.intercept ?: return@launch
+                val slope = st.reportData.slope ?: run { setStep4("BLOCKED|" + str(R.string.st_blocked_step1)); return@launch }
+                val intercept = st.reportData.intercept ?: run { setStep4("BLOCKED|" + str(R.string.st_blocked_step1)); return@launch }
+                if (st.standardGroups.size < 2) { setStep4("BLOCKED|" + str(R.string.st4_blocked_groups)); return@launch }
+                setStep4("PROCESSING|" + str(R.string.st4_processing))
                 val ctx = getApplication<Application>()
                 val spd = spdResult
                 val points = mutableListOf<Pair<Double, Double>>()
                 val rows = mutableListOf<String>()
+                var skipped = 0
                 for (g in st.standardGroups) {
-                    val blanks = g.blankUris.mapNotNull { FrameProfileExtractor.extract(ctx, it) }
-                    val samples = g.sampleUris.mapNotNull { FrameProfileExtractor.extract(ctx, it) }
+                    val blankBatch = decode(ctx, g.blankUris)
+                    val sampleBatch = decode(ctx, g.sampleUris)
+                    if (blankBatch.frames.isEmpty() || sampleBatch.frames.isEmpty()) { skipped++; continue }
                     val band = parseBand(st.reportData.sampleBand) ?: (500.0 to 540.0)
                     val a = SampleAnalyzer.analyze(
-                        blanks, samples, band.first, band.second, slope, intercept,
+                        blankBatch.frames, sampleBatch.frames, band.first, band.second, slope, intercept,
                         fluorophore = st.reportData.sampleFluorophore,
                         wavelengths = spd?.wavelengths,
                         respR = spd?.respR, respG = spd?.respG, respB = spd?.respB
-                    ) ?: continue
+                    ) ?: run { skipped++; continue }
                     points.add(g.concentration to a.correctedArea)
                     rows.add(String.format(Locale.US, "%.3f %s → %.1f", g.concentration, g.unit, a.correctedArea))
                 }
-                val reg = ConcentrationRegressor.fit(points) ?: return@launch
+                if (points.size < 2) { setStep4("FAILED|" + str(R.string.st4_failed_groups, points.size)); return@launch }
+                val reg = ConcentrationRegressor.fit(points) ?: run {
+                    setStep4("FAILED|" + str(R.string.st4_failed_reg)); return@launch
+                }
                 val predicted = st.reportData.correctedAreaValue?.let { ConcentrationRegressor.predict(reg, it) }
                 val warnings = reg.warnings.toMutableList()
+                if (points.any { it.second < 0.0 })
+                    warnings.add("Negative standard area(s) — check blank pairing / SPD correction")
+                val sampleArea = st.reportData.correctedAreaValue
+                if (sampleArea != null && sampleArea < 0.0)
+                    warnings.add("Negative sample area — prediction unreliable")
                 predicted?.let { p ->
                     if (p < 0) warnings.add("Negative prediction — check blank / calibration")
                     val xs = points.map { it.first }
@@ -298,7 +359,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                         curveWarnings = warnings
                     )
                 )
+                setStep4(
+                    "COMPUTED|" + str(R.string.st4_computed, String.format(Locale.US, "%.4f", reg.r2), points.size) +
+                            if (warnings.isNotEmpty()) str(R.string.st_warn_count, warnings.size) else ""
+                )
             }.onFailure { e ->
+                setStep4("FAILED|" + (e.message ?: e.javaClass.simpleName))
                 _uiState.value = _uiState.value.copy(
                     reportData = _uiState.value.reportData.copy(
                         regressionFormula = "Analysis error: ${e.javaClass.simpleName}"
@@ -318,7 +384,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     slope = r.slope, intercept = r.intercept, gErrorNm = r.gErrorNm,
                     quality = r.wavelengthQuality, roiStart = r.roiStart, roiEnd = r.roiEnd,
                     sensorWidth = r.sensorWidth, sensorHeight = r.sensorHeight,
-                    peakR = r.peakR, peakG = r.peakG, peakB = r.peakB,
+                    peakR = r.peakR?.roundToInt(), peakG = r.peakG?.roundToInt(), peakB = r.peakB?.roundToInt(),
                     wlR = r.wlR, wlG = r.wlG, wlB = r.wlB,
                     exposureSeconds = r.exposureTime.removeSuffix(" s").toDoubleOrNull()
                 )
@@ -357,7 +423,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 validationPoint = "G(${p.wlG ?: 522.5}nm)",
                 gResidual = "—",
                 slope = slope, intercept = intercept, gErrorNm = p.gErrorNm,
-                peakR = p.peakR, peakG = p.peakG, peakB = p.peakB,
+                peakR = p.peakR?.toDouble(), peakG = p.peakG?.toDouble(), peakB = p.peakB?.toDouble(),
+                peakWindows = emptyList(),
+                peakDiagnostics = "Loaded from preset (peaks rounded to px)",
                 roiStart = p.roiStart, roiEnd = p.roiEnd,
                 sensorWidth = p.sensorWidth, sensorHeight = p.sensorHeight,
                 wlR = p.wlR ?: 622.5, wlG = p.wlG ?: 522.5, wlB = p.wlB ?: 462.5,
@@ -365,6 +433,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 redProfile = emptyList(), greenProfile = emptyList(), blueProfile = emptyList()
             )
         )
+        setStep1("PRESET|" + str(R.string.st_preset_loaded, p.quality ?: "—"))
         viewModelScope.launch(Dispatchers.IO) {
             if (_uiState.value.spdCaptures.isNotEmpty()) analyzeSpd()
             analyzeSample()
@@ -376,8 +445,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         if (restored != null) {
             spdResult = restored
             applySpdResult(restored.copy(spdSource = p.spdSource ?: restored.spdSource))
+            setStep2("PRESET|" + str(R.string.st_preset_loaded, p.name))
         } else {
-            setSpdStatus("PRESET (${p.name})")
+            setStep2("PRESET|" + str(R.string.st_preset_loaded, p.name))
             _uiState.value = _uiState.value.copy(
                 reportData = _uiState.value.reportData.copy(
                     spdCoeffR = p.coeffR?.let { String.format(Locale.US, "%.4f", it) } ?: "—",
@@ -392,9 +462,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun updatePreset(p: PresetEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            presetDao.update(p.copy(updatedAt = System.currentTimeMillis()))
-        }
+        viewModelScope.launch(Dispatchers.IO) { presetDao.update(p.copy(updatedAt = System.currentTimeMillis())) }
     }
 
     fun deletePreset(id: Long) {
@@ -405,14 +473,20 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun analyzePositioning() {
         runCatching {
             val uris = _uiState.value.positioningCaptures
-            if (uris.isEmpty()) return
+            if (uris.isEmpty()) { setStep1("IDLE|" + str(R.string.st_idle1)); return }
             val ctx = getApplication<Application>()
-            val profiles = uris.mapNotNull { FrameProfileExtractor.extract(ctx, it) }
+            val batch = decode(ctx, uris)
+            if (batch.frames.isEmpty()) {
+                setStep1("FAILED|" + str(R.string.st_failed_decode, note(batch))); return
+            }
             val s = _settings.value
             val wlR = s.wavelengthR.toDoubleOrNull() ?: 622.5
             val wlG = s.wavelengthG.toDoubleOrNull() ?: 522.5
             val wlB = s.wavelengthB.toDoubleOrNull() ?: 462.5
-            val res = WavelengthCalibrator.calibrate(profiles, wlR, wlG, wlB) ?: return
+            val res = WavelengthCalibrator.calibrate(batch.frames, wlR, wlG, wlB)
+            if (res == null) {
+                setStep1("FAILED|" + str(R.string.st_failed_peak, note(batch))); return
+            }
             _uiState.value = _uiState.value.copy(
                 reportData = _uiState.value.reportData.copy(
                     wavelengthQuality = res.quality,
@@ -425,6 +499,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     gResidual = String.format(Locale.US, "%+.2f pixels", res.gResidualPx),
                     slope = res.slope, intercept = res.intercept, gErrorNm = res.gErrorNm,
                     peakR = res.peakR, peakG = res.peakG, peakB = res.peakB,
+                    peakWindows = res.peakWindows,
+                    peakDiagnostics = if (res.peakFlags.isEmpty()) "—" else "⚠ " + res.peakFlags.joinToString("; "),
                     roiStart = res.roiStart, roiEnd = res.roiEnd,
                     sensorWidth = res.sensorWidth, sensorHeight = res.sensorHeight,
                     redProfile = res.red, greenProfile = res.green, blueProfile = res.blue,
@@ -432,7 +508,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     wlR = wlR, wlG = wlG, wlB = wlB
                 )
             )
+            setStep1(
+                "COMPUTED|" + str(R.string.st_computed_quality, res.quality, note(batch)) +
+                        if (res.peakFlags.isNotEmpty()) str(R.string.st_suspect) else ""
+            )
         }.onFailure { e ->
+            setStep1("FAILED|" + (e.message ?: e.javaClass.simpleName))
             _uiState.value = _uiState.value.copy(
                 reportData = _uiState.value.reportData.copy(
                     wavelengthQuality = "FAILED",
@@ -445,54 +526,68 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun analyzeSpd() {
         runCatching {
             val uris = _uiState.value.spdCaptures
-            if (uris.isEmpty()) {
-                spdResult = null
-                resetPage2()
-                return
-            }
+            if (uris.isEmpty()) { spdResult = null; resetPage2(); setStep2("IDLE|" + str(R.string.st_idle2)); return }
             val ctx = getApplication<Application>()
-            val lamp = uris.mapNotNull { FrameProfileExtractor.extract(ctx, it) }
-            val pos = _uiState.value.positioningCaptures.mapNotNull { FrameProfileExtractor.extract(ctx, it) }
+            val lampBatch = decode(ctx, uris)
+            if (lampBatch.frames.isEmpty()) {
+                setStep2("FAILED|" + str(R.string.st_failed_decode, note(lampBatch))); return
+            }
+            val posBatch = decode(ctx, _uiState.value.positioningCaptures)
+            if (posBatch.frames.isEmpty()) {
+                setStep2("BLOCKED|" + str(R.string.st_blocked_pos, note(posBatch))); return
+            }
             val slope = _uiState.value.reportData.slope
             val intercept = _uiState.value.reportData.intercept
-            if (lamp.isEmpty() || pos.isEmpty() || slope == null || intercept == null) {
-                setSpdStatus("Requires Step 1 calibration first")
-                return
+            if (slope == null || intercept == null) {
+                setStep2("BLOCKED|" + str(R.string.st_blocked_step1)); return
             }
             val spd = SpdLoader.load(ctx)
-            if (spd == null) {
-                setSpdStatus("SPD source missing (assets/true_spd.csv or Settings import)")
-                return
-            }
-            val res = SpectralResponseCalibrator.calibrate(lamp, pos, spd.second, slope, intercept, spd.first)
+            if (spd == null) { setStep2("FAILED|" + str(R.string.st_failed_spd_source)); return }
+            val res = SpectralResponseCalibrator.calibrate(
+                lampBatch.frames, posBatch.frames, spd.second, slope, intercept, spd.first
+            )
             if (res == null) {
-                setSpdStatus("SPD calibration failed (mask too small?)")
-                return
+                setStep2("FAILED|" + str(R.string.st_failed_spd_degenerate, note(lampBatch))); return
             }
             spdResult = res
             applySpdResult(res)
+            setStep2("COMPUTED|" + str(
+                R.string.st_computed_spd, res.frames,
+                "${res.maskedCount}/${res.totalCount}", note(lampBatch)
+            ))
         }.onFailure { e ->
-            setSpdStatus("Analysis error: ${e.javaClass.simpleName}")
+            setStep2("FAILED|" + (e.message ?: e.javaClass.simpleName))
         }
     }
 
     private suspend fun analyzeSample() {
         runCatching {
             val st = _uiState.value
-            if (st.blankCaptures.isEmpty() || st.sampleCaptures.isEmpty()) return
-            val slope = st.reportData.slope ?: return
-            val intercept = st.reportData.intercept ?: return
-            val band = parseBand(st.reportData.sampleBand) ?: return
+            if (st.blankCaptures.isEmpty() || st.sampleCaptures.isEmpty()) {
+                setStep3("IDLE|" + str(R.string.st_idle3)); return
+            }
+            setStep3("PROCESSING|" + str(R.string.st_processing_frames, st.blankCaptures.size + st.sampleCaptures.size))
+            val slope = st.reportData.slope
+            val intercept = st.reportData.intercept
+            if (slope == null || intercept == null) {
+                setStep3("BLOCKED|" + str(R.string.st_blocked_step1)); return
+            }
+            val band = parseBand(st.reportData.sampleBand)
+            if (band == null) { setStep3("BLOCKED|" + str(R.string.st_blocked_band)); return }
             val ctx = getApplication<Application>()
-            val blanks = st.blankCaptures.mapNotNull { FrameProfileExtractor.extract(ctx, it) }
-            val samples = st.sampleCaptures.mapNotNull { FrameProfileExtractor.extract(ctx, it) }
+            val blankBatch = decode(ctx, st.blankCaptures)
+            val sampleBatch = decode(ctx, st.sampleCaptures)
+            if (blankBatch.frames.isEmpty() || sampleBatch.frames.isEmpty()) {
+                setStep3("FAILED|" + str(R.string.st_failed_decode, note(blankBatch) + "; " + note(sampleBatch))); return
+            }
             val spd = spdResult
             val res = SampleAnalyzer.analyze(
-                blanks, samples, band.first, band.second, slope, intercept,
+                blankBatch.frames, sampleBatch.frames, band.first, band.second, slope, intercept,
                 fluorophore = st.reportData.sampleFluorophore,
                 wavelengths = spd?.wavelengths,
                 respR = spd?.respR, respG = spd?.respG, respB = spd?.respB
-            ) ?: return
+            )
+            if (res == null) { setStep3("FAILED|" + str(R.string.st_failed_window)); return }
             _uiState.value = _uiState.value.copy(
                 reportData = _uiState.value.reportData.copy(
                     blankMeanArea = String.format(Locale.US, "%.1f", res.blankMeanArea),
@@ -513,7 +608,13 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     sampleCentroid = String.format(Locale.US, "%.1f nm", res.centroidNm)
                 )
             )
+            setStep3("COMPUTED|" + str(
+                R.string.st_computed_sample, res.channel,
+                if (res.responseApplied) "APPLIED" else "N/A",
+                note(blankBatch), note(sampleBatch)
+            ))
         }.onFailure { e ->
+            setStep3("FAILED|" + (e.message ?: e.javaClass.simpleName))
             _uiState.value = _uiState.value.copy(
                 reportData = _uiState.value.reportData.copy(
                     sampleIntegratedArea = "Analysis error: ${e.javaClass.simpleName}"
@@ -522,13 +623,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ═══════════ page-2 helpers (v1.4.4) ═══════════
-    private fun setSpdStatus(s: String) {
-        _uiState.value = _uiState.value.copy(
-            reportData = _uiState.value.reportData.copy(spdStatus = s)
-        )
-    }
-
+    // ═══════════ page-2 helpers ═══════════
     private fun resetPage2() {
         _uiState.value = _uiState.value.copy(
             reportData = _uiState.value.reportData.copy(
@@ -548,16 +643,16 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun applySpdResult(res: SpdCalibrationResult) {
-        val k = maxOf(1, res.wavelengths.size / 180)
-        fun sample(a: FloatArray): List<Float> =
-            if (a.isEmpty()) emptyList() else a.filterIndexed { i, _ -> i % k == 0 }
+        val maskedIdx = res.wavelengths.indices.filter { res.mask.getOrElse(it) { false } }
+        if (maskedIdx.isEmpty()) { resetPage2(); return }
+        val k = maxOf(1, maskedIdx.size / 180)
+        val idx = maskedIdx.filterIndexed { i, _ -> i % k == 0 }
+        fun pick(a: FloatArray): List<Float> = idx.map { a.getOrElse(it) { 0f } }
         fun peakLine(arr: FloatArray, fmt: String): String {
-            if (arr.isEmpty()) return "—"
             var best = 0f; var bl = 0f
-            for (i in arr.indices) {
-                if (res.mask.getOrElse(i) { false } && arr[i] > best) {
-                    best = arr[i]; bl = res.wavelengths.getOrElse(i) { 0f }
-                }
+            for (i in maskedIdx) {
+                val v = arr.getOrElse(i) { 0f }
+                if (v > best) { best = v; bl = res.wavelengths[i] }
             }
             if (best <= 0f) return "—"
             return String.format(Locale.US, "$fmt@%.1f", best, bl)
@@ -589,12 +684,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 spdCorrPeaks = "R ${peakLine(res.corrR, "%.4f")}  G ${peakLine(res.corrG, "%.4f")}  B ${peakLine(res.corrB, "%.4f")}",
                 spdHandoffBG = res.handoffBG,
                 spdHandoffGR = res.handoffGR,
-                spdLambda = sample(res.wavelengths),
-                spdPosR = sample(res.posR), spdPosG = sample(res.posG), spdPosB = sample(res.posB),
-                spdRespR = sample(res.respR), spdRespG = sample(res.respG), spdRespB = sample(res.respB),
-                spdCorrR = sample(res.corrR), spdCorrG = sample(res.corrG), spdCorrB = sample(res.corrB),
-                spdWB = sample(res.wB), spdWG = sample(res.wG), spdWR = sample(res.wR),
-                spdFused = sample(res.fused)
+                spdLambda = pick(res.wavelengths),
+                spdPosR = pick(res.posR), spdPosG = pick(res.posG), spdPosB = pick(res.posB),
+                spdRespR = pick(res.respR), spdRespG = pick(res.respG), spdRespB = pick(res.respB),
+                spdCorrR = pick(res.corrR), spdCorrG = pick(res.corrG), spdCorrB = pick(res.corrB),
+                spdWB = pick(res.wB), spdWG = pick(res.wG), spdWR = pick(res.wR),
+                spdFused = pick(res.fused)
             )
         )
     }
@@ -606,28 +701,14 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             val st = _uiState.value
             dao.deleteCapturesByProject(p.id)
             dao.deleteStandardGroupsByProject(p.id)
-            st.positioningCaptures.forEach {
-                dao.insertCapture(CaptureEntity(projectId = p.id, step = "POSITIONING", uri = it.toString()))
-            }
-            st.spdCaptures.forEach {
-                dao.insertCapture(CaptureEntity(projectId = p.id, step = "SPD", uri = it.toString()))
-            }
-            st.blankCaptures.forEach {
-                dao.insertCapture(CaptureEntity(projectId = p.id, step = "BLANK", uri = it.toString()))
-            }
-            st.sampleCaptures.forEach {
-                dao.insertCapture(CaptureEntity(projectId = p.id, step = "SAMPLE", uri = it.toString()))
-            }
+            st.positioningCaptures.forEach { dao.insertCapture(CaptureEntity(projectId = p.id, step = "POSITIONING", uri = it.toString())) }
+            st.spdCaptures.forEach { dao.insertCapture(CaptureEntity(projectId = p.id, step = "SPD", uri = it.toString())) }
+            st.blankCaptures.forEach { dao.insertCapture(CaptureEntity(projectId = p.id, step = "BLANK", uri = it.toString())) }
+            st.sampleCaptures.forEach { dao.insertCapture(CaptureEntity(projectId = p.id, step = "SAMPLE", uri = it.toString())) }
             for (g in st.standardGroups) {
-                val gid = dao.insertStandardGroup(
-                    StandardGroupEntity(projectId = p.id, concentration = g.concentration, unit = g.unit)
-                )
-                g.blankUris.forEach {
-                    dao.insertCapture(CaptureEntity(projectId = p.id, step = "STANDARD_BLANK", standardGroupId = gid, uri = it.toString()))
-                }
-                g.sampleUris.forEach {
-                    dao.insertCapture(CaptureEntity(projectId = p.id, step = "STANDARD_SAMPLE", standardGroupId = gid, uri = it.toString()))
-                }
+                val gid = dao.insertStandardGroup(StandardGroupEntity(projectId = p.id, concentration = g.concentration, unit = g.unit))
+                g.blankUris.forEach { dao.insertCapture(CaptureEntity(projectId = p.id, step = "STANDARD_BLANK", standardGroupId = gid, uri = it.toString())) }
+                g.sampleUris.forEach { dao.insertCapture(CaptureEntity(projectId = p.id, step = "STANDARD_SAMPLE", standardGroupId = gid, uri = it.toString())) }
             }
         }
     }

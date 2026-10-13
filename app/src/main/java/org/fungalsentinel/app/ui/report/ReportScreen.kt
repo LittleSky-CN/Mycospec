@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -27,11 +29,6 @@ import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 import java.util.Locale
 
-/**
- * Four-page analysis report (v1.4.4 layout):
- * Page 1 wavelength calibration, Page 2 SPD response + logistic fusion (4a–4d),
- * Page 3 sample analysis, Page 4 concentration regression.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportScreen(
@@ -70,8 +67,9 @@ fun ReportScreen(
                 fontWeight = FontWeight.Bold
             )
 
-            // ═══════ PAGE 1 — Wavelength calibration ═══════
+            // ═══════ PAGE 1 — Wavelength calibration (v1.4.5 estimator) ═══════
             PageCard(page = 1, title = "Step 1: Wavelength Calibration") {
+                StatusLine(r.step1Status)
                 if (r.previewUri != null && r.roiStart != null && r.roiEnd != null && r.sensorWidth != null) {
                     FigureLabel("Figure 1: Positioning preview with Auto ROI")
                     Box(
@@ -81,7 +79,19 @@ fun ReportScreen(
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         AsyncImage(
-                            r.previewUri, null, contentScale = ContentScale.Crop,
+                            model = r.previewUri,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            colorFilter = ColorFilter.colorMatrix(
+                                ColorMatrix(
+                                    floatArrayOf(
+                                        2.4f, 0f, 0f, 0f, 24f,
+                                        0f, 2.4f, 0f, 0f, 24f,
+                                        0f, 0f, 2.4f, 0f, 24f,
+                                        0f, 0f, 0f, 1f, 0f
+                                    )
+                                )
+                            ),
                             modifier = Modifier.fillMaxSize()
                         )
                         Canvas(Modifier.fillMaxSize()) {
@@ -99,7 +109,11 @@ fun ReportScreen(
                 }
                 if (r.redProfile.isNotEmpty()) {
                     FigureLabel("Figure 2: Automatic 1D Profiles and Dynamic Peak Windows")
-                    ProfileChart(r.redProfile, r.greenProfile, r.blueProfile)
+                    ProfileChart(
+                        r.redProfile, r.greenProfile, r.blueProfile,
+                        windows = r.peakWindows,
+                        centroids = listOfNotNull(r.peakR, r.peakG, r.peakB)
+                    )
                     Spacer(Modifier.height(8.dp))
                 }
                 if (r.slope != null && r.peakB != null && r.peakG != null && r.peakR != null) {
@@ -116,11 +130,20 @@ fun ReportScreen(
                 ReportLine("[Calibration Metadata]", "Exposure: ${r.exposureTime}   X ROI: ${r.xRoi}")
                 ReportLine("[Validation Results]", "Train: ${r.trainingPoints}   Validate: ${r.validationPoint}")
                 ReportLine("", "G Residual: ${r.gResidual}   G Error: ${r.wavelengthGError}")
+                ReportLine("[Peak Estimator]", "Valley-bounded Gaussian core (v1.4.5); legacy centroid = diagnostic only")
+                if (r.peakDiagnostics != "—") {
+                    Text(
+                        r.peakDiagnostics,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 QualityBadge(r.wavelengthQuality)
             }
 
             // ═══════ PAGE 2 — SPD response & logistic fusion (v1.4.4) ═══════
             PageCard(page = 2, title = "Step 2: Spectral Response & Fusion (v1.4.4)") {
+                StatusLine(r.step2Status)
                 if (r.spdLambda.isNotEmpty()) {
                     if (r.spdPosR.isNotEmpty()) {
                         FigureLabel("Figure 4a: Positioning LEDs — RAW measured (independent data)")
@@ -167,6 +190,7 @@ fun ReportScreen(
 
             // ═══════ PAGE 3 — Sample analysis ═══════
             PageCard(page = 3, title = "Step 3: Sample Analysis") {
+                StatusLine(r.step3Status)
                 if (r.sampleSpectrum.isNotEmpty()) {
                     FigureLabel("Figure 7: Blank-subtracted & SPD-corrected spectrum vs Blank")
                     ProfileChart(r.sampleSpectrum, r.blankSpectrum, emptyList())
@@ -193,6 +217,7 @@ fun ReportScreen(
 
             // ═══════ PAGE 4 — Concentration regression ═══════
             PageCard(page = 4, title = "Step 4: Concentration Regression") {
+                StatusLine(r.step4Status)
                 if (r.curvePoints.isNotEmpty() && r.curveSlope != null) {
                     FigureLabel("Figure 8: Standard curve with unknown sample")
                     CurveChart(r.curvePoints, r.curveSlope, r.curveIntercept ?: 0.0)
@@ -216,6 +241,24 @@ fun ReportScreen(
 }
 
 // ─────────── shared report widgets ───────────
+
+/**
+ * Parses "TOKEN|localized message" format.
+ * Color logic uses the TOKEN (language-agnostic), display uses the message.
+ */
+@Composable
+private fun StatusLine(s: String) {
+    val token = s.substringBefore('|')
+    val message = s.substringAfter('|', s)
+    val color = when (token) {
+        "FAILED", "BLOCKED" -> MaterialTheme.colorScheme.error
+        "COMPUTED", "PRESET" -> Color(0xFF5CFF5C)
+        "PROCESSING" -> Color(0xFF5CA8FF)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text(message, style = MaterialTheme.typography.bodySmall, color = color)
+    Spacer(Modifier.height(8.dp))
+}
 
 @Composable
 private fun PageCard(page: Int, title: String, content: @Composable ColumnScope.() -> Unit) {
@@ -280,11 +323,30 @@ private fun QualityBadge(quality: String) {
     )
 }
 
+/** Per-channel profiles with optional valley-bounded peak windows and centroid markers. */
 @Composable
-private fun ProfileChart(red: List<Float>, green: List<Float>, blue: List<Float>) {
+private fun ProfileChart(
+    red: List<Float>,
+    green: List<Float>,
+    blue: List<Float>,
+    windows: List<Pair<Int, Int>> = emptyList(),
+    centroids: List<Double> = emptyList()
+) {
     Canvas(Modifier.fillMaxWidth().height(150.dp)) {
         val all = red + green + blue
-        val max = all.maxOrNull()?.coerceAtLeast(1f) ?: 1f
+        val max = all.maxOrNull()?.coerceAtLeast(1e-6f) ?: 1f
+        val n = maxOf(red.size, green.size, blue.size, 1)
+        val winColors = listOf(Color(0xFFFF5C5C), Color(0xFF5CFF5C), Color(0xFF5CA8FF))
+        windows.forEachIndexed { i, (lo, hi) ->
+            val x0 = lo.toFloat() / n * size.width
+            val x1 = hi.toFloat() / n * size.width
+            drawRect(winColors[i % 3].copy(alpha = 0.15f), Offset(x0, 0f), Size(x1 - x0, size.height))
+        }
+        val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 5f), 0f)
+        centroids.forEach { c ->
+            val px = c.toFloat() / n * size.width
+            drawLine(Color(0xFFCCCCCC), Offset(px, 0f), Offset(px, size.height), 1.5f, pathEffect = dash)
+        }
         fun line(data: List<Float>, color: Color) {
             if (data.size < 2) return
             val path = Path()
@@ -301,7 +363,7 @@ private fun ProfileChart(red: List<Float>, green: List<Float>, blue: List<Float>
     }
 }
 
-/** Multi-series chart with optional per-series stroke widths and vertical marker lines. */
+/** Multi-series chart with per-series stroke widths and vertical marker lines. */
 @Composable
 private fun MultiLineChartX(
     x: List<Float>,
@@ -339,6 +401,7 @@ private fun MultiLineChartX(
     }
 }
 
+/** Two-point fit chart; pixel axis points DOWN to match Python invert_yaxis. */
 @Composable
 private fun FitChart(
     slope: Double, intercept: Double,
@@ -358,7 +421,7 @@ private fun FitChart(
             val yMax = (ys.maxOrNull() ?: 1f) + 80f
             val ySpan = (yMax - yMin).coerceAtLeast(1f)
             fun px(wl: Float) = (wl - xMin) / (xMax - xMin) * size.width
-            fun py(v: Float) = size.height - (v - yMin) / ySpan * size.height
+            fun py(v: Float) = (v - yMin) / ySpan * size.height
             drawLine(
                 Color(0xFF558B2F),
                 Offset(px(xMin), py((slope * xMin + intercept).toFloat())),

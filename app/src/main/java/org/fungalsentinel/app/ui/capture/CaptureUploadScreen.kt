@@ -7,19 +7,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.RawOn
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,25 +32,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import org.fungalsentinel.app.R
-import org.fungalsentinel.app.ui.components.TutorialButton
+import org.fungalsentinel.app.ui.components.NeonBackPill
+import org.fungalsentinel.app.ui.components.NeonButtonGroup
+import org.fungalsentinel.app.ui.components.NeonConfirmButton
+import org.fungalsentinel.app.ui.components.NeonHelpCircle
+import org.fungalsentinel.app.ui.components.NeonYellowButton
 import java.io.File
 
 /**
- * Reusable capture/upload component.
- *
- * Three input channels:
- *  1. Capture  -> full-screen inline Camera2 RAW overlay (works on first tap)
- *  2. Gallery  -> decodable images (JPEG/PNG)
- *  3. Files    -> DNG/RAW via SAF, copied into app-private storage
- *
- * @param onHelp optional callback that opens the contextual help dialog
+ * Capture / upload page — design-team mockup layout:
+ * [back pill][green title pill][n/5][help circle]
+ * thumbnail strip (magenta frames, corner delete, index badge)
+ * three yellow channel buttons (responsive), hint, magenta confirm.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaptureUploadScreen(
     title: String,
@@ -56,7 +58,7 @@ fun CaptureUploadScreen(
     minCaptures: Int = 1,
     maxCaptures: Int = 5,
     capturedImages: List<Uri>,
-    onLaunchCamera: () -> Unit = {},   // reserved external hook; internal overlay is default
+    onLaunchCamera: () -> Unit = {},
     onImagesChanged: (List<Uri>) -> Unit,
     onConfirm: () -> Unit,
     onBack: () -> Unit,
@@ -66,29 +68,20 @@ fun CaptureUploadScreen(
     val context = LocalContext.current
     var showCamera by remember { mutableStateOf(false) }
 
-    // Merge helper: never exceed maxCaptures
     val addUris: (List<Uri>) -> Unit = { incoming ->
         if (incoming.isNotEmpty()) {
             val remaining = maxCaptures - capturedImages.size
-            if (remaining > 0) {
-                onImagesChanged(capturedImages + incoming.take(remaining))
-            }
+            if (remaining > 0) onImagesChanged(capturedImages + incoming.take(remaining))
         }
     }
-
-    // Channel 2: gallery picker
     val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
+        ActivityResultContracts.GetMultipleContents()
     ) { uris -> addUris(uris) }
-
-    // Channel 3: SAF document picker (sees DNG/RAW), imported to private storage
     val filesLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris ->
-        addUris(uris.mapNotNull { CaptureImporter.import(context, it) })
-    }
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris -> addUris(uris.mapNotNull { CaptureImporter.import(context, it) }) }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -97,204 +90,109 @@ fun CaptureUploadScreen(
             // ── Top bar ──
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-                Column(modifier = Modifier.weight(1f)) {
+                NeonBackPill(onBack)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(50.dp))
+                        .padding(vertical = 8.dp, horizontal = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
                     )
-                    if (subtitle.isNotEmpty()) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
                 Text(
                     text = "${capturedImages.size} / $maxCaptures",
+                    color = Color(0xFFF5F5C0),
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (capturedImages.size >= minCaptures) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.error
-                    }
+                    fontWeight = FontWeight.Bold
                 )
-                // Contextual help entry (wired by each step screen)
-                if (onHelp != null) {
-                    TutorialButton(onClick = onHelp)
-                }
+                if (onHelp != null) NeonHelpCircle(onHelp)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (subtitle.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = subtitle,
+                    color = Color(0xFFF5F5C0),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
 
             // ── Thumbnail strip ──
             if (capturedImages.isNotEmpty()) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     itemsIndexed(capturedImages) { index, uri ->
-                        val isDng = uri.toString().endsWith(".dng", true) ||
-                                uri.path?.endsWith(".dng", true) == true
-
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outline,
-                                    RoundedCornerShape(8.dp)
-                                )
-                        ) {
-                            if (isDng) {
-                                // Coil cannot decode RAW: show a clear placeholder
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(
-                                            Icons.Default.RawOn,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                        Text(
-                                            text = "DNG",
-                                            color = Color.White,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            } else {
-                                AsyncImage(
-                                    model = uri,
-                                    contentDescription = "Capture ${index + 1}",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-
-                            // Delete button
-                            IconButton(
-                                onClick = { onImagesChanged(capturedImages - uri) },
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(24.dp)
-                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                            ) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Remove",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-
-                            // Index badge
-                            Text(
-                                text = "${index + 1}",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .background(Color.Black.copy(alpha = 0.5f))
-                                    .padding(horizontal = 4.dp)
-                            )
-                        }
+                        NeonThumbnail(uri = uri, index = index, onRemove = { onImagesChanged(capturedImages - uri) })
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
             }
 
-            // ── Action buttons: Capture / Gallery / Files(DNG) ──
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Button(
-                    onClick = { showCamera = true },
-                    enabled = capturedImages.size < maxCaptures,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.capture_photo))
-                }
-                OutlinedButton(
-                    onClick = { galleryLauncher.launch("image/*") },
-                    enabled = capturedImages.size < maxCaptures,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.upload_gallery))
-                }
-                OutlinedButton(
-                    onClick = {
-                        filesLauncher.launch(
-                            arrayOf(
-                                "image/*",
-                                "image/x-adobe-dng",
-                                "image/dng",
-                                "application/octet-stream"
+            // ── Three input channels (Responsive for narrow/landscape screens) ──
+            BoxWithConstraints {
+                val vertical = maxWidth < 480.dp
+                NeonButtonGroup(vertical) { m ->
+                    NeonYellowButton(
+                        text = stringResource(R.string.capture_photo),
+                        onClick = { showCamera = true },
+                        enabled = capturedImages.size < maxCaptures,
+                        icon = Icons.Default.CameraAlt,
+                        modifier = m
+                    )
+                    NeonYellowButton(
+                        text = stringResource(R.string.upload_gallery),
+                        onClick = { galleryLauncher.launch("image/*") },
+                        enabled = capturedImages.size < maxCaptures,
+                        icon = Icons.Default.PhotoLibrary,
+                        modifier = m
+                    )
+                    NeonYellowButton(
+                        text = stringResource(R.string.upload_files),
+                        onClick = {
+                            filesLauncher.launch(
+                                arrayOf("image/*", "image/x-adobe-dng", "image/dng", "application/octet-stream")
                             )
-                        )
-                    },
-                    enabled = capturedImages.size < maxCaptures,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.FolderOpen, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.upload_files))
+                        },
+                        enabled = capturedImages.size < maxCaptures,
+                        icon = Icons.Default.FolderOpen,
+                        modifier = m
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // ── Hint ─
-            if (capturedImages.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.capture_hint, minCaptures, maxCaptures),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                )
-            }
-
-            // ── Confirm ──
-            Button(
-                onClick = onConfirm,
-                enabled = capturedImages.size >= minCaptures,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
+            // ── Hint + confirm ──
+            Text(
+                text = stringResource(R.string.capture_hint, minCaptures, maxCaptures),
+                color = Color(0xFFF5F5C0),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                NeonConfirmButton(
                     text = stringResource(R.string.confirm_captures, capturedImages.size),
-                    style = MaterialTheme.typography.titleMedium
+                    onClick = onConfirm,
+                    enabled = capturedImages.size >= minCaptures
                 )
             }
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Full-screen inline camera overlay (no navigation => no state loss)
         if (showCamera) {
             InlineCameraOverlay(
                 onCaptured = { uri ->
@@ -307,19 +205,71 @@ fun CaptureUploadScreen(
     }
 }
 
-/**
- * Copies an external SAF document into app-private storage and returns a
- * stable FileProvider URI, so later re-analysis never loses permission.
- */
+/** Magenta-framed thumbnail with corner delete and index badge (mockup 1). */
+@Composable
+private fun NeonThumbnail(uri: Uri, index: Int, onRemove: () -> Unit) {
+    val isDng = uri.toString().endsWith(".dng", true) || uri.path?.endsWith(".dng", true) == true
+    Box(
+        modifier = Modifier
+            .size(96.dp)
+            .background(Color.Black, RoundedCornerShape(14.dp))
+            .border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(14.dp))
+    ) {
+        if (isDng) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.RawOn, null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Text("DNG", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        } else {
+            AsyncImage(
+                model = uri,
+                contentDescription = "Capture ${index + 1}",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(11.dp))
+            )
+        }
+        // corner delete
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(3.dp)
+                .size(26.dp)
+                .background(Color.Black, CircleShape)
+                .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                .clip(CircleShape)
+                .clickable(onClick = onRemove),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Close, "Remove",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(12.dp)
+            )
+        }
+        // index badge
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(topEnd = 12.dp))
+                .padding(horizontal = 7.dp, vertical = 3.dp)
+        ) {
+            Text("${index + 1}", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        }
+    }
+}
+
 object CaptureImporter {
     fun import(context: Context, source: Uri): Uri? = runCatching {
         val resolver = context.contentResolver
-
-        // Best-effort persistable permission (harmless if unsupported)
-        runCatching {
-            resolver.takePersistableUriPermission(source, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-
+        runCatching { resolver.takePersistableUriPermission(source, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         val mime = resolver.getType(source).orEmpty()
         val name = source.lastPathSegment.orEmpty()
         val isDng = name.endsWith(".dng", true) || mime.contains("dng", true)
@@ -328,14 +278,11 @@ object CaptureImporter {
             mime.contains("png", true) -> "png"
             else -> "jpg"
         }
-
         val dir = File(context.filesDir, "captures").apply { mkdirs() }
-        val target = File(dir, "import_${System.currentTimeMillis()}.${ext}")
-
+        val target = File(dir, "import_${System.currentTimeMillis()}.$ext")
         resolver.openInputStream(source)?.use { input ->
             target.outputStream().use { output -> input.copyTo(output) }
         } ?: return null
-
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target)
     }.getOrNull()
 }

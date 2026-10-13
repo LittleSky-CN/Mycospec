@@ -1,29 +1,22 @@
 package org.fungalsentinel.app.ui.steps
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.capture.CaptureUploadScreen
-import org.fungalsentinel.app.ui.components.HalfScreenLayout
-import org.fungalsentinel.app.ui.components.HelpTopBar
-import org.fungalsentinel.app.ui.components.StepIndicator
-import org.fungalsentinel.app.ui.components.TutorialHost
+import org.fungalsentinel.app.ui.components.*
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 
-/**
- * Step 2 — Spectral response calibration (FSSA v1.4 fusion pipeline).
- * SPD source is configured in Settings (bundled assets or imported CSV);
- * this page only captures lamp frames. Results -> Report Page 2.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Step2SpdScreen(
@@ -42,7 +35,18 @@ fun Step2SpdScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     var showLoadDialog by remember { mutableStateOf(false) }
 
-    val presetLoaded = report.spdStatus.startsWith("PRESET")
+    val presetLoaded = report.spdStatus.startsWith("PRESET") || report.step2Status.startsWith("PRESET")
+    val calibrated = report.spdStatus.startsWith("Calibrated") || report.step2Status.startsWith("COMPUTED")
+
+    val status = report.step2Status
+    val token = status.substringBefore('|')
+    val message = status.substringAfter('|', status)
+    val statusColor = when (token) {
+        "FAILED", "BLOCKED" -> MaterialTheme.colorScheme.error
+        "COMPUTED", "PRESET" -> Color(0xFF5CFF5C)
+        "PROCESSING" -> Color(0xFF5CA8FF)
+        else -> Color(0xFFF5F5C0)
+    }
 
     val tutorial = TutorialHost(
         stepId = "step2_spd",
@@ -65,104 +69,73 @@ fun Step2SpdScreen(
                 modifier = innerModifier
             )
         } else {
-            Scaffold(
-                modifier = innerModifier,
-                topBar = {
-                    HelpTopBar(
-                        title = stringResource(R.string.step2_title),
-                        tutorial = tutorial,
-                        onBack = onBack
-                    )
-                }
-            ) { padding ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    StepIndicator(currentStep = 2, totalSteps = 4)
+            Column(
+                modifier = innerModifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                NeonHeader("STEP2:", stringResource(R.string.step2_short), onBack, tutorial)
 
+                NeonOutlineBox(MaterialTheme.colorScheme.secondary) {
                     Text(
                         text = stringResource(R.string.step2_description),
+                        color = Color(0xFFF5F5C0),
                         style = MaterialTheme.typography.bodyLarge
                     )
-
-                    if (presetLoaded) {
-                        Text(
-                            text = "Response loaded from preset — no new captures needed.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } else if (captures.isNotEmpty()) {
-                        Text(
-                            text = "${captures.size} frame(s) loaded — response computed.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Keep phone, grating, slit, ISO, and focus unchanged.\n" +
-                                "Use the standard source matching the SPD configured in Settings.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.note_step2_keep),
+                        color = Color(0xFFF5F5C0),
+                        style = MaterialTheme.typography.bodySmall
                     )
+                }
 
-                    // ── Preset row ──
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                NeonOutlineBox(Color.White) {
+                    Text(
+                        text = message,
+                        color = statusColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedButton(
-                            onClick = { showSaveDialog = true },
-                            enabled = report.spdCoeffR != "—" && !presetLoaded,
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Save preset") }
-                        OutlinedButton(
-                            onClick = { showLoadDialog = true },
-                            enabled = spdPresets.isNotEmpty(),
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Load preset") }
-                    }
+                    )
+                }
 
-                    // ── Report ──
-                    Button(
-                        onClick = onOpenReport,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Icon(Icons.Default.Assessment, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("View Report")
-                    }
+                Spacer(modifier = Modifier.weight(1f))
 
-                    // ── Start capture ──
-                    Button(
-                        onClick = { showCapture = true },
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    NeonStepIndicator(current = 2)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        Text(stringResource(R.string.step2_start_capture))
-                    }
-
-                    // ── Next ─
-                    if (captures.isNotEmpty() || presetLoaded) {
-                        Button(
-                            onClick = onNext,
-                            modifier = Modifier.fillMaxWidth().height(56.dp)
-                        ) {
-                            Text(stringResource(R.string.next_step))
-                            Spacer(Modifier.width(8.dp))
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            NeonYellowButton(
+                                text = stringResource(R.string.act_save_preset),
+                                onClick = { showSaveDialog = true },
+                                enabled = calibrated && !presetLoaded,
+                                modifier = Modifier.weight(1f)
+                            )
+                            NeonYellowButton(
+                                text = stringResource(R.string.act_load_preset),
+                                onClick = { showLoadDialog = true },
+                                enabled = spdPresets.isNotEmpty(),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            NeonYellowButton(stringResource(R.string.act_view_report), onOpenReport, modifier = Modifier.weight(1f))
+                            NeonYellowButton(stringResource(R.string.step2_start_capture), { showCapture = true }, modifier = Modifier.weight(1f))
+                            NeonYellowButton(stringResource(R.string.next_step), onNext, enabled = calibrated || presetLoaded, modifier = Modifier.weight(1f))
                         }
                     }
-
-                    Spacer(Modifier.height(32.dp))
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
@@ -171,58 +144,33 @@ fun Step2SpdScreen(
         var name by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
-            title = { Text("Save SPD preset") },
-            text = {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Preset name") },
-                    singleLine = true
-                )
-            },
+            title = { Text(stringResource(R.string.act_save_preset)) },
+            text = { OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.lbl_preset_name)) }, singleLine = true) },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (name.isNotBlank()) {
-                            projectViewModel.saveSpdPreset(name)
-                            showSaveDialog = false
-                        }
-                    }
-                ) { Text("Save") }
+                TextButton(onClick = {
+                    if (name.isNotBlank()) { projectViewModel.saveSpdPreset(name); showSaveDialog = false }
+                }) { Text("OK") }
             },
-            dismissButton = {
-                TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
-            }
+            dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text("×") } }
         )
     }
-
     if (showLoadDialog) {
         AlertDialog(
             onDismissRequest = { showLoadDialog = false },
-            title = { Text("Load SPD preset") },
+            title = { Text(stringResource(R.string.act_load_preset)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     spdPresets.forEach { p ->
-                        Card(
-                            onClick = {
-                                projectViewModel.loadSpdPreset(p)
-                                showLoadDialog = false
-                            }
-                        ) {
+                        Card(onClick = { projectViewModel.loadSpdPreset(p); showLoadDialog = false }) {
                             Column(Modifier.padding(12.dp)) {
                                 Text(p.name, style = MaterialTheme.typography.titleSmall)
-                                Text(
-                                    text = "${p.deviceModel} · ${p.frames ?: 0} frames",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                                Text("${p.deviceModel} · ${p.frames ?: 0}", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { showLoadDialog = false }) { Text("Close") }
-            }
+            confirmButton = { TextButton(onClick = { showLoadDialog = false }) { Text("OK") } }
         )
     }
 }
