@@ -43,14 +43,9 @@ import org.fungalsentinel.app.ui.components.NeonButtonGroup
 import org.fungalsentinel.app.ui.components.NeonConfirmButton
 import org.fungalsentinel.app.ui.components.NeonHelpCircle
 import org.fungalsentinel.app.ui.components.NeonYellowButton
+import org.fungalsentinel.app.ui.theme.AppColors
 import java.io.File
 
-/**
- * Capture / upload page — design-team mockup layout:
- * [back pill][green title pill][n/5][help circle]
- * thumbnail strip (magenta frames, corner delete, index badge)
- * three yellow channel buttons (responsive), hint, magenta confirm.
- */
 @Composable
 fun CaptureUploadScreen(
     title: String,
@@ -87,7 +82,6 @@ fun CaptureUploadScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // ── Top bar ──
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -112,7 +106,7 @@ fun CaptureUploadScreen(
                 }
                 Text(
                     text = "${capturedImages.size} / $maxCaptures",
-                    color = Color(0xFFF5F5C0),
+                    color = AppColors.TextPrimary,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -123,14 +117,13 @@ fun CaptureUploadScreen(
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = subtitle,
-                    color = Color(0xFFF5F5C0),
+                    color = AppColors.TextPrimary,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // ── Thumbnail strip ──
             if (capturedImages.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     itemsIndexed(capturedImages) { index, uri ->
@@ -140,7 +133,6 @@ fun CaptureUploadScreen(
                 Spacer(modifier = Modifier.height(18.dp))
             }
 
-            // ── Three input channels (Responsive for narrow/landscape screens) ──
             BoxWithConstraints {
                 val vertical = maxWidth < 480.dp
                 NeonButtonGroup(vertical) { m ->
@@ -174,10 +166,9 @@ fun CaptureUploadScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // ── Hint + confirm ──
             Text(
                 text = stringResource(R.string.capture_hint, minCaptures, maxCaptures),
-                color = Color(0xFFF5F5C0),
+                color = AppColors.TextPrimary,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -205,7 +196,6 @@ fun CaptureUploadScreen(
     }
 }
 
-/** Magenta-framed thumbnail with corner delete and index badge (mockup 1). */
 @Composable
 private fun NeonThumbnail(uri: Uri, index: Int, onRemove: () -> Unit) {
     val isDng = uri.toString().endsWith(".dng", true) || uri.path?.endsWith(".dng", true) == true
@@ -223,7 +213,7 @@ private fun NeonThumbnail(uri: Uri, index: Int, onRemove: () -> Unit) {
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(26.dp)
                     )
-                    Text("DNG", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("DNG", color = AppColors.Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         } else {
@@ -236,7 +226,6 @@ private fun NeonThumbnail(uri: Uri, index: Int, onRemove: () -> Unit) {
                     .clip(RoundedCornerShape(11.dp))
             )
         }
-        // corner delete
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -254,7 +243,6 @@ private fun NeonThumbnail(uri: Uri, index: Int, onRemove: () -> Unit) {
                 modifier = Modifier.size(12.dp)
             )
         }
-        // index badge
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)

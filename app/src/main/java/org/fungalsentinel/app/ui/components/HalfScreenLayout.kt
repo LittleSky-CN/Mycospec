@@ -7,23 +7,28 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 /**
  * Half-screen layout.
- * Trigger rule: Settings toggle ON  AND  landscape  AND  light sensor covered.
+ * Trigger rule: Settings toggle ON AND landscape AND light sensor covered.
  * Hysteresis: covered < 10 lux, uncovered > 30 lux (no flicker at threshold).
+ * 【v2.2.3】Added neon border to prevent edge-touch issues.
  */
 @Composable
 fun HalfScreenLayout(
@@ -36,7 +41,6 @@ fun HalfScreenLayout(
     val screenWidth = configuration.screenWidthDp.dp
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     var isCovered by remember { mutableStateOf(false) }
-
     val shouldListen = forceHalfScreen && isLandscape
 
     DisposableEffect(shouldListen) {
@@ -67,8 +71,12 @@ fun HalfScreenLayout(
         label = "halfScreenWidth"
     )
 
+    val borderModifier = Modifier
+        .fillMaxSize()
+        .padding(4.dp)
+
     if (isCovered) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = borderModifier) {
             Box(modifier = Modifier.width(availableWidth).fillMaxHeight()) {
                 content(Modifier.fillMaxSize())
             }
@@ -81,6 +89,8 @@ fun HalfScreenLayout(
             )
         }
     } else {
-        content(Modifier.fillMaxSize())
+        Box(modifier = borderModifier) {
+            content(Modifier.fillMaxSize())
+        }
     }
 }

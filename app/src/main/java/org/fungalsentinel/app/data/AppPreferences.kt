@@ -21,7 +21,10 @@ data class AppSettings(
     val blankMode: String = "SINGLE",
     val calibrationProtection: Boolean = true,
     val autoExposure: Boolean = true,
-    val exposureMs: Long = 100L
+    val exposureMs: Long = 100L,
+    // 【新增】对焦相关设置
+    val autoFocus: Boolean = true,
+    val focusDiopter: Float = 0f
 )
 
 object AppPreferences {
@@ -34,6 +37,9 @@ object AppPreferences {
     private val KEY_PROTECT = booleanPreferencesKey("calibration_protection")
     private val KEY_AE = booleanPreferencesKey("auto_exposure")
     private val KEY_EXP_MS = longPreferencesKey("exposure_ms")
+    // 【新增】Key 定义
+    private val KEY_AF = booleanPreferencesKey("auto_focus")
+    private val KEY_FOCUS = floatPreferencesKey("focus_diopter")
 
     fun getSettings(context: Context): Flow<AppSettings> =
         context.dataStore.data.map { p ->
@@ -46,7 +52,10 @@ object AppPreferences {
                 blankMode = p[KEY_BLANK] ?: "SINGLE",
                 calibrationProtection = p[KEY_PROTECT] ?: true,
                 autoExposure = p[KEY_AE] ?: true,
-                exposureMs = p[KEY_EXP_MS] ?: 100L
+                exposureMs = p[KEY_EXP_MS] ?: 100L,
+                // 【新增】读取设置
+                autoFocus = p[KEY_AF] ?: true,
+                focusDiopter = p[KEY_FOCUS] ?: 0f
             )
         }
 
@@ -61,6 +70,9 @@ object AppPreferences {
             p[KEY_PROTECT] = settings.calibrationProtection
             p[KEY_AE] = settings.autoExposure
             p[KEY_EXP_MS] = settings.exposureMs
+            // 【新增】保存设置
+            p[KEY_AF] = settings.autoFocus
+            p[KEY_FOCUS] = settings.focusDiopter
         }
     }
 }

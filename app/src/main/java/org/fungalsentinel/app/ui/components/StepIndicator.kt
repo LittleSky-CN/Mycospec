@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.fungalsentinel.app.ui.theme.AppColors
 
 @Composable
 fun StepIndicator(
@@ -37,7 +38,7 @@ fun StepIndicator(
                         when {
                             isActive -> MaterialTheme.colorScheme.primary
                             isCompleted -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                            else -> MaterialTheme.colorScheme.surfaceVariant
+                            else -> AppColors.Surface
                         }
                     ),
                 contentAlignment = Alignment.Center
@@ -58,7 +59,7 @@ fun StepIndicator(
                         .height(2.dp)
                         .background(
                             if (isCompleted) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant
+                            else AppColors.Surface
                         )
                 )
             }

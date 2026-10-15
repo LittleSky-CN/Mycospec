@@ -24,19 +24,18 @@ import org.fungalsentinel.app.ui.capture.CaptureUploadScreen
 import org.fungalsentinel.app.ui.components.*
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 import org.fungalsentinel.app.viewmodel.StandardGroupInput
+import org.fungalsentinel.app.ui.theme.AppColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Step4StandardCurveScreen(
-    onNext: () -> Unit,
-    onBack: () -> Unit,
-    onOpenReport: () -> Unit,
-    projectViewModel: ProjectViewModel,
-    isHalfScreen: Boolean = false
+    onNext: () -> Unit, onBack: () -> Unit, onOpenReport: () -> Unit,
+    projectViewModel: ProjectViewModel, isHalfScreen: Boolean = false, blankMode: String = "SINGLE", coverRatio: Float = 0.5f
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
     val standardGroups = uiState.standardGroups
     val report = uiState.reportData
+    val singleBlank = blankMode == "SINGLE"
 
     var editingConc by remember { mutableStateOf("") }
     var editingUnit by remember { mutableStateOf("mg/L") }
@@ -47,7 +46,7 @@ fun Step4StandardCurveScreen(
     var showSampleCapture by remember { mutableStateOf(false) }
 
     val concValid = editingConc.toDoubleOrNull() != null
-    val canAdd = concValid && editingBlank.isNotEmpty() && editingSample.isNotEmpty()
+    val canAdd = concValid && editingSample.isNotEmpty() && (singleBlank || editingBlank.isNotEmpty())
     val curveReady = report.curveSlope != null
 
     val status = report.step4Status
@@ -55,181 +54,109 @@ fun Step4StandardCurveScreen(
     val message = status.substringAfter('|', status)
     val statusColor = when (token) {
         "FAILED", "BLOCKED" -> MaterialTheme.colorScheme.error
-        "COMPUTED", "PRESET" -> Color(0xFF5CFF5C)
-        "PROCESSING" -> Color(0xFF5CA8FF)
-        else -> Color(0xFFF5F5C0)
+        "COMPUTED", "PRESET" -> AppColors.Accent
+        "PROCESSING" -> AppColors.Chart.B
+        else -> AppColors.TextPrimary
     }
 
-    val tutorial = TutorialHost(
-        stepId = "step4_standard",
-        titleRes = R.string.tutorial_step4_title,
-        bodyRes = R.string.tutorial_step4_body
-    )
+    val tutorial = TutorialHost(stepId = "step4_standard", titleRes = R.string.tutorial_step4_title, bodyRes = R.string.tutorial_step4_body)
 
-    HalfScreenLayout(forceHalfScreen = isHalfScreen) { innerModifier ->
+    HalfScreenLayout(forceHalfScreen = isHalfScreen, coverRatio = coverRatio) { innerModifier ->
         if (showBlankCapture) {
             CaptureUploadScreen(
                 title = "${stringResource(R.string.step3_capture_blank_title)} — ${editingConc.ifBlank { "?" }} $editingUnit",
-                minCaptures = 1,
-                maxCaptures = 5,
-                capturedImages = editingBlank,
-                onImagesChanged = { editingBlank = it },
-                onConfirm = { showBlankCapture = false },
-                onBack = { showBlankCapture = false },
-                onHelp = { tutorial.show() },
-                modifier = innerModifier
+                minCaptures = 1, maxCaptures = 5, capturedImages = editingBlank,
+                onImagesChanged = { editingBlank = it }, onConfirm = { showBlankCapture = false },
+                onBack = { showBlankCapture = false }, onHelp = { tutorial.show() }, modifier = innerModifier
             )
         } else if (showSampleCapture) {
             CaptureUploadScreen(
                 title = "${stringResource(R.string.step3_capture_sample_title)} — ${editingConc.ifBlank { "?" }} $editingUnit",
-                minCaptures = 1,
-                maxCaptures = 5,
-                capturedImages = editingSample,
-                onImagesChanged = { editingSample = it },
-                onConfirm = { showSampleCapture = false },
-                onBack = { showSampleCapture = false },
-                onHelp = { tutorial.show() },
-                modifier = innerModifier
+                minCaptures = 1, maxCaptures = 5, capturedImages = editingSample,
+                onImagesChanged = { editingSample = it }, onConfirm = { showSampleCapture = false },
+                onBack = { showSampleCapture = false }, onHelp = { tutorial.show() }, modifier = innerModifier
             )
         } else {
             Column(
-                modifier = innerModifier
-                    .fillMaxSize()
-                    .background(Color.Black)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
+                modifier = innerModifier.fillMaxSize().background(Color.Black).verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 NeonHeader("STEP4:", stringResource(R.string.step4_short), onBack, tutorial)
-
-                NeonOutlineBox(MaterialTheme.colorScheme.secondary) {
-                    Text(
-                        text = stringResource(R.string.step4_description),
-                        color = Color(0xFFF5F5C0),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                NeonOutlineBox(AppColors.Accent) {
+                    Text(text = stringResource(R.string.step4_description), color = AppColors.TextPrimary, style = MaterialTheme.typography.bodyLarge)
                 }
-
-                NeonOutlineBox(Color.White) {
-                    Text(
-                        text = message,
-                        color = statusColor,
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                NeonOutlineBox(AppColors.TextPrimary.copy(alpha = 0.5f)) {
+                    Text(text = message, color = statusColor, style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 }
 
                 if (standardGroups.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.lbl_standard_groups, standardGroups.size),
-                        color = Color(0xFFF5F5C0),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = stringResource(R.string.lbl_standard_groups, standardGroups.size), color = AppColors.TextPrimary,
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     standardGroups.forEach { group ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = AppColors.Surface)) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("${group.concentration} ${group.unit}", color = Color(0xFFF5F5C0), fontWeight = FontWeight.Bold)
+                                    Text("${group.concentration} ${group.unit}", color = AppColors.TextPrimary, fontWeight = FontWeight.Bold)
                                     Text(
-                                        stringResource(R.string.lbl_group_counts, group.blankUris.size, group.sampleUris.size),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text = if (singleBlank) "${stringResource(R.string.lbl_sample_captures)}: ${group.sampleUris.size}"
+                                        else stringResource(R.string.lbl_group_counts, group.blankUris.size, group.sampleUris.size),
+                                        style = MaterialTheme.typography.bodySmall, color = AppColors.TextPrimary.copy(alpha = 0.7f)
                                     )
                                 }
-                                IconButton(onClick = {
-                                    projectViewModel.setStandardGroups(standardGroups.filter { it.id != group.id })
-                                }) {
-                                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFF5F5C0))
+                                IconButton(onClick = { projectViewModel.setStandardGroups(standardGroups.filter { it.id != group.id }) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, tint = AppColors.Error)
                                 }
                             }
                         }
                     }
                 }
 
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(stringResource(R.string.act_add_group), color = Color(0xFFF5F5C0), fontWeight = FontWeight.Bold)
-                        OutlinedTextField(
-                            value = editingConc,
-                            onValueChange = { editingConc = it; concError = false },
-                            label = { Text(stringResource(R.string.step4_concentration_label)) },
-                            isError = concError,
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = editingUnit,
-                            onValueChange = { editingUnit = it },
-                            label = { Text(stringResource(R.string.step4_unit_label)) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = AppColors.Surface)) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(stringResource(R.string.act_add_group), color = AppColors.TextPrimary, fontWeight = FontWeight.Bold)
+                        OutlinedTextField(value = editingConc, onValueChange = { editingConc = it; concError = false },
+                            label = { Text(stringResource(R.string.step4_concentration_label)) }, isError = concError,
+                            singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = editingUnit, onValueChange = { editingUnit = it },
+                            label = { Text(stringResource(R.string.step4_unit_label)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            Button(
-                                onClick = { showBlankCapture = true },
-                                enabled = concValid && editingBlank.size < 5,
-                                modifier = Modifier.weight(1f)
-                            ) { Text("${stringResource(R.string.lbl_blank_captures)} (${editingBlank.size})") }
-                            Button(
-                                onClick = { showSampleCapture = true },
-                                enabled = concValid && editingSample.size < 5,
-                                modifier = Modifier.weight(1f)
-                            ) { Text("${stringResource(R.string.lbl_sample_captures)} (${editingSample.size})") }
+                            if (!singleBlank) {
+                                Button(onClick = { showBlankCapture = true }, enabled = concValid && editingBlank.size < 5, modifier = Modifier.weight(1f)) {
+                                    Text("${stringResource(R.string.lbl_blank_captures)} (${editingBlank.size})")
+                                }
+                            }
+                            Button(onClick = { showSampleCapture = true }, enabled = concValid && editingSample.size < 5, modifier = Modifier.weight(1f)) {
+                                Text("${stringResource(R.string.lbl_sample_captures)} (${editingSample.size})")
+                            }
                         }
                         Button(
                             onClick = {
                                 val conc = editingConc.toDoubleOrNull()
                                 if (conc == null) { concError = true; return@Button }
                                 val newId = (standardGroups.maxOfOrNull { it.id } ?: 0) + 1
-                                projectViewModel.setStandardGroups(
-                                    standardGroups + StandardGroupInput(newId, conc, editingUnit, editingBlank, editingSample)
-                                )
+                                projectViewModel.setStandardGroups(standardGroups + StandardGroupInput(
+                                    id = newId, concentration = conc, unit = editingUnit,
+                                    blankUris = if (singleBlank) emptyList() else editingBlank, sampleUris = editingSample
+                                ))
                                 editingConc = ""; editingBlank = emptyList(); editingSample = emptyList(); concError = false
                             },
-                            enabled = canAdd,
-                            modifier = Modifier.fillMaxWidth()
+                            enabled = canAdd, modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Add, null)
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.act_add_group))
+                            Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.act_add_group))
                         }
                     }
                 }
 
                 if (standardGroups.size == 1) {
-                    Text(
-                        text = stringResource(R.string.note_step4_min),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(text = stringResource(R.string.note_step4_min), style = MaterialTheme.typography.bodySmall, color = AppColors.TextPrimary.copy(alpha = 0.7f))
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     NeonStepIndicator(current = 4)
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             NeonYellowButton(stringResource(R.string.act_view_report), onOpenReport, modifier = Modifier.weight(1f))
                             NeonYellowButton(stringResource(R.string.step4_build_curve), { projectViewModel.buildCurve() },

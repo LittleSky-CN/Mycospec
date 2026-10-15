@@ -26,10 +26,6 @@ import org.fungalsentinel.app.viewmodel.ProjectViewModel
 import org.fungalsentinel.app.viewmodel.SettingsViewModel
 import org.fungalsentinel.app.ui.settings.HalfScreenPreviewScreen
 
-/**
- * Central route table.
- * NOTE: route constants must NOT contain trailing spaces (previous bug).
- */
 object Routes {
     const val HOME = "home"
     const val NEW_PROJECT = "new_project"
@@ -42,7 +38,6 @@ object Routes {
     const val DNG_CAMERA = "dng_camera"
     const val HISTORY = "history"
     const val SETTINGS = "settings"
-
     const val HALF_PREVIEW = "half_preview"
 }
 
@@ -52,8 +47,6 @@ fun AppNavigation(navController: NavHostController) {
     val settingsViewModel: SettingsViewModel = viewModel()
     val settings by settingsViewModel.settings.collectAsState()
     val projectState by projectViewModel.uiState.collectAsState()
-
-    // History data source: Room flow -> Compose state
     val context = LocalContext.current
     val app = context.applicationContext as FssaApplication
     val dao = app.database.projectDao()
@@ -61,7 +54,6 @@ fun AppNavigation(navController: NavHostController) {
     val scope = rememberCoroutineScope()
 
     NavHost(navController = navController, startDestination = Routes.HOME) {
-
         composable(Routes.HOME) {
             HomeScreen(
                 onNewProject = { navController.navigate(Routes.NEW_PROJECT) },
@@ -72,24 +64,25 @@ fun AppNavigation(navController: NavHostController) {
             )
         }
 
+        // 【修复】这里必须匹配 NewProjectScreen 的签名 (String, Boolean) -> Unit
         composable(Routes.NEW_PROJECT) {
             NewProjectScreen(
-                onProjectCreated = { name ->
-                    projectViewModel.createProject(name)
+                onProjectCreated = { name, hasBlueFilter ->
+                    projectViewModel.createProject(name, hasBlueFilter)
                     navController.navigate(Routes.STEP1) { popUpTo(Routes.HOME) }
                 },
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // FIX: each step now routes to its OWN screen (old build sent all to Step1)
         composable(Routes.STEP1) {
             Step1WavelengthScreen(
                 onNext = { navController.navigate(Routes.STEP2) },
                 onBack = { navController.popBackStack() },
                 onOpenReport = { navController.navigate(Routes.REPORT) },
                 projectViewModel = projectViewModel,
-                isHalfScreen = settings.halfScreenEnabled
+                isHalfScreen = settings.halfScreenEnabled,
+                coverRatio = settings.coverRatio
             )
         }
 
@@ -99,7 +92,8 @@ fun AppNavigation(navController: NavHostController) {
                 onBack = { navController.popBackStack() },
                 onOpenReport = { navController.navigate(Routes.REPORT) },
                 projectViewModel = projectViewModel,
-                isHalfScreen = settings.halfScreenEnabled
+                isHalfScreen = settings.halfScreenEnabled,
+                coverRatio = settings.coverRatio
             )
         }
 
@@ -110,7 +104,8 @@ fun AppNavigation(navController: NavHostController) {
                 onOpenReport = { navController.navigate(Routes.REPORT) },
                 projectViewModel = projectViewModel,
                 isHalfScreen = settings.halfScreenEnabled,
-                blankMode = settings.blankMode
+                blankMode = settings.blankMode,
+                coverRatio = settings.coverRatio
             )
         }
 
@@ -120,7 +115,9 @@ fun AppNavigation(navController: NavHostController) {
                 onBack = { navController.popBackStack() },
                 onOpenReport = { navController.navigate(Routes.REPORT) },
                 projectViewModel = projectViewModel,
-                isHalfScreen = settings.halfScreenEnabled
+                isHalfScreen = settings.halfScreenEnabled,
+                blankMode = settings.blankMode,
+                coverRatio = settings.coverRatio
             )
         }
 
@@ -160,7 +157,6 @@ fun AppNavigation(navController: NavHostController) {
                 projectViewModel = projectViewModel,
                 onBack = { navController.popBackStack() },
                 onOpenProject = { project ->
-                    // Resume: restore captures/groups, recompute, jump to first incomplete step
                     projectViewModel.openProject(project.id) { step ->
                         val route = when (step) {
                             1 -> Routes.STEP1
@@ -174,7 +170,7 @@ fun AppNavigation(navController: NavHostController) {
                 onDelete = { project ->
                     scope.launch { dao.deleteProject(project) }
                 },
-                onExport = { /* TODO: ZIP export (manifest/result/profiles/standards/spd/raw) */ }
+                onExport = { /* TODO: ZIP export */ }
             )
         }
 
@@ -188,6 +184,7 @@ fun AppNavigation(navController: NavHostController) {
             )
         }
 
+        // 【修复】补全了所有 SettingsScreen 的参数，去掉了注释
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 wavelengthR = settings.wavelengthR,
@@ -197,17 +194,20 @@ fun AppNavigation(navController: NavHostController) {
                 coverRatio = settings.coverRatio,
                 blankMode = settings.blankMode,
                 calibrationProtection = settings.calibrationProtection,
+                autoExposure = settings.autoExposure,
+                exposureMs = settings.exposureMs,
+                autoFocus = settings.autoFocus,
+                focusDiopter = settings.focusDiopter,
+                onAutoFocusChange = { settingsViewModel.updateAutoFocus(it) },
+                onFocusDiopterChange = { settingsViewModel.updateFocusDiopter(it) },
                 onWavelengthChange = { r, g, b -> settingsViewModel.updateWavelengths(r, g, b) },
                 onHalfScreenChange = { enabled, ratio -> settingsViewModel.updateHalfScreen(enabled, ratio) },
                 onBlankModeChange = { settingsViewModel.updateBlankMode(it) },
                 onCalibrationProtectionChange = { settingsViewModel.updateCalibrationProtection(it) },
-                onBack = { navController.popBackStack() },
-                autoExposure = settings.autoExposure,
-                exposureMs = settings.exposureMs,
                 onAutoExposureChange = { settingsViewModel.updateAutoExposure(it) },
                 onExposureChange = { settingsViewModel.updateExposureMs(it) },
                 onOpenPreview = { navController.navigate(Routes.HALF_PREVIEW) },
-
+                onBack = { navController.popBackStack() }
             )
         }
     }

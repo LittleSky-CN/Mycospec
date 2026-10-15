@@ -43,7 +43,6 @@ data class StandardGroupInput(
 )
 
 data class ReportData(
-    // ── Page 1 (v1.4.5 estimator) ──
     val wavelengthQuality: String = "—",
     val wavelengthGError: String = "— nm",
     val mappingFormula: String = "—",
@@ -71,7 +70,6 @@ data class ReportData(
     val wlR: Double = 622.5,
     val wlG: Double = 522.5,
     val wlB: Double = 462.5,
-    // ── Page 2 (v1.4.4 logistic fusion, mask-cropped) ──
     val spdStatus: String = "Pending",
     val spdSource: String = "true_spd.csv (bundled)",
     val spdCoeffR: String = "—",
@@ -104,7 +102,6 @@ data class ReportData(
     val spdWG: List<Float> = emptyList(),
     val spdWR: List<Float> = emptyList(),
     val spdFused: List<Float> = emptyList(),
-    // ── Page 3 ──
     val sampleFluorophore: String = "—",
     val sampleBand: String = "—",
     val blankMeanArea: String = "—",
@@ -120,7 +117,6 @@ data class ReportData(
     val samplePeakIntensity: String = "—",
     val sampleFwhm: String = "—",
     val sampleCentroid: String = "—",
-    // ── Page 4 ──
     val standardRows: List<String> = emptyList(),
     val regressionFormula: String = "—",
     val regressionR2: String = "—",
@@ -129,7 +125,7 @@ data class ReportData(
     val curveIntercept: Double? = null,
     val curvePoints: List<Pair<Double, Double>> = emptyList(),
     val curveWarnings: List<String> = emptyList(),
-    // ── Real status tracking ("TOKEN|localized message") ──
+    val isLogFit: Boolean = false,
     val step1Status: String = "IDLE",
     val step2Status: String = "IDLE",
     val step3Status: String = "IDLE",
@@ -154,6 +150,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     val uiState: StateFlow<ProjectUiState> = _uiState.asStateFlow()
     private val _settings = MutableStateFlow(AppSettings())
 
+    private val _hasBlueFilter = MutableStateFlow(false)
+    val hasBlueFilter: StateFlow<Boolean> = _hasBlueFilter.asStateFlow()
+
     val wlPresets: StateFlow<List<PresetEntity>> =
         presetDao.observeByType(PresetTypes.WAVELENGTH)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -162,12 +161,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private var spdResult: SpdCalibrationResult? = null
+    private var spdRbSwapRetried = false
 
     init {
         viewModelScope.launch {
             AppPreferences.getSettings(application).collect { _settings.value = it }
         }
-        // Localized idle defaults
         _uiState.value = _uiState.value.copy(
             reportData = _uiState.value.reportData.copy(
                 step1Status = "IDLE|" + str(R.string.st_idle1),
@@ -178,7 +177,6 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    // ═══════════ helpers ═══════════
     private fun str(id: Int, vararg a: Any): String = getApplication<Application>().getString(id, *a)
     private fun setStep1(s: String) { _uiState.value = _uiState.value.copy(reportData = _uiState.value.reportData.copy(step1Status = s)) }
     private fun setStep2(s: String) { _uiState.value = _uiState.value.copy(reportData = _uiState.value.reportData.copy(step2Status = s)) }
@@ -186,7 +184,6 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     private fun setStep4(s: String) { _uiState.value = _uiState.value.copy(reportData = _uiState.value.reportData.copy(step4Status = s)) }
 
     private class DecodeBatch(val frames: List<FrameProfile>, val total: Int, val failed: List<String>)
-
     private fun note(b: DecodeBatch): String =
         if (b.failed.isEmpty()) str(R.string.st_decoded, b.total, b.total)
         else str(R.string.st_decoded, b.frames.size, b.total) + " (" +
@@ -201,8 +198,13 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         return DecodeBatch(ok, uris.size, bad)
     }
 
-    // ═══════════ lifecycle ═══════════
-    fun createProject(name: String) {
+    private fun swapRbChannels(frames: List<FrameProfile>): List<FrameProfile> =
+        frames.map { it.copy(redProfile = it.blueProfile, blueProfile = it.redProfile) }
+
+    fun createProject(name: String, hasBlueFilter: Boolean = false) {
+        _hasBlueFilter.value = hasBlueFilter
+        FrameProfileExtractor.forceRbSwap = false   // 【v2.2.6】新项目重置通道交换标志
+        spdRbSwapRetried = false
         viewModelScope.launch {
             val id = dao.insertProject(ProjectEntity(name = name))
             _uiState.value = ProjectUiState(currentProject = ProjectEntity(id = id, name = name))
@@ -214,7 +216,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             val current = _uiState.value.currentProject ?: return@launch
             dao.updateProject(current.copy(status = "FINISHED", finishedAt = System.currentTimeMillis()))
             _uiState.value = ProjectUiState()
+            _hasBlueFilter.value = false
+            FrameProfileExtractor.forceRbSwap = false
             spdResult = null
+            spdRbSwapRetried = false
         }
     }
 
@@ -233,6 +238,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                         dao.getCapturesByStepAndGroupOnce(projectId, "STANDARD_SAMPLE", ge.id).map { Uri.parse(it.uri) }
                     )
                 }
+                _hasBlueFilter.value = false
+                FrameProfileExtractor.forceRbSwap = false   // 【v2.2.6】先重置，再由 Step 1 重新判定
+                spdRbSwapRetried = false
                 _uiState.value = ProjectUiState(project, pos, spd, blank, sample, groups)
                 if (pos.isNotEmpty()) setStep1("PROCESSING|" + str(R.string.st_processing_frames, pos.size))
                 if (spd.isNotEmpty()) setStep2("PROCESSING|" + str(R.string.st_processing_frames, spd.size))
@@ -251,7 +259,6 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ═══════════ setters ═══════════
     fun setPositioningCaptures(uris: List<Uri>) {
         _uiState.value = _uiState.value.copy(positioningCaptures = uris)
         setStep1("PROCESSING|" + str(R.string.st_processing_frames, uris.size))
@@ -287,6 +294,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             "MCHERRY" -> 590 to 630
             "CFP" -> 460 to 490
             "MTURQUOISE2" -> 460 to 490
+            "FLUORESCEIN" -> 500 to 540
             else -> 500 to 540
         }
         _uiState.value = _uiState.value.copy(
@@ -310,58 +318,117 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 val slope = st.reportData.slope ?: run { setStep4("BLOCKED|" + str(R.string.st_blocked_step1)); return@launch }
                 val intercept = st.reportData.intercept ?: run { setStep4("BLOCKED|" + str(R.string.st_blocked_step1)); return@launch }
                 if (st.standardGroups.size < 2) { setStep4("BLOCKED|" + str(R.string.st4_blocked_groups)); return@launch }
+
+                val singleBlank = _settings.value.blankMode == "SINGLE"
+                if (singleBlank && st.blankCaptures.isEmpty()) {
+                    setStep4("BLOCKED|" + str(R.string.st4_blocked_blank)); return@launch
+                }
+
                 setStep4("PROCESSING|" + str(R.string.st4_processing))
                 val ctx = getApplication<Application>()
                 val spd = spdResult
-                val points = mutableListOf<Pair<Double, Double>>()
-                val rows = mutableListOf<String>()
-                var skipped = 0
-                for (g in st.standardGroups) {
-                    val blankBatch = decode(ctx, g.blankUris)
+                val decodedGroups = st.standardGroups.map { g ->
+                    val blankUris = if (singleBlank) st.blankCaptures else g.blankUris
+                    val blankBatch = decode(ctx, blankUris)
                     val sampleBatch = decode(ctx, g.sampleUris)
-                    if (blankBatch.frames.isEmpty() || sampleBatch.frames.isEmpty()) { skipped++; continue }
-                    val band = parseBand(st.reportData.sampleBand) ?: (500.0 to 540.0)
-                    val a = SampleAnalyzer.analyze(
-                        blankBatch.frames, sampleBatch.frames, band.first, band.second, slope, intercept,
-                        fluorophore = st.reportData.sampleFluorophore,
-                        wavelengths = spd?.wavelengths,
-                        respR = spd?.respR, respG = spd?.respG, respB = spd?.respB
-                    ) ?: run { skipped++; continue }
-                    points.add(g.concentration to a.correctedArea)
-                    rows.add(String.format(Locale.US, "%.3f %s → %.1f", g.concentration, g.unit, a.correctedArea))
+                    Triple(g, blankBatch.frames, sampleBatch.frames)
                 }
+                val band = parseBand(st.reportData.sampleBand) ?: (500.0 to 540.0)
+                fun collectPoints(swapRb: Boolean): Triple<List<Pair<Double, Double>>, List<String>, Int> {
+                    val points = mutableListOf<Pair<Double, Double>>()
+                    val rows = mutableListOf<String>()
+                    var skipped = 0
+                    for ((g, blankFrames, sampleFrames) in decodedGroups) {
+                        if (blankFrames.isEmpty() || sampleFrames.isEmpty()) { skipped++; continue }
+                        val analysisBlank = if (swapRb) swapRbChannels(blankFrames) else blankFrames
+                        val analysisSample = if (swapRb) swapRbChannels(sampleFrames) else sampleFrames
+                        val a = SampleAnalyzer.analyze(
+                            analysisBlank, analysisSample, band.first, band.second, slope, intercept,
+                            fluorophore = st.reportData.sampleFluorophore,
+                            wavelengths = spd?.wavelengths,
+                            respR = spd?.respR, respG = spd?.respG, respB = spd?.respB
+                        ) ?: run { skipped++; continue }
+                        points.add(g.concentration to a.correctedArea)
+                        rows.add(String.format(Locale.US, "%.3f %s → %.1f", g.concentration, g.unit, a.correctedArea))
+                    }
+                    return Triple(points, rows, skipped)
+                }
+
+                val initialSwap = spdRbSwapRetried
+                var candidate = collectPoints(initialSwap)
+                var regression = if (candidate.first.size >= 2) ConcentrationRegressor.fit(candidate.first) else null
+                var retried = false
+                if (regression == null) {
+                    val retryCandidate = collectPoints(!initialSwap)
+                    val retryReg = if (retryCandidate.first.size >= 2) {
+                        ConcentrationRegressor.fit(retryCandidate.first)
+                    } else null
+                    if (retryReg != null) {
+                        candidate = retryCandidate
+                        regression = retryReg
+                        retried = true
+                    }
+                }
+                val points = candidate.first
+                val rows = candidate.second
+                val skipped = candidate.third
                 if (points.size < 2) { setStep4("FAILED|" + str(R.string.st4_failed_groups, points.size)); return@launch }
-                val reg = ConcentrationRegressor.fit(points) ?: run {
+
+                // 【v2.2.6 核心修复】直接传原始 points，由 ConcentrationRegressor 内部决定是否取 log，
+                // 避免“外层先 log10 + 内层再 log10”的双重对数错误（曾导致预测值变成 log 值）
+                val reg = regression ?: run {
                     setStep4("FAILED|" + str(R.string.st4_failed_reg)); return@launch
                 }
-                val predicted = st.reportData.correctedAreaValue?.let { ConcentrationRegressor.predict(reg, it) }
-                val warnings = reg.warnings.toMutableList()
-                if (points.any { it.second < 0.0 })
-                    warnings.add("Negative standard area(s) — check blank pairing / SPD correction")
+                val useLogFit = reg.isLogarithmic
+
                 val sampleArea = st.reportData.correctedAreaValue
-                if (sampleArea != null && sampleArea < 0.0)
-                    warnings.add("Negative sample area — prediction unreliable")
-                predicted?.let { p ->
+                val predictedConc = sampleArea?.let { ConcentrationRegressor.predict(reg, it) }
+
+                val warnings = reg.warnings.toMutableList()
+                // 过曝/信号反转检测：浓度升高但信号显著下降
+                val sortedPoints = points.sortedBy { it.first }
+                var saturationDetected = false
+                for (i in 1 until sortedPoints.size) {
+                    if (sortedPoints[i].first > sortedPoints[i - 1].first &&
+                        sortedPoints[i].second < sortedPoints[i - 1].second * 0.8
+                    ) { saturationDetected = true; break }
+                }
+                if (saturationDetected)
+                    warnings.add("Signal drops at high concentration — possible sensor saturation (overexposure). Please reduce exposure time.")
+                if (points.any { it.second < 0.0 }) warnings.add("Negative standard area(s) — check blank pairing / SPD correction")
+                if (sampleArea != null && sampleArea < 0.0) warnings.add("Negative sample area — prediction unreliable")
+                if (reg.r2 < 0.95) warnings.add("Low R² (<0.95) — curve may not be reliable")
+                if (reg.slope < 0 && !useLogFit) warnings.add("Negative slope detected — check for overexposure or incorrect blank subtraction.")
+                predictedConc?.let { p ->
                     if (p < 0) warnings.add("Negative prediction — check blank / calibration")
                     val xs = points.map { it.first }
-                    if (xs.isNotEmpty() && (p < xs.min() || p > xs.max()))
-                        warnings.add("Prediction outside calibration range")
+                    if (xs.isNotEmpty() && (p < xs.min() || p > xs.max())) warnings.add("Prediction outside calibration range")
                 }
+
+                val formulaStr = if (useLogFit) {
+                    String.format(Locale.US, "Area = %.4f * log10(Conc) + %.2f", reg.slope, reg.intercept)
+                } else {
+                    String.format(Locale.US, "Area = %.4f * Conc + %.2f", reg.slope, reg.intercept)
+                }
+
                 _uiState.value = _uiState.value.copy(
                     reportData = _uiState.value.reportData.copy(
                         standardRows = rows,
-                        regressionFormula = String.format(Locale.US, "Area = %.4f * Conc + %.2f", reg.slope, reg.intercept),
+                        regressionFormula = formulaStr,
                         regressionR2 = String.format(Locale.US, "%.4f", reg.r2),
-                        predictedConcentration = predicted?.let { String.format(Locale.US, "%.3f", it) } ?: "—",
+                        predictedConcentration = predictedConc?.let { String.format(Locale.US, "%.3f", it) } ?: "—",
                         curveSlope = reg.slope,
                         curveIntercept = reg.intercept,
-                        curvePoints = points,
-                        curveWarnings = warnings
+                        curvePoints = points.sortedBy { it.first },
+                        curveWarnings = warnings,
+                        isLogFit = useLogFit
                     )
                 )
                 setStep4(
                     "COMPUTED|" + str(R.string.st4_computed, String.format(Locale.US, "%.4f", reg.r2), points.size) +
-                            if (warnings.isNotEmpty()) str(R.string.st_warn_count, warnings.size) else ""
+                            (if (useLogFit) " (Log-Fit)" else "") +
+                            (if (warnings.isNotEmpty()) str(R.string.st_warn_count, warnings.size) else "") +
+                            (if (retried) " [R/B swap retry]" else "")
                 )
             }.onFailure { e ->
                 setStep4("FAILED|" + (e.message ?: e.javaClass.simpleName))
@@ -374,7 +441,6 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ═══════════ presets ═══════════
     fun saveWavelengthPreset(name: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val r = _uiState.value.reportData
@@ -442,8 +508,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun loadSpdPreset(p: PresetEntity) {
         val restored = p.payloadJson?.let { SpectralResponseCalibrator.fromJson(it) }
+        spdRbSwapRetried = restored?.rbSwapped ?: false
+        spdResult = restored
         if (restored != null) {
-            spdResult = restored
             applySpdResult(restored.copy(spdSource = p.spdSource ?: restored.spdSource))
             setStep2("PRESET|" + str(R.string.st_preset_loaded, p.name))
         } else {
@@ -469,7 +536,6 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) { presetDao.deleteById(id) }
     }
 
-    // ═══════════ analysis pipeline ═══════════
     private suspend fun analyzePositioning() {
         runCatching {
             val uris = _uiState.value.positioningCaptures
@@ -483,19 +549,28 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             val wlR = s.wavelengthR.toDoubleOrNull() ?: 622.5
             val wlG = s.wavelengthG.toDoubleOrNull() ?: 522.5
             val wlB = s.wavelengthB.toDoubleOrNull() ?: 462.5
-            val res = WavelengthCalibrator.calibrate(batch.frames, wlR, wlG, wlB)
+
+            val useGreenRedFit = _hasBlueFilter.value
+            val res = WavelengthCalibrator.calibrate(batch.frames, wlR, wlG, wlB, useGreenRedFit)
             if (res == null) {
                 setStep1("FAILED|" + str(R.string.st_failed_peak, note(batch))); return
             }
+
+            // 【v2.2.6 关键】将 R/B 交换结论下发到解码器，Step 2/3 重新解码时标签即一致
+            FrameProfileExtractor.forceRbSwap = res.rbSwapped
+
+            val trainingPoints = if (useGreenRedFit) "G(${wlG}nm), R(${wlR}nm)" else "B(${wlB}nm), R(${wlR}nm)"
+            val validationPoint = if (useGreenRedFit) "—" else "G(${wlG}nm)"
+
             _uiState.value = _uiState.value.copy(
                 reportData = _uiState.value.reportData.copy(
                     wavelengthQuality = res.quality,
-                    wavelengthGError = String.format(Locale.US, "%+.3f nm", res.gErrorNm),
+                    wavelengthGError = if (useGreenRedFit) "— (filter mode)" else String.format(Locale.US, "%+.3f nm", res.gErrorNm),
                     mappingFormula = String.format(Locale.US, "Pixel(p) = %.6f * Wavelength(nm) + %.4f", res.slope, res.intercept),
                     exposureTime = if (res.exposureSeconds > 0) String.format(Locale.US, "%.4f s", res.exposureSeconds) else "—",
                     xRoi = "[${res.roiStart}, ${res.roiEnd}] (Width: ${res.roiEnd - res.roiStart + 1} px)",
-                    trainingPoints = "B(${wlB}nm), R(${wlR}nm)",
-                    validationPoint = "G(${wlG}nm)",
+                    trainingPoints = trainingPoints,
+                    validationPoint = validationPoint,
                     gResidual = String.format(Locale.US, "%+.2f pixels", res.gResidualPx),
                     slope = res.slope, intercept = res.intercept, gErrorNm = res.gErrorNm,
                     peakR = res.peakR, peakG = res.peakG, peakB = res.peakB,
@@ -510,7 +585,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             )
             setStep1(
                 "COMPUTED|" + str(R.string.st_computed_quality, res.quality, note(batch)) +
-                        if (res.peakFlags.isNotEmpty()) str(R.string.st_suspect) else ""
+                        if (res.peakFlags.isNotEmpty()) str(R.string.st_suspect) else "" +
+                                if (useGreenRedFit) " [filter mode]" else "" +
+                                        if (res.rbSwapped) " [R/B auto-corrected]" else ""
             )
         }.onFailure { e ->
             setStep1("FAILED|" + (e.message ?: e.javaClass.simpleName))
@@ -525,6 +602,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun analyzeSpd() {
         runCatching {
+            spdRbSwapRetried = false
+            spdResult = null
             val uris = _uiState.value.spdCaptures
             if (uris.isEmpty()) { spdResult = null; resetPage2(); setStep2("IDLE|" + str(R.string.st_idle2)); return }
             val ctx = getApplication<Application>()
@@ -543,18 +622,26 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             }
             val spd = SpdLoader.load(ctx)
             if (spd == null) { setStep2("FAILED|" + str(R.string.st_failed_spd_source)); return }
-            val res = SpectralResponseCalibrator.calibrate(
+            var res = SpectralResponseCalibrator.calibrate(
                 lampBatch.frames, posBatch.frames, spd.second, slope, intercept, spd.first
             )
             if (res == null) {
+                res = SpectralResponseCalibrator.calibrate(
+                    swapRbChannels(lampBatch.frames), swapRbChannels(posBatch.frames),
+                    spd.second, slope, intercept, spd.first
+                )
+                spdRbSwapRetried = res != null
+            }
+            if (res == null) {
                 setStep2("FAILED|" + str(R.string.st_failed_spd_degenerate, note(lampBatch))); return
             }
+            res = res.copy(rbSwapped = spdRbSwapRetried)
             spdResult = res
             applySpdResult(res)
             setStep2("COMPUTED|" + str(
                 R.string.st_computed_spd, res.frames,
                 "${res.maskedCount}/${res.totalCount}", note(lampBatch)
-            ))
+            ) + if (spdRbSwapRetried) " [R/B swap retry]" else "")
         }.onFailure { e ->
             setStep2("FAILED|" + (e.message ?: e.javaClass.simpleName))
         }
@@ -581,12 +668,21 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 setStep3("FAILED|" + str(R.string.st_failed_decode, note(blankBatch) + "; " + note(sampleBatch))); return
             }
             val spd = spdResult
-            val res = SampleAnalyzer.analyze(
-                blankBatch.frames, sampleBatch.frames, band.first, band.second, slope, intercept,
+            val initialSwap = spdRbSwapRetried
+            fun analyze(swapRb: Boolean) = SampleAnalyzer.analyze(
+                if (swapRb) swapRbChannels(blankBatch.frames) else blankBatch.frames,
+                if (swapRb) swapRbChannels(sampleBatch.frames) else sampleBatch.frames,
+                band.first, band.second, slope, intercept,
                 fluorophore = st.reportData.sampleFluorophore,
                 wavelengths = spd?.wavelengths,
                 respR = spd?.respR, respG = spd?.respG, respB = spd?.respB
             )
+            var retried = false
+            var res = analyze(initialSwap)
+            if (res == null) {
+                res = analyze(!initialSwap)
+                retried = res != null
+            }
             if (res == null) { setStep3("FAILED|" + str(R.string.st_failed_window)); return }
             _uiState.value = _uiState.value.copy(
                 reportData = _uiState.value.reportData.copy(
@@ -608,11 +704,19 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     sampleCentroid = String.format(Locale.US, "%.1f nm", res.centroidNm)
                 )
             )
-            setStep3("COMPUTED|" + str(
-                R.string.st_computed_sample, res.channel,
-                if (res.responseApplied) "APPLIED" else "N/A",
-                note(blankBatch), note(sampleBatch)
-            ))
+            // 【v2.2.6】曝光回显 + 缺失曝光告警，便于现场核验归一化是否生效
+            val bExp = blankBatch.frames.firstOrNull()?.exposureSeconds ?: 0.0
+            val sExp = sampleBatch.frames.firstOrNull()?.exposureSeconds ?: 0.0
+            val noExp = (blankBatch.frames + sampleBatch.frames).count { it.exposureSeconds <= 0.0 }
+            setStep3(
+                "COMPUTED|" + str(
+                    R.string.st_computed_sample, res.channel,
+                    if (res.responseApplied) "APPLIED" else "N/A",
+                    note(blankBatch), note(sampleBatch)
+                ) + String.format(Locale.US, " [exp b=%.3fs s=%.3fs]", bExp, sExp) +
+                        (if (retried) " [R/B swap retry]" else "") +
+                        (if (noExp > 0) " ⚠ $noExp frame(s) missing exposure, not normalized" else "")
+            )
         }.onFailure { e ->
             setStep3("FAILED|" + (e.message ?: e.javaClass.simpleName))
             _uiState.value = _uiState.value.copy(
@@ -623,7 +727,6 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ═══════════ page-2 helpers ═══════════
     private fun resetPage2() {
         _uiState.value = _uiState.value.copy(
             reportData = _uiState.value.reportData.copy(
@@ -694,7 +797,6 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    // ═══════════ persistence ═══════════
     private suspend fun persistAll() {
         runCatching {
             val p = _uiState.value.currentProject ?: return

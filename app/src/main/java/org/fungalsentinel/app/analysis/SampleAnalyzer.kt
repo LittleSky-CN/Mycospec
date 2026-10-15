@@ -6,10 +6,10 @@ import kotlin.math.sqrt
 data class SampleAnalysisResult(
     val channel: String,
     val responseApplied: Boolean,
-    val blankMeanArea: Double,     // RAW blank AUC (trapezoid) in window
-    val sampleMeanArea: Double,    // RAW sample AUC (trapezoid) in window
-    val correctedArea: Double,     // AUC of (sample-blank)/resp in window (quantification metric)
-    val sampleSD: Double,          // SD of per-frame corrected areas
+    val blankMeanArea: Double,
+    val sampleMeanArea: Double,
+    val correctedArea: Double,
+    val sampleSD: Double,
     val replicates: Int,
     val windowStartPx: Int,
     val windowEndPx: Int,
@@ -17,21 +17,10 @@ data class SampleAnalysisResult(
     val peakIntensity: Double,
     val fwhmNm: Double,
     val centroidNm: Double,
-    val correctedSpectrum: List<Float>,   // I_true, cropped to 400-700 nm
-    val blankSpectrum: List<Float>        // raw blank, cropped to 400-700 nm
+    val correctedSpectrum: List<Float>,
+    val blankSpectrum: List<Float>
 )
 
-/**
- * Step 3 — Python parity (quantification.py / spectral_features.py):
- *  exposure-normalized profiles -> S_net = Avg(Sample) - Avg(Blank)
- *  -> I_true = S_net / R_camera(λ) with 5% relative floor
- *  -> trapezoid AUC + microplate features (Peak, FWHM, Centroid).
- *
- * 【FIX】Features are calculated on an ascending-wavelength array (reversed if
- * slope is negative) using crossing detection + linear interpolation, exactly
- * matching core/spectral_features.py. This eliminates negative FWHM and
- * correctly handles negative net spectra (Peak stays 0.0).
- */
 object SampleAnalyzer {
     private const val VIS_LO = 400.0
     private const val VIS_HI = 700.0
@@ -51,7 +40,6 @@ object SampleAnalyzer {
         floorFraction: Float = 0.05f
     ): SampleAnalysisResult? {
         if (blankFrames.isEmpty() || sampleFrames.isEmpty()) return null
-
         val channel = when (fluorophore) {
             "MCHERRY" -> "R"
             "CFP", "MTURQUOISE2" -> "B"
@@ -62,7 +50,6 @@ object SampleAnalyzer {
             "B" -> { f -> f.blueProfile }
             else -> { f -> f.greenProfile }
         }
-
         val n = minOf(sampleFrames[0].redProfile.size, blankFrames[0].redProfile.size)
         if (n < 10) return null
 
@@ -80,14 +67,10 @@ object SampleAnalyzer {
         val meanSample = meanOf(sampleFrames)
         val meanBlank = meanOf(blankFrames)
         val net = FloatArray(n) { meanSample[it] - meanBlank[it] }
-
-        // TRUE wavelength per pixel index (pixel order, negative-slope safe)
         val lam = FloatArray(n) { i -> ((i - intercept) / slope).toFloat() }
 
-        // Response lookup by wavelength (order-agnostic)
         val respSel: FloatArray? = when (channel) { "R" -> respR; "B" -> respB; else -> respG }
-        val applied = respSel != null && wavelengths != null && wavelengths.size >= 2 &&
-                respSel.size == wavelengths.size
+        val applied = respSel != null && wavelengths != null && wavelengths.size >= 2 && respSel.size == wavelengths.size
 
         fun respAt(l: Float): Float {
             val w = wavelengths ?: return 0f
@@ -103,14 +86,12 @@ object SampleAnalyzer {
             return r[lo] + (r[hi] - r[lo]) * t
         }
 
-        // Integration window in pixels from fluorophore band
         val p0 = (slope * bandStartNm + intercept).toInt()
         val p1 = (slope * bandEndNm + intercept).toInt()
         val lo = minOf(p0, p1).coerceIn(0, n - 1)
         val hi = maxOf(p0, p1).coerceIn(0, n - 1)
         if (lo >= hi) return null
 
-        // 5% relative floor of resp inside window
         var floor = 0f
         if (applied) {
             var pk = 0f
@@ -155,9 +136,7 @@ object SampleAnalyzer {
             sqrt(frameAreas.sumOf { (it - corrected) * (it - corrected) } / (frameAreas.size - 1))
         } else 0.0
 
-        // ═══════════ Microplate features (Python parity: spectral_features.py) ═══════════
-
-        // 1. Extract window data and ensure wavelength is ascending
+        // Microplate features
         val windowSize = hi - lo + 1
         val wls = DoubleArray(windowSize)
         val ints = DoubleArray(windowSize)
@@ -165,100 +144,64 @@ object SampleAnalyzer {
             wls[i] = lam[lo + i].toDouble()
             ints[i] = itru(net, lo + i).toDouble()
         }
-
-        // Ensure ascending wavelength (handles negative slope mapping)
         if (windowSize > 1 && wls[0] > wls[windowSize - 1]) {
             wls.reverse()
             ints.reverse()
         }
 
-        // 2. Peak (init 0.0: stays 0 if all negative, aligned with Python)
-        var peakI = 0.0
-        var peakNm = 0.0
-        var peakIdx = 0
+        var peakI = 0.0; var peakNm = 0.0; var peakIdx = 0
         for (i in ints.indices) {
-            if (ints[i] > peakI) {
-                peakI = ints[i]
-                peakNm = wls[i]
-                peakIdx = i
-            }
+            if (ints[i] > peakI) { peakI = ints[i]; peakNm = wls[i]; peakIdx = i }
         }
 
-        // 3. Centroid
-        var sumI = 0.0
-        var sumIL = 0.0
-        for (i in ints.indices) {
-            sumI += ints[i]
-            sumIL += ints[i] * wls[i]
-        }
+        var sumI = 0.0; var sumIL = 0.0
+        for (i in ints.indices) { sumI += ints[i]; sumIL += ints[i] * wls[i] }
         val centroidNm = if (sumI > 0.0) sumIL / sumI else peakNm
 
-        // 4. FWHM (crossing detection + linear interpolation, right bound searches AFTER peak)
         var fwhmNm = 0.0
         if (peakI > 0.0) {
             val half = peakI / 2.0
-            var leftNm: Double? = null
-            var rightNm: Double? = null
-
-            // Find left crossing (rising edge)
+            var leftNm: Double? = null; var rightNm: Double? = null
             for (i in 0 until windowSize - 1) {
-                val v1 = ints[i]
-                val v2 = ints[i + 1]
+                val v1 = ints[i]; val v2 = ints[i + 1]
                 if (v1 < half && v2 >= half) {
                     val t = (half - v1) / (v2 - v1 + 1e-12)
-                    leftNm = wls[i] + t * (wls[i + 1] - wls[i])
-                    break
+                    leftNm = wls[i] + t * (wls[i + 1] - wls[i]); break
                 }
             }
-
-            // Find right crossing (falling edge) - AFTER the peak
             if (leftNm != null) {
                 for (i in peakIdx until windowSize - 1) {
-                    val v1 = ints[i]
-                    val v2 = ints[i + 1]
+                    val v1 = ints[i]; val v2 = ints[i + 1]
                     if (v1 >= half && v2 < half) {
                         val t = (half - v1) / (v2 - v1 + 1e-12)
-                        rightNm = wls[i] + t * (wls[i + 1] - wls[i])
-                        break
+                        rightNm = wls[i] + t * (wls[i + 1] - wls[i]); break
                     }
                 }
             }
-
-            fwhmNm = if (leftNm != null && rightNm != null) {
-                rightNm - leftNm
-            } else {
-                abs(wls[windowSize - 1] - wls[0])
-            }
+            fwhmNm = if (leftNm != null && rightNm != null) rightNm - leftNm else abs(wls[windowSize - 1] - wls[0])
         } else {
             fwhmNm = if (windowSize > 1) abs(wls[windowSize - 1] - wls[0]) else 0.0
         }
 
-        // Spectra cropped to visible band (Python: VISIBLE_NM = 400-700)
+        // 【修复】强制 visIdx 按波长递增排序，防止画图时 X 轴反转导致斜坡
         val visIdx = (0 until n).filter { lam[it] in VIS_LO.toFloat()..VIS_HI.toFloat() }
+            .sortedBy { lam[it] }
+
         fun crop(arr: FloatArray, transform: (FloatArray, Int) -> Float): List<Float> {
             if (visIdx.isEmpty()) return emptyList()
             val k = maxOf(1, visIdx.size / 180)
             return visIdx.filterIndexed { i, _ -> i % k == 0 }.map { transform(arr, it) }
         }
         val corrSpec = crop(net) { a, i -> itru(a, i) }
-        val blankSpec = crop(meanBlank) { a, i -> a[i] }
+        val blankSpec = crop(meanBlank) { a, i -> itru(a, i) }
 
         return SampleAnalysisResult(
-            channel = channel,
-            responseApplied = applied,
-            blankMeanArea = rawBlank,
-            sampleMeanArea = rawSample,
-            correctedArea = corrected,
-            sampleSD = sd,
-            replicates = sampleFrames.size,
-            windowStartPx = lo,
-            windowEndPx = hi,
-            peakNm = peakNm,
-            peakIntensity = peakI,
-            fwhmNm = fwhmNm,
-            centroidNm = centroidNm,
-            correctedSpectrum = corrSpec,
-            blankSpectrum = blankSpec
+            channel = channel, responseApplied = applied,
+            blankMeanArea = rawBlank, sampleMeanArea = rawSample, correctedArea = corrected,
+            sampleSD = sd, replicates = sampleFrames.size,
+            windowStartPx = lo, windowEndPx = hi,
+            peakNm = peakNm, peakIntensity = peakI, fwhmNm = fwhmNm, centroidNm = centroidNm,
+            correctedSpectrum = corrSpec, blankSpectrum = blankSpec
         )
     }
 }

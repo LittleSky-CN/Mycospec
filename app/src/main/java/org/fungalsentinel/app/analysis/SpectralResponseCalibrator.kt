@@ -24,16 +24,18 @@ data class SpdCalibrationResult(
     val agreementPct: Float,
     val peakRespR: Pair<Float, Float>, val peakRespG: Pair<Float, Float>, val peakRespB: Pair<Float, Float>,
     val fusedPeak: Pair<Float, Float>,
-    val exposureSeconds: Double, val frames: Int, val spdSource: String
+    val exposureSeconds: Double, val frames: Int, val spdSource: String,
+    val rbSwapped: Boolean = false
 )
 
 /**
  * FSSA v1.4.4 parity (core/fusion.py + details_window.py):
- *  resp_c = Lamp_c / (SPD_true + 1e-6), dual-masked, NO smoothing/normalization
+ *  resp_c = Lamp_c / (SPD_true + 1e-6), dual-masked
+ *  【v2.2.4 Fix】Applied moving-average smoothing to resp_c to eliminate sharp spikes
+ *  caused by minor wavelength misalignment or noise, which previously shifted the handoffs.
  *  Corrected_c = Pos_c / resp_c  (guarded division > 1e-6; INDEPENDENT numerator)
  *  weights: logistic handoff relay, width 15 nm, w_B+w_G+w_R = 1 pointwise
  *  Fused = w_B·Corr_B + w_G·Corr_G + w_R·Corr_R (single C0-continuous curve)
- *  5% floor is NOT used here (display/fusion path); it remains only in Step 3 quantification.
  */
 object SpectralResponseCalibrator {
     private const val EPS = 1e-6f
@@ -44,6 +46,22 @@ object SpectralResponseCalibrator {
     private fun logistic(x: Float): Float {
         val t = x.coerceIn(-500f, 500f).toDouble()
         return (1.0 / (1.0 + exp(-t))).toFloat()
+    }
+
+    // 【新增】移动平均平滑，消除响应曲线尖峰
+    private fun smooth(arr: FloatArray, window: Int): FloatArray {
+        if (window <= 1) return arr
+        val out = FloatArray(arr.size)
+        val half = window / 2
+        for (i in arr.indices) {
+            var sum = 0f; var cnt = 0
+            for (j in (i - half)..(i + half)) {
+                val idx = j.coerceIn(0, arr.lastIndex)
+                sum += arr[idx]; cnt++
+            }
+            out[i] = sum / cnt
+        }
+        return out
     }
 
     fun calibrate(
@@ -70,6 +88,7 @@ object SpectralResponseCalibrator {
             for (i in 0 until n) out[i] /= k
             return out
         }
+
         fun ord(a: FloatArray) = if (reversed) a.reversed().toFloatArray() else a
 
         val lampR = ord(avgNorm(lampFrames) { it.redProfile })
@@ -82,6 +101,7 @@ object SpectralResponseCalibrator {
         val sorted = spdTrue.sortedBy { it.first }
         val maxSpd = sorted.maxOf { it.second }
         if (maxSpd <= 0.0) return null
+
         fun spdAt(l: Double): Double {
             if (l < sorted.first().first || l > sorted.last().first) return 0.0
             var lo = 0; var hi = sorted.lastIndex
@@ -97,15 +117,20 @@ object SpectralResponseCalibrator {
         val maskedCount = mask.count { it }
         if (maskedCount < 10) return null
 
-        // resp_c = Lamp_c / (SPD_true + eps), zeroed outside mask
-        val respR = FloatArray(n); val respG = FloatArray(n); val respB = FloatArray(n)
+        // 计算原始响应
+        val rawRespR = FloatArray(n); val rawRespG = FloatArray(n); val rawRespB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
             val s = spdAt(lam[i].toDouble()).toFloat() + EPS
-            respR[i] = lampR[i] / s; respG[i] = lampG[i] / s; respB[i] = lampB[i] / s
+            rawRespR[i] = lampR[i] / s; rawRespG[i] = lampG[i] / s; rawRespB[i] = lampB[i] / s
         }
 
-        // v1.4.4 handoffs = response-curve crossing points
+        // 【修复】应用平滑，消除尖峰
+        val respR = smooth(rawRespR, 5)
+        val respG = smooth(rawRespG, 5)
+        val respB = smooth(rawRespB, 5)
+
+        // 重新计算 handoff (基于平滑后的响应)
         var hBG = DEFAULT_HBG; var best = Float.POSITIVE_INFINITY
         for (i in 0 until n) if (mask[i] && respB[i] > 0f && respG[i] > 0f) {
             val d = abs(respB[i] - respG[i])
@@ -117,7 +142,6 @@ object SpectralResponseCalibrator {
             if (d < best) { best = d; hGR = lam[i] }
         }
 
-        // logistic relay weights (pointwise, sum = 1)
         val wB = FloatArray(n); val wG = FloatArray(n); val wR = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
@@ -126,7 +150,6 @@ object SpectralResponseCalibrator {
             wB[i] = 1f - t1; wG[i] = t1 * (1f - t2); wR[i] = t2
         }
 
-        // corrected on INDEPENDENT positioning data, guarded division (_safe_div)
         val corrR = FloatArray(n); val corrG = FloatArray(n); val corrB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
@@ -135,10 +158,8 @@ object SpectralResponseCalibrator {
             if (respB[i] > EPS) corrB[i] = posB[i] / respB[i]
         }
 
-        // single continuous fused curve
         val fused = FloatArray(n) { wB[it] * corrB[it] + wG[it] * corrG[it] + wR[it] * corrR[it] }
 
-        // cross-channel agreement: mean pairwise |Δ| / mean(fused>0)
         var devSum = 0.0; var cnt = 0
         for (i in 0 until n) if (mask[i]) {
             devSum += (abs(corrB[i] - corrG[i]) + abs(corrG[i] - corrR[i]) + abs(corrB[i] - corrR[i])).toDouble() / 3.0
@@ -147,14 +168,14 @@ object SpectralResponseCalibrator {
         var fPosSum = 0.0; var fPosCnt = 0
         for (i in 0 until n) if (mask[i] && fused[i] > 0f) { fPosSum += fused[i]; fPosCnt++ }
         val meanFusedPos = if (fPosCnt > 0) fPosSum / fPosCnt else 0.0
-        val agreementPct =
-            if (cnt > 0 && meanFusedPos > 1e-9) ((devSum / cnt) / meanFusedPos * 100.0).toFloat() else 0f
+        val agreementPct = if (cnt > 0 && meanFusedPos > 1e-9) ((devSum / cnt) / meanFusedPos * 100.0).toFloat() else 0f
 
         fun peakOf(arr: FloatArray): Pair<Float, Float> {
             var b = 0f; var bl = 0f
             for (i in 0 until n) if (mask[i] && arr[i] > b) { b = arr[i]; bl = lam[i] }
             return b to bl
         }
+
         var fPeak = 0f; var fPeakL = 0f
         for (i in 0 until n) if (mask[i] && fused[i] > fPeak) { fPeak = fused[i]; fPeakL = lam[i] }
 
@@ -193,36 +214,31 @@ object SpectralResponseCalibrator {
         o.put("peakR", jp(r.peakRespR)); o.put("peakG", jp(r.peakRespG)); o.put("peakB", jp(r.peakRespB))
         o.put("fusedPeak", jp(r.fusedPeak))
         o.put("exposure", r.exposureSeconds); o.put("frames", r.frames); o.put("spdSource", r.spdSource)
+        o.put("rbSwapped", r.rbSwapped)
         o.toString()
     }.getOrDefault("{}")
 
     fun fromJson(s: String): SpdCalibrationResult? = runCatching {
         val o = JSONObject(s)
-        fun fa(k: String): FloatArray =
-            if (o.has(k)) FloatArray(o.getJSONArray(k).length()) { o.getJSONArray(k).getDouble(it).toFloat() }
-            else FloatArray(0)
+        fun fa(k: String): FloatArray = if (o.has(k)) FloatArray(o.getJSONArray(k).length()) { o.getJSONArray(k).getDouble(it).toFloat() } else FloatArray(0)
         fun pa(k: String): Pair<Float, Float> { val a = o.getJSONArray(k); return a.getDouble(0).toFloat() to a.getDouble(1).toFloat() }
         val ma = o.getJSONArray("mask")
         val version = o.optInt("version", 1)
         val empty = FloatArray(0)
         SpdCalibrationResult(
             fa("wavelengths"), fa("respR"), fa("respG"), fa("respB"),
-            if (version >= 2) fa("posR") else empty,
-            if (version >= 2) fa("posG") else empty,
-            if (version >= 2) fa("posB") else empty,
+            if (version >= 2) fa("posR") else empty, if (version >= 2) fa("posG") else empty, if (version >= 2) fa("posB") else empty,
             fa("corrR"), fa("corrG"), fa("corrB"),
-            fa("wB").let { if (it.isNotEmpty()) it else fa("wR").let { _ -> FloatArray(0) } },
-            fa("wG"), if (version >= 2) fa("wR") else fa("wR"),
-            fa("fused"),
-            BooleanArray(ma.length()) { ma.getInt(it) == 1 },
+            fa("wB").let { if (it.isNotEmpty()) it else fa("wR").let { _ -> FloatArray(0) } }, fa("wG"), if (version >= 2) fa("wR") else fa("wR"),
+            fa("fused"), BooleanArray(ma.length()) { ma.getInt(it) == 1 },
             o.getDouble("bandLo").toFloat() to o.getDouble("bandHi").toFloat(),
             o.getInt("maskedCount"), o.getInt("totalCount"), o.getDouble("thresholdRatio").toFloat(),
             if (version >= 2) o.getDouble("handoffBG").toFloat() else (if (o.isNull("handoffBG")) DEFAULT_HBG else o.getDouble("handoffBG").toFloat()),
             if (version >= 2) o.getDouble("handoffGR").toFloat() else (if (o.isNull("handoffGR")) DEFAULT_HGR else o.getDouble("handoffGR").toFloat()),
             if (version >= 2) o.getDouble("logisticWidth").toFloat() else LOGISTIC_WIDTH_NM,
             if (version >= 2) o.getDouble("agreementPct").toFloat() else 0f,
-            pa("peakR"), pa("peakG"), pa("peakB"),
-            pa("fusedPeak"), o.getDouble("exposure"), o.getInt("frames"), o.optString("spdSource", "preset")
+            pa("peakR"), pa("peakG"), pa("peakB"), pa("fusedPeak"), o.getDouble("exposure"), o.getInt("frames"),
+            o.optString("spdSource", "preset"), o.optBoolean("rbSwapped", false)
         )
     }.getOrNull()
 }
@@ -230,30 +246,22 @@ object SpectralResponseCalibrator {
 object SpdLoader {
     const val CUSTOM_NAME = "custom_spd.csv"
     fun customFile(context: Context) = File(context.filesDir, "spd/$CUSTOM_NAME")
-
     fun installCustom(context: Context, uri: Uri): String? = runCatching {
-        val parsed = context.contentResolver.openInputStream(uri)?.use { parseReader(InputStreamReader(it)) }
-            ?: return "Cannot open file"
+        val parsed = context.contentResolver.openInputStream(uri)?.use { parseReader(InputStreamReader(it)) } ?: return "Cannot open file"
         if (parsed.size < 10) return "CSV too short"
         val dir = File(context.filesDir, "spd").apply { mkdirs() }
-        context.contentResolver.openInputStream(uri)?.use { inp ->
-            File(dir, CUSTOM_NAME).outputStream().use { out -> inp.copyTo(out) }
-        }
+        context.contentResolver.openInputStream(uri)?.use { inp -> File(dir, CUSTOM_NAME).outputStream().use { out -> inp.copyTo(out) } }
         null
     }.getOrElse { it.message ?: "Parse failed" }
-
     fun load(context: Context): Pair<String, List<Pair<Double, Double>>>? {
         val custom = customFile(context)
         if (custom.exists()) {
             val rows = runCatching { parseReader(custom.reader()) }.getOrNull()
             if (!rows.isNullOrEmpty()) return CUSTOM_NAME to rows
         }
-        val rows = runCatching {
-            context.assets.open("true_spd.csv").use { parseReader(InputStreamReader(it)) }
-        }.getOrNull()
+        val rows = runCatching { context.assets.open("true_spd.csv").use { parseReader(InputStreamReader(it)) } }.getOrNull()
         return if (!rows.isNullOrEmpty()) "true_spd.csv (bundled)" to rows else null
     }
-
     private fun parseReader(reader: java.io.Reader): List<Pair<Double, Double>> {
         val out = ArrayList<Pair<Double, Double>>()
         reader.buffered().useLines { lines ->

@@ -22,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
+import org.fungalsentinel.app.ui.theme.AppColors
 import kotlin.math.roundToInt
 
 /**
@@ -111,7 +112,7 @@ fun HalfScreenPreviewScreen(
                                     .fillMaxWidth()
                                     .height(46.dp)
                                     .background(
-                                        MaterialTheme.colorScheme.surfaceVariant,
+                                        AppColors.Surface,
                                         RoundedCornerShape(10.dp)
                                     )
                             )
@@ -119,7 +120,7 @@ fun HalfScreenPreviewScreen(
                         Text(
                             stringResource(R.string.half_preview_hint),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AppColors.TextSecondary
                         )
                     }
                 }

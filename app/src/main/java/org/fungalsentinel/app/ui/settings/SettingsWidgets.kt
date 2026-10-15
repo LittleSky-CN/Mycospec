@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.fungalsentinel.app.ui.theme.AppColors
 
 /** Section header + content block used across Settings. */
 @Composable
@@ -24,7 +25,7 @@ fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) 
             text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            color = AppColors.Accent
         )
         Spacer8()
         content()

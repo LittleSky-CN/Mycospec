@@ -32,4 +32,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateCalibrationProtection(enabled: Boolean) = update { it.copy(calibrationProtection = enabled) }
     fun updateAutoExposure(enabled: Boolean) = update { it.copy(autoExposure = enabled) }
     fun updateExposureMs(ms: Long) = update { it.copy(exposureMs = ms) }
+
+    // 【新增】对焦更新方法
+    fun updateAutoFocus(enabled: Boolean) = update { it.copy(autoFocus = enabled) }
+    fun updateFocusDiopter(diopter: Float) = update { it.copy(focusDiopter = diopter) }
 }

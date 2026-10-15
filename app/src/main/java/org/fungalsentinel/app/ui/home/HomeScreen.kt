@@ -24,6 +24,7 @@ import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.components.HalfScreenLayout
 import org.fungalsentinel.app.ui.components.HelpTopBar
 import org.fungalsentinel.app.ui.components.TutorialHost
+import org.fungalsentinel.app.ui.theme.AppColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -182,7 +183,7 @@ private fun HomeCard(
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = AppColors.TextSecondary
                 )
             }
         }

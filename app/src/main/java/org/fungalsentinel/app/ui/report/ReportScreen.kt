@@ -26,6 +26,8 @@ import coil.compose.AsyncImage
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.components.HelpTopBar
 import org.fungalsentinel.app.ui.components.TutorialHost
+import org.fungalsentinel.app.ui.theme.AppColors
+import org.fungalsentinel.app.ui.theme.statusTextColor
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 import java.util.Locale
 
@@ -64,7 +66,8 @@ fun ReportScreen(
             Text(
                 text = "Project: ${uiState.currentProject?.name ?: "—"}",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = AppColors.TextPrimary
             )
 
             // ═══════ PAGE 1 — Wavelength calibration (v1.4.5 estimator) ═══════
@@ -76,7 +79,7 @@ fun ReportScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(150.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(AppColors.Surface)
                     ) {
                         AsyncImage(
                             model = r.previewUri,
@@ -98,12 +101,14 @@ fun ReportScreen(
                             val sw = r.sensorWidth.coerceAtLeast(1).toFloat()
                             val x0 = r.roiStart / sw * size.width
                             val x1 = r.roiEnd / sw * size.width
-                            drawRect(Color(0x4400E676), Offset(x0, 0f), Size(x1 - x0, size.height))
+                            // 【收敛】ROI 覆盖改为强调绿半透明，替代亮绿 0x4400E676
+                            drawRect(AppColors.Accent.copy(alpha = 0.27f), Offset(x0, 0f), Size(x1 - x0, size.height))
                         }
                     }
                     Text(
                         "Auto X ROI  R(${r.wlR}nm) G(${r.wlG}nm) B(${r.wlB}nm)",
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppColors.TextSecondary
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -116,12 +121,20 @@ fun ReportScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                 }
-                if (r.slope != null && r.peakB != null && r.peakG != null && r.peakR != null) {
-                    FigureLabel("Figure 3: Two-point Fit (B+R) with Third-point Validation (G)")
+                // 【v2.2.2】适配滤光片模式：pB 可空
+                if (r.slope != null && r.peakG != null && r.peakR != null) {
+                    val isFilterMode = r.peakB == null
+                    val title = if (isFilterMode)
+                        "Figure 3: Two-point Fit (G+R) [Filter Mode]"
+                    else
+                        "Figure 3: Two-point Fit (B+R) with Third-point Validation (G)"
+                    FigureLabel(title)
                     FitChart(
-                        r.slope, r.intercept ?: 0.0, r.wlB, r.wlG, r.wlR,
-                        r.peakB.toFloat(), r.peakG.toFloat(), r.peakR.toFloat(),
-                        r.gErrorNm ?: 0.0
+                        slope = r.slope, intercept = r.intercept ?: 0.0,
+                        wlB = r.wlB, wlG = r.wlG, wlR = r.wlR,
+                        pxB = r.peakB?.toFloat(), pxG = r.peakG.toFloat(), pxR = r.peakR.toFloat(),
+                        errorNm = r.gErrorNm ?: 0.0,
+                        isGreenRedFit = isFilterMode
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -134,43 +147,43 @@ fun ReportScreen(
                 if (r.peakDiagnostics != "—") {
                     Text(
                         r.peakDiagnostics,
-                        color = MaterialTheme.colorScheme.error,
+                        color = AppColors.Error,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
                 QualityBadge(r.wavelengthQuality)
             }
 
-            // ═══════ PAGE 2 — SPD response & logistic fusion (v1.4.4) ═══════
+            // ══════ PAGE 2 — SPD response & logistic fusion (v1.4.4) ═══════
             PageCard(page = 2, title = "Step 2: Spectral Response & Fusion (v1.4.4)") {
                 StatusLine(r.step2Status)
                 if (r.spdLambda.isNotEmpty()) {
                     if (r.spdPosR.isNotEmpty()) {
                         FigureLabel("Figure 4a: Positioning LEDs — RAW measured (independent data)")
                         MultiLineChartX(r.spdLambda, listOf(
-                            r.spdPosR to Color(0xFFFF5C5C),
-                            r.spdPosG to Color(0xFF5CFF5C),
-                            r.spdPosB to Color(0xFF5CA8FF)
+                            r.spdPosR to AppColors.Chart.R,
+                            r.spdPosG to AppColors.Chart.G,
+                            r.spdPosB to AppColors.Chart.B
                         ), widths = listOf(1.5f, 1.5f, 1.5f))
                     }
                     FigureLabel("Figure 4b: SPD-corrected (thin) + ONE pointwise-fused curve (thick)")
                     MultiLineChartX(r.spdLambda, listOf(
-                        r.spdCorrR to Color(0xFFFF5C5C),
-                        r.spdCorrG to Color(0xFF5CFF5C),
-                        r.spdCorrB to Color(0xFF5CA8FF),
-                        r.spdFused to Color(0xFFF5F5C0)
+                        r.spdCorrR to AppColors.Chart.R,
+                        r.spdCorrG to AppColors.Chart.G,
+                        r.spdCorrB to AppColors.Chart.B,
+                        r.spdFused to AppColors.TextPrimary
                     ), widths = listOf(1.2f, 1.2f, 1.2f, 3f))
                     FigureLabel("Figure 4c: Camera absolute response = Lamp_c / SPD_true (masked)")
                     MultiLineChartX(r.spdLambda, listOf(
-                        r.spdRespR to Color(0xFFFF5C5C),
-                        r.spdRespG to Color(0xFF5CFF5C),
-                        r.spdRespB to Color(0xFF5CA8FF)
+                        r.spdRespR to AppColors.Chart.R,
+                        r.spdRespG to AppColors.Chart.G,
+                        r.spdRespB to AppColors.Chart.B
                     ))
                     FigureLabel("Figure 4d: Logistic channel weights (sum = 1) with handoffs")
                     MultiLineChartX(r.spdLambda, listOf(
-                        r.spdWB to Color(0xFF5CA8FF),
-                        r.spdWG to Color(0xFF5CFF5C),
-                        r.spdWR to Color(0xFFFF5C5C)
+                        r.spdWB to AppColors.Chart.B,
+                        r.spdWG to AppColors.Chart.G,
+                        r.spdWR to AppColors.Chart.R
                     ), widths = listOf(2.5f, 2.5f, 2.5f),
                         vLines = listOf(r.spdHandoffBG, r.spdHandoffGR))
                     Spacer(Modifier.height(8.dp))
@@ -193,10 +206,11 @@ fun ReportScreen(
                 StatusLine(r.step3Status)
                 if (r.sampleSpectrum.isNotEmpty()) {
                     FigureLabel("Figure 7: Blank-subtracted & SPD-corrected spectrum vs Blank")
-                    ProfileChart(r.sampleSpectrum, r.blankSpectrum, emptyList())
+                    ProfileChart(r.blankSpectrum, r.sampleSpectrum, emptyList())
                     Text(
                         "Green = corrected sample, Red = blank",
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppColors.TextSecondary
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -228,10 +242,11 @@ fun ReportScreen(
                 ReportLine("[Regression Formula]", r.regressionFormula)
                 ReportLine("R²", r.regressionR2)
                 ReportLine("[Predicted Concentration]", r.predictedConcentration)
-                r.curveWarnings.forEach { w ->
+                // 【收敛】所有警告统一语义红，删除橙色分支
+                r.curveWarnings.forEach { warning ->
                     Text(
-                        "⚠️ $w",
-                        color = MaterialTheme.colorScheme.error,
+                        text = "⚠ $warning",
+                        color = AppColors.Error,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -242,21 +257,12 @@ fun ReportScreen(
 
 // ─────────── shared report widgets ───────────
 
-/**
- * Parses "TOKEN|localized message" format.
- * Color logic uses the TOKEN (language-agnostic), display uses the message.
- */
 @Composable
 private fun StatusLine(s: String) {
     val token = s.substringBefore('|')
     val message = s.substringAfter('|', s)
-    val color = when (token) {
-        "FAILED", "BLOCKED" -> MaterialTheme.colorScheme.error
-        "COMPUTED", "PRESET" -> Color(0xFF5CFF5C)
-        "PROCESSING" -> Color(0xFF5CA8FF)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Text(message, style = MaterialTheme.typography.bodySmall, color = color)
+    // 【统一】状态色收敛：绿=成功 / 半透明绿=处理中 / 红=失败 / 灰=空闲
+    Text(message, style = MaterialTheme.typography.bodySmall, color = statusTextColor(token))
     Spacer(Modifier.height(8.dp))
 }
 
@@ -264,19 +270,19 @@ private fun StatusLine(s: String) {
 private fun PageCard(page: Int, title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = AppColors.Surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 "— Page $page —",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppColors.TextSecondary
             )
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = AppColors.Accent
             )
             Spacer(Modifier.height(8.dp))
             content()
@@ -285,35 +291,37 @@ private fun PageCard(page: Int, title: String, content: @Composable ColumnScope.
 }
 
 @Composable
-private fun FigureLabel(t: String) = Text(t, style = MaterialTheme.typography.labelMedium)
+private fun FigureLabel(t: String) =
+    Text(t, style = MaterialTheme.typography.labelMedium, color = AppColors.TextSecondary)
 
 @Composable
 private fun SectionTitle(t: String) =
-    Text(t, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    Text(t, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary)
 
 @Composable
 private fun ReportLine(label: String, value: String) {
     if (label.isEmpty()) {
-        Text(value, style = MaterialTheme.typography.bodyMedium)
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = AppColors.TextPrimary)
     } else {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppColors.TextSecondary
             )
-            Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = AppColors.TextPrimary)
         }
     }
 }
 
 @Composable
 private fun QualityBadge(quality: String) {
+    // 【收敛】PASS=绿 / WARNING=半透明绿 / FAILED=红 / 其它=灰
     val color = when (quality) {
-        "PASS" -> Color(0xFF2E7D32)
-        "WARNING" -> Color(0xFFF9A825)
-        "FAILED" -> Color(0xFFB3261E)
-        else -> Color.Gray
+        "PASS" -> AppColors.Accent
+        "WARNING" -> AppColors.AccentSoft
+        "FAILED" -> AppColors.Error
+        else -> AppColors.TextSecondary
     }
     Text(
         "Calibration Quality: $quality",
@@ -336,7 +344,8 @@ private fun ProfileChart(
         val all = red + green + blue
         val max = all.maxOrNull()?.coerceAtLeast(1e-6f) ?: 1f
         val n = maxOf(red.size, green.size, blue.size, 1)
-        val winColors = listOf(Color(0xFFFF5C5C), Color(0xFF5CFF5C), Color(0xFF5CA8FF))
+        // 【收敛】通道窗色走 Chart 子对象
+        val winColors = listOf(AppColors.Chart.R, AppColors.Chart.G, AppColors.Chart.B)
         windows.forEachIndexed { i, (lo, hi) ->
             val x0 = lo.toFloat() / n * size.width
             val x1 = hi.toFloat() / n * size.width
@@ -345,7 +354,7 @@ private fun ProfileChart(
         val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 5f), 0f)
         centroids.forEach { c ->
             val px = c.toFloat() / n * size.width
-            drawLine(Color(0xFFCCCCCC), Offset(px, 0f), Offset(px, size.height), 1.5f, pathEffect = dash)
+            drawLine(AppColors.TextSecondary.copy(alpha = 0.7f), Offset(px, 0f), Offset(px, size.height), 1.5f, pathEffect = dash)
         }
         fun line(data: List<Float>, color: Color) {
             if (data.size < 2) return
@@ -357,9 +366,9 @@ private fun ProfileChart(
             }
             drawPath(path, color, style = Stroke(width = 2f))
         }
-        line(red, Color(0xFFFF5C5C))
-        line(green, Color(0xFF5CFF5C))
-        line(blue, Color(0xFF5CA8FF))
+        line(red, AppColors.Chart.R)
+        line(green, AppColors.Chart.G)
+        line(blue, AppColors.Chart.B)
     }
 }
 
@@ -383,7 +392,7 @@ private fun MultiLineChartX(
             val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
             for (v in vLines) {
                 val px = (v - xMin) / span * size.width
-                drawLine(Color(0xFF9E9E9E), Offset(px, 0f), Offset(px, size.height), 1.5f, pathEffect = dash)
+                drawLine(AppColors.TextSecondary.copy(alpha = 0.5f), Offset(px, 0f), Offset(px, size.height), 1.5f, pathEffect = dash)
             }
         }
         series.forEachIndexed { si, (data, color) ->
@@ -401,18 +410,22 @@ private fun MultiLineChartX(
     }
 }
 
-/** Two-point fit chart; pixel axis points DOWN to match Python invert_yaxis. */
+/**
+ * Two-point fit chart.
+ * 【v2.2.2】pxB 可空；isGreenRedFit 时隐藏 B 点、修改标题文案。
+ */
 @Composable
 private fun FitChart(
     slope: Double, intercept: Double,
     wlB: Double, wlG: Double, wlR: Double,
-    pxB: Float, pxG: Float, pxR: Float, errorNm: Double
+    pxB: Float?, pxG: Float, pxR: Float, errorNm: Double,
+    isGreenRedFit: Boolean = false
 ) {
     Column {
         Canvas(Modifier.fillMaxWidth().height(170.dp)) {
             val xMin = 440f
             val xMax = 660f
-            val ys = listOf(
+            val ys = listOfNotNull(
                 pxB, pxG, pxR,
                 (slope * xMin + intercept).toFloat(),
                 (slope * xMax + intercept).toFloat()
@@ -422,38 +435,52 @@ private fun FitChart(
             val ySpan = (yMax - yMin).coerceAtLeast(1f)
             fun px(wl: Float) = (wl - xMin) / (xMax - xMin) * size.width
             fun py(v: Float) = (v - yMin) / ySpan * size.height
+            // 【收敛】拟合线改为中性灰蓝 Chart.Fit，替代橄榄绿 0xFF558B2F
             drawLine(
-                Color(0xFF558B2F),
+                AppColors.Chart.Fit,
                 Offset(px(xMin), py((slope * xMin + intercept).toFloat())),
                 Offset(px(xMax), py((slope * xMax + intercept).toFloat())),
                 2f
             )
-            drawCircle(Color(0xFF5CA8FF), 6f, Offset(px(wlB.toFloat()), py(pxB)))
-            drawCircle(Color(0xFFFF5C5C), 6f, Offset(px(wlR.toFloat()), py(pxR)))
+            // 【v2.2.2】滤光片模式下不绘制 B 点
+            if (!isGreenRedFit && pxB != null) {
+                drawCircle(AppColors.Chart.B, 6f, Offset(px(wlB.toFloat()), py(pxB)))
+            }
+            drawCircle(AppColors.Chart.R, 6f, Offset(px(wlR.toFloat()), py(pxR)))
             drawCircle(
-                Color(0xFF5CFF5C), 6f,
+                AppColors.Chart.G, 6f,
                 Offset(px(wlG.toFloat()), py(pxG)),
                 style = Stroke(2f)
             )
         }
-        Text(
+        val fitText = if (isGreenRedFit) {
+            String.format(
+                Locale.US,
+                "Fit: p = %.4fλ %+.2f   Train (G, R)   [Filter Mode]",
+                slope, intercept
+            )
+        } else {
             String.format(
                 Locale.US,
                 "Fit: p = %.4fλ %+.2f   Train (B, R)   Validate (G)   Error: %+.2f nm",
                 slope, intercept, errorNm
-            ),
+            )
+        }
+        Text(
+            fitText,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = AppColors.TextSecondary
         )
     }
 }
 
 @Composable
 private fun CurveChart(
-    points: List<Pair<Double, Double>>,
+    points: List<Pair<Double, Double>>,  // (Concentration or log10(Concentration), Area)
     slope: Double, intercept: Double
 ) {
     Canvas(Modifier.fillMaxWidth().height(180.dp)) {
+        if (points.isEmpty()) return@Canvas
         val xs = points.map { it.first.toFloat() }
         val ys = points.map { it.second.toFloat() }
         val xMin = (xs.minOrNull() ?: 0f) * 0.9f
@@ -464,15 +491,17 @@ private fun CurveChart(
         val ySpan = (yMax - yMin).coerceAtLeast(1e-6f)
         fun px(v: Float) = (v - xMin) / xSpan * size.width
         fun py(v: Float) = size.height - (v - yMin) / ySpan * size.height
+        // 【收敛】回归线用中性 Chart.Fit
         drawLine(
-            Color(0xFF558B2F),
+            AppColors.Chart.Fit,
             Offset(px(xMin), py((slope * xMin + intercept).toFloat())),
             Offset(px(xMax), py((slope * xMax + intercept).toFloat())),
             2f
         )
+        // 【收敛】标准点用唯一强调色 Accent
         points.forEach { p ->
             drawCircle(
-                Color(0xFF5CA8FF), 6f,
+                AppColors.Accent, 6f,
                 Offset(px(p.first.toFloat()), py(p.second.toFloat()))
             )
         }

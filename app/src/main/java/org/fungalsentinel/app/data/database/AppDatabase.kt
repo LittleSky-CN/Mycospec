@@ -21,7 +21,7 @@ import org.fungalsentinel.app.data.model.StandardGroupEntity
         StandardGroupEntity::class,
         ResultEntity::class
     ],
-    version = 2,
+    version = 3, // Bumped from 2
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,13 +33,10 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // 删除旧表（开发阶段简化处理）
                 db.execSQL("DROP TABLE IF EXISTS captures")
                 db.execSQL("DROP TABLE IF EXISTS results")
                 db.execSQL("DROP TABLE IF EXISTS standard_groups")
                 db.execSQL("DROP TABLE IF EXISTS projects")
-
-                // 创建新表
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `projects` (
@@ -75,7 +72,6 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_captures_projectId` ON `captures` (`projectId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_captures_standardGroupId` ON `captures` (`standardGroupId`)")
-
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `calibrations` (
@@ -91,7 +87,6 @@ abstract class AppDatabase : RoomDatabase() {
                     """.trimIndent()
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_calibrations_projectId` ON `calibrations` (`projectId`)")
-
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `standard_groups` (
@@ -105,7 +100,6 @@ abstract class AppDatabase : RoomDatabase() {
                     """.trimIndent()
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_standard_groups_projectId` ON `standard_groups` (`projectId`)")
-
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `results` (
@@ -125,6 +119,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // NEW: Migration for hasBlueFilter column
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE projects ADD COLUMN hasBlueFilter INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -132,7 +133,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "fssa_database"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3) // Added MIGRATION_2_3
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

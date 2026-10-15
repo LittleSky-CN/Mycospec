@@ -8,13 +8,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.capture.CaptureUploadScreen
 import org.fungalsentinel.app.ui.components.*
+import org.fungalsentinel.app.ui.theme.AppColors
+import org.fungalsentinel.app.ui.theme.statusTextColor
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,7 +25,8 @@ fun Step1WavelengthScreen(
     onBack: () -> Unit,
     onOpenReport: () -> Unit,
     projectViewModel: ProjectViewModel,
-    isHalfScreen: Boolean = false
+    isHalfScreen: Boolean = false,
+    coverRatio: Float = 0.5f
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
     val captures = uiState.positioningCaptures
@@ -35,15 +37,16 @@ fun Step1WavelengthScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     var showLoadDialog by remember { mutableStateOf(false) }
 
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val landscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val gap = if (landscape) 8.dp else 14.dp
+    val pad = if (landscape) 10.dp else 16.dp
+
     val status = report.step1Status
     val token = status.substringBefore('|')
     val message = status.substringAfter('|', status)
-    val statusColor = when (token) {
-        "FAILED", "BLOCKED" -> MaterialTheme.colorScheme.error
-        "COMPUTED", "PRESET" -> Color(0xFF5CFF5C)
-        "PROCESSING" -> Color(0xFF5CA8FF)
-        else -> Color(0xFFF5F5C0)
-    }
+    // 【统一】状态色收敛：绿=成功 / 半透明绿=处理中 / 红=失败 / 灰=空闲
+    val statusColor = statusTextColor(token)
 
     val tutorial = TutorialHost(
         stepId = "step1_wavelength",
@@ -51,7 +54,7 @@ fun Step1WavelengthScreen(
         bodyRes = R.string.tutorial_step1_body
     )
 
-    HalfScreenLayout(forceHalfScreen = isHalfScreen) { innerModifier ->
+    HalfScreenLayout(forceHalfScreen = isHalfScreen, coverRatio = coverRatio) { innerModifier ->
         if (showCapture) {
             CaptureUploadScreen(
                 title = stringResource(R.string.step1_capture_title),
@@ -69,64 +72,66 @@ fun Step1WavelengthScreen(
             Column(
                 modifier = innerModifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .background(AppColors.Bg)
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(pad),
+                verticalArrangement = Arrangement.spacedBy(gap)
             ) {
                 NeonHeader("STEP1:", stringResource(R.string.step1_short), onBack, tutorial)
 
-                NeonOutlineBox(MaterialTheme.colorScheme.secondary) {
+                // 说明框：唯一强调色描边
+                NeonOutlineBox(AppColors.Accent) {
                     Text(
                         text = stringResource(R.string.step1_description),
-                        color = Color(0xFFF5F5C0),
-                        style = MaterialTheme.typography.bodyLarge
+                        color = AppColors.TextPrimary,
+                        style = if (landscape) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
                     )
                 }
 
-                NeonOutlineBox(Color.White) {
+                // 状态框：中性描边，文本色由状态令牌决定
+                NeonOutlineBox(AppColors.Outline) {
                     Text(
                         text = message,
                         color = statusColor,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    NeonStepIndicator(current = 1)
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                BoxWithConstraints {
+                    val vertical = maxWidth < 460.dp
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            NeonYellowButton(
-                                text = stringResource(R.string.act_save_preset),
-                                onClick = { showSaveDialog = true },
-                                enabled = report.slope != null && report.wavelengthQuality != "PRESET",
-                                modifier = Modifier.weight(1f)
-                            )
-                            NeonYellowButton(
-                                text = stringResource(R.string.act_load_preset),
-                                onClick = { showLoadDialog = true },
-                                enabled = wlPresets.isNotEmpty(),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            NeonYellowButton(stringResource(R.string.act_view_report), onOpenReport, modifier = Modifier.weight(1f))
-                            NeonYellowButton(stringResource(R.string.step1_start_capture), { showCapture = true }, modifier = Modifier.weight(1f))
-                            NeonYellowButton(stringResource(R.string.next_step), onNext, enabled = report.slope != null, modifier = Modifier.weight(1f))
+                        NeonStepIndicator(current = 1)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            NeonButtonGroup(vertical) { m ->
+                                NeonYellowButton(
+                                    text = stringResource(R.string.act_save_preset),
+                                    onClick = { showSaveDialog = true },
+                                    enabled = report.slope != null && report.wavelengthQuality != "PRESET",
+                                    modifier = m
+                                )
+                                NeonYellowButton(
+                                    text = stringResource(R.string.act_load_preset),
+                                    onClick = { showLoadDialog = true },
+                                    enabled = wlPresets.isNotEmpty(),
+                                    modifier = m
+                                )
+                            }
+                            NeonButtonGroup(vertical) { m ->
+                                NeonYellowButton(stringResource(R.string.act_view_report), onOpenReport, modifier = m)
+                                NeonYellowButton(stringResource(R.string.step1_start_capture), { showCapture = true }, modifier = m)
+                                NeonYellowButton(stringResource(R.string.next_step), onNext, enabled = report.slope != null, modifier = m)
+                            }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }

@@ -11,9 +11,9 @@ import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager as AndroidCameraManager
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.DngCreator
 import android.hardware.camera2.TotalCaptureResult
-import android.hardware.camera2.CaptureResult
 import android.media.Image
 import android.media.ImageReader
 import android.os.Environment
@@ -32,6 +32,7 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.annotation.SuppressLint
 
 enum class DngPolicy { ALL, SAMPLES_ONLY, NONE }
 
@@ -40,57 +41,49 @@ data class CameraParams(
     val iso: Int = 100,
     val focusDiopter: Float = 0f,
     val wbTemperature: Int? = null,
-    val autoExposure: Boolean = true,          // NEW: AE toggle from Settings
+    val autoExposure: Boolean = true,
+    val autoFocus: Boolean = true,
     val hotPixelMode: Int = CameraMetadata.HOT_PIXEL_MODE_FAST
 )
 
 data class CaptureMetadata(
-    val exposureTimeNs: Long,
-    val iso: Int,
-    val focusDistance: Float,
-    val whiteBalance: Int?,
-    val sensorWidth: Int,
-    val sensorHeight: Int,
-    val saturationRatio: Float,
-    val timestamp: Long
+    val exposureTimeNs: Long, val iso: Int, val focusDistance: Float,
+    val whiteBalance: Int?, val sensorWidth: Int, val sensorHeight: Int,
+    val saturationRatio: Float, val timestamp: Long
 )
 
 class CameraManager(private val context: Context) {
-
     companion object {
         private const val TAG = "CameraManager"
-        private val EXPOSURE_RANGE_MS = 1L..600_000L     // 1 ms .. 10 min
+        private val EXPOSURE_RANGE_MS = 1L..600_000L
         private val ISO_RANGE = 50..1600
         private val FOCUS_RANGE_D = 0f..5f
-        private const val RESULT_WAIT_MS = 2500L
-        private const val POLL_INTERVAL_MS = 25L
+        private const val RESULT_WAIT_MS = 3000L     // 【v2.2.6】10s → 3s，缩短阻塞窗口
+        private const val POLL_INTERVAL_MS = 20L
     }
 
     private val androidCameraManager: AndroidCameraManager =
         context.getSystemService(Context.CAMERA_SERVICE) as AndroidCameraManager
-
-    // Thread A: camera open / session / capture callbacks
     private var backgroundThread: HandlerThread? = null
     private var backgroundHandler: Handler? = null
-    // Thread B: image processing & result waiting (FIX: never block Thread A)
     private var processThread: HandlerThread? = null
     private var processHandler: Handler? = null
-
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
     private var previewSurface: Surface? = null
     private var rawImageReader: ImageReader? = null
     private var cameraCharacteristics: CameraCharacteristics? = null
-
     private var currentParams = CameraParams()
+
     var dngPolicy: DngPolicy = DngPolicy.ALL
 
     @Volatile private var pendingCaptureResult: TotalCaptureResult? = null
     @Volatile private var captureFailed = false
+    @Volatile private var lastPreviewResult: TotalCaptureResult? = null
+    @Volatile private var captureInFlight = false   // 【v2.2.6】单帧在途互斥，防连点排队卡死
 
     private val _isReady = MutableStateFlow(false)
     val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
-
     private val _lastMetadata = MutableStateFlow<CaptureMetadata?>(null)
     val lastMetadata: StateFlow<CaptureMetadata?> = _lastMetadata.asStateFlow()
 
@@ -99,78 +92,44 @@ class CameraManager(private val context: Context) {
     var onSaturationWarning: ((Float) -> Unit)? = null
 
     fun hasCameraPermission(): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
     private fun startThreads() {
-        if (backgroundThread == null) {
-            backgroundThread = HandlerThread("CameraSession").also { it.start() }
-            backgroundHandler = Handler(backgroundThread!!.looper)
-        }
-        if (processThread == null) {
-            processThread = HandlerThread("RawProcess").also { it.start() }
-            processHandler = Handler(processThread!!.looper)
-        }
+        if (backgroundThread == null) { backgroundThread = HandlerThread("CameraSession").also { it.start() }; backgroundHandler = Handler(backgroundThread!!.looper) }
+        if (processThread == null) { processThread = HandlerThread("RawProcess").also { it.start() }; processHandler = Handler(processThread!!.looper) }
     }
 
     private fun stopThreads() {
-        listOf(backgroundThread, processThread).forEach { t ->
-            t?.quitSafely()
-            try { t?.join() } catch (_: InterruptedException) {}
-        }
-        backgroundThread = null; backgroundHandler = null
-        processThread = null; processHandler = null
+        listOf(backgroundThread, processThread).forEach { t -> t?.quitSafely(); try { t?.join() } catch (_: InterruptedException) {} }
+        backgroundThread = null; backgroundHandler = null; processThread = null; processHandler = null
     }
 
+    @SuppressLint("MissingPermission")
     fun openCamera(previewSurface: Surface) {
-        if (!hasCameraPermission()) {
-            onError?.invoke("Camera permission not granted"); return
-        }
+        if (!hasCameraPermission()) { onError?.invoke("Camera permission not granted"); return }
         startThreads()
         this.previewSurface = previewSurface
         _isReady.value = false
         try {
-            val rawCameraId = findRawCapableCamera() ?: run {
-                onError?.invoke("No RAW-capable camera found on this device"); return
-            }
+            val rawCameraId = findRawCapableCamera() ?: run { onError?.invoke("No RAW-capable camera found"); return }
             cameraCharacteristics = androidCameraManager.getCameraCharacteristics(rawCameraId)
             val rawSize = chooseRawSize()
-            rawImageReader = ImageReader.newInstance(
-                rawSize.width, rawSize.height, ImageFormat.RAW_SENSOR, 2
-            ).apply {
-                // Images are processed on Thread B
-                setOnImageAvailableListener(
-                    { reader -> processHandler?.post { processRawImage(reader) } },
-                    processHandler
-                )
+            rawImageReader = ImageReader.newInstance(rawSize.width, rawSize.height, ImageFormat.RAW_SENSOR, 2).apply {
+                setOnImageAvailableListener({ reader -> processHandler?.post { processRawImage(reader) } }, processHandler)
             }
             androidCameraManager.openCamera(rawCameraId, object : CameraDevice.StateCallback() {
-                override fun onOpened(camera: CameraDevice) {
-                    cameraDevice = camera; createCaptureSession()
-                }
-                override fun onDisconnected(camera: CameraDevice) {
-                    camera.close(); cameraDevice = null; _isReady.value = false
-                }
+                override fun onOpened(camera: CameraDevice) { cameraDevice = camera; createCaptureSession() }
+                override fun onDisconnected(camera: CameraDevice) { camera.close(); cameraDevice = null; _isReady.value = false }
                 override fun onError(camera: CameraDevice, error: Int) {
                     camera.close(); cameraDevice = null; _isReady.value = false
+                    captureInFlight = false
                     onError?.invoke("Camera device error: $error")
                 }
             }, backgroundHandler)
-        } catch (e: SecurityException) {
-            onError?.invoke("Security exception: ${e.message}")
-        } catch (e: CameraAccessException) {
-            onError?.invoke("Camera access error: ${e.message}")
-        }
+        } catch (e: Exception) { onError?.invoke("Camera access error: ${e.message}") }
     }
 
     private fun findRawCapableCamera(): String? {
-        for (id in androidCameraManager.cameraIdList) {
-            val ch = androidCameraManager.getCameraCharacteristics(id)
-            val caps = ch.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES) ?: continue
-            val back = ch.get(CameraCharacteristics.LENS_FACING) ==
-                    CameraCharacteristics.LENS_FACING_BACK
-            if (back && caps.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_RAW)) return id
-        }
         for (id in androidCameraManager.cameraIdList) {
             val caps = androidCameraManager.getCameraCharacteristics(id)
                 .get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES) ?: continue
@@ -180,22 +139,17 @@ class CameraManager(private val context: Context) {
     }
 
     private fun chooseRawSize(): Size {
-        val chars = cameraCharacteristics!!
-        val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            ?: throw IllegalStateException("No stream configuration map")
-        val rawSizes = map.getOutputSizes(ImageFormat.RAW_SENSOR)
-            ?: throw IllegalStateException("No RAW_SENSOR sizes")
-        return rawSizes.maxByOrNull { it.width * it.height }!!
+        val map = cameraCharacteristics!!.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            ?: throw IllegalStateException("No stream config")
+        return map.getOutputSizes(ImageFormat.RAW_SENSOR)?.maxByOrNull { it.width * it.height }
+            ?: throw IllegalStateException("No RAW sizes")
     }
 
     @Suppress("DEPRECATION")
     private fun createCaptureSession() {
-        val device = cameraDevice ?: return
-        val reader = rawImageReader ?: return
-        val preview = previewSurface ?: return
         try {
-            device.createCaptureSession(
-                listOf(preview, reader.surface),
+            cameraDevice!!.createCaptureSession(
+                listOf(previewSurface!!, rawImageReader!!.surface),
                 object : CameraCaptureSession.StateCallback() {
                     override fun onConfigured(session: CameraCaptureSession) {
                         captureSession = session; startPreview(); _isReady.value = true
@@ -203,35 +157,29 @@ class CameraManager(private val context: Context) {
                     override fun onConfigureFailed(session: CameraCaptureSession) {
                         onError?.invoke("Session configuration failed")
                     }
-                },
-                backgroundHandler
+                }, backgroundHandler
             )
-        } catch (e: CameraAccessException) {
-            onError?.invoke("Session creation failed: ${e.message}")
-        }
+        } catch (e: CameraAccessException) { onError?.invoke("Session creation failed: ${e.message}") }
     }
 
     private fun startPreview() {
-        val session = captureSession ?: return
-        val preview = previewSurface ?: return
-        val device = cameraDevice ?: return
         try {
-            val builder = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
-                addTarget(preview); applyManualControls(this)
-            }
-            session.setRepeatingRequest(builder.build(), null, backgroundHandler)
-        } catch (e: CameraAccessException) {
-            onError?.invoke("Preview start failed: ${e.message}")
-        }
+            val session = captureSession ?: return
+            val builder = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+                .apply { addTarget(previewSurface!!); applyManualControls(this) }
+            session.setRepeatingRequest(builder.build(), object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureCompleted(s: CameraCaptureSession, r: CaptureRequest, result: TotalCaptureResult) {
+                    lastPreviewResult = result
+                }
+            }, backgroundHandler)
+        } catch (e: CameraAccessException) { onError?.invoke("Preview start failed: ${e.message}") }
     }
 
     private fun applyManualControls(builder: CaptureRequest.Builder) {
         val chars = cameraCharacteristics ?: return
         if (currentParams.autoExposure) {
-            // AE ON: camera decides exposure time
             builder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON)
         } else {
-            // Manual exposure (1 ms .. 10 min, from Settings slider)
             builder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
             builder.set(
                 CaptureRequest.SENSOR_EXPOSURE_TIME,
@@ -244,72 +192,71 @@ class CameraManager(private val context: Context) {
                 currentParams.iso.coerceIn(ISO_RANGE).coerceIn(isoRange.lower..isoRange.upper)
             )
         }
-        val focusRange = chars.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) ?: 0f
-        val focusD = currentParams.focusDiopter.coerceIn(FOCUS_RANGE_D)
-        builder.set(
-            CaptureRequest.LENS_FOCUS_DISTANCE,
-            if (focusD == 0f) 0f else (1f / focusD).coerceAtMost(focusRange)
-        )
-        builder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF)
+        if (currentParams.autoFocus) {
+            builder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+        } else {
+            builder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF)
+            val focusRange = chars.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) ?: 0f
+            val focusD = currentParams.focusDiopter.coerceIn(FOCUS_RANGE_D)
+            builder.set(
+                CaptureRequest.LENS_FOCUS_DISTANCE,
+                if (focusD == 0f) 0f else (1f / focusD).coerceAtMost(focusRange)
+            )
+        }
         if (currentParams.wbTemperature != null) {
             builder.set(CaptureRequest.CONTROL_AWB_MODE, CameraMetadata.CONTROL_AWB_MODE_OFF)
-            builder.set(
-                CaptureRequest.COLOR_CORRECTION_MODE,
-                CameraMetadata.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX
-            )
+            builder.set(CaptureRequest.COLOR_CORRECTION_MODE, CameraMetadata.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX)
             val neutral = arrayOf(
                 android.util.Rational(1, 1), android.util.Rational(0, 1), android.util.Rational(0, 1),
                 android.util.Rational(0, 1), android.util.Rational(1, 1), android.util.Rational(0, 1),
                 android.util.Rational(0, 1), android.util.Rational(0, 1), android.util.Rational(1, 1)
             )
-            builder.set(
-                CaptureRequest.COLOR_CORRECTION_TRANSFORM,
-                android.hardware.camera2.params.ColorSpaceTransform(neutral)
-            )
+            builder.set(CaptureRequest.COLOR_CORRECTION_TRANSFORM, android.hardware.camera2.params.ColorSpaceTransform(neutral))
         } else {
             builder.set(CaptureRequest.CONTROL_AWB_MODE, CameraMetadata.CONTROL_AWB_MODE_AUTO)
+            builder.set(CaptureRequest.NOISE_REDUCTION_MODE, CameraMetadata.NOISE_REDUCTION_MODE_FAST)
+            builder.set(CaptureRequest.SHADING_MODE, CameraMetadata.SHADING_MODE_FAST)
+            builder.set(CaptureRequest.HOT_PIXEL_MODE, currentParams.hotPixelMode)
         }
-        builder.set(CaptureRequest.NOISE_REDUCTION_MODE, CameraMetadata.NOISE_REDUCTION_MODE_FAST)
-        builder.set(CaptureRequest.SHADING_MODE, CameraMetadata.SHADING_MODE_FAST)
-        builder.set(CaptureRequest.HOT_PIXEL_MODE, currentParams.hotPixelMode)
     }
 
     fun updateParams(params: CameraParams) {
         currentParams = params
-        if (_isReady.value) startPreview()
+        if (_isReady.value && !captureInFlight) startPreview()
     }
 
+    /** 【v2.2.6】OnePlus/ColorOS 会话阻塞规避：拍摄前 stopRepeating，处理完重启预览；互斥锁防排队 */
     fun captureRaw() {
-        val device = cameraDevice ?: run { onError?.invoke("Camera not opened"); return }
+        if (captureInFlight) { onError?.invoke("Capture busy — previous frame still processing"); return }
         val session = captureSession ?: run { onError?.invoke("Session not ready"); return }
-        val reader = rawImageReader ?: run { onError?.invoke("RAW reader not ready"); return }
-        pendingCaptureResult = null
-        captureFailed = false
+        val device = cameraDevice ?: run { onError?.invoke("Camera not open"); return }
+        captureInFlight = true
         try {
-            val request = device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
-                addTarget(reader.surface); applyManualControls(this)
-            }.build()
-            // Callback delivers on Thread A; waiting happens on Thread B -> no deadlock
+            pendingCaptureResult = null; captureFailed = false
+            val request = device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
+                .apply { addTarget(rawImageReader!!.surface); applyManualControls(this) }.build()
+            runCatching { session.stopRepeating() }
             session.capture(request, object : CameraCaptureSession.CaptureCallback() {
-                override fun onCaptureCompleted(
-                    s: CameraCaptureSession, r: CaptureRequest, result: TotalCaptureResult
-                ) {
+                override fun onCaptureCompleted(s: CameraCaptureSession, r: CaptureRequest, result: TotalCaptureResult) {
                     pendingCaptureResult = result
                 }
-                override fun onCaptureFailed(
-                    s: CameraCaptureSession, r: CaptureRequest,
-                    failure: android.hardware.camera2.CaptureFailure
-                ) {
+                override fun onCaptureFailed(s: CameraCaptureSession, r: CaptureRequest, f: android.hardware.camera2.CaptureFailure) {
                     captureFailed = true
-                    onError?.invoke("Capture failed: reason=${failure.reason}")
+                    onError?.invoke("Capture failed: reason=${f.reason}")
+                    finishCaptureCycle()
                 }
             }, backgroundHandler)
         } catch (e: CameraAccessException) {
             onError?.invoke("Capture dispatch failed: ${e.message}")
+            finishCaptureCycle()
         }
     }
 
-    /** Runs on Thread B; polls the volatile result delivered by Thread A. */
+    private fun finishCaptureCycle() {
+        captureInFlight = false
+        if (_isReady.value) startPreview()
+    }
+
     private fun waitForResult(): TotalCaptureResult? {
         val deadline = System.currentTimeMillis() + RESULT_WAIT_MS
         while (System.currentTimeMillis() < deadline) {
@@ -321,25 +268,25 @@ class CameraManager(private val context: Context) {
     }
 
     private fun processRawImage(reader: ImageReader) {
-        val image: Image = reader.acquireLatestImage() ?: return
+        val image: Image = reader.acquireLatestImage() ?: run { finishCaptureCycle(); return }
         try {
-            val result = waitForResult()
+            val result = waitForResult() ?: lastPreviewResult
             if (result == null) {
-                onError?.invoke("No capture result for this frame — discarded"); return
+                onError?.invoke("No capture result available (callback lost)")
+                return
             }
             val saturation = computeSaturationRatio(image)
             if (saturation >= 0.01f) { onSaturationWarning?.invoke(saturation); return }
+
             val metadata = CaptureMetadata(
-                exposureTimeNs = if (currentParams.autoExposure) {
-                    result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: 0L
-                } else currentParams.exposureMs * 1_000_000L,
+                exposureTimeNs = if (currentParams.autoExposure)
+                    result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: (currentParams.exposureMs * 1_000_000L)
+                else currentParams.exposureMs * 1_000_000L,
                 iso = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: currentParams.iso,
                 focusDistance = currentParams.focusDiopter,
                 whiteBalance = currentParams.wbTemperature,
-                sensorWidth = image.width,
-                sensorHeight = image.height,
-                saturationRatio = saturation,
-                timestamp = System.currentTimeMillis()
+                sensorWidth = image.width, sensorHeight = image.height,
+                saturationRatio = saturation, timestamp = System.currentTimeMillis()
             )
             _lastMetadata.value = metadata
             if (dngPolicy != DngPolicy.NONE) saveDng(image, metadata, result)
@@ -347,22 +294,24 @@ class CameraManager(private val context: Context) {
             onError?.invoke("RAW processing failed: ${e.message}")
         } finally {
             image.close()
+            finishCaptureCycle()
         }
     }
 
+    /** 【v2.2.6】白电平自适应：按传感器实际位深判定饱和，兼容 10/12/14/16-bit */
     private fun computeSaturationRatio(image: Image): Float {
+        val white = cameraCharacteristics?.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL) ?: 16383
+        val threshold = (white * 0.98f).toInt()
         val plane = image.planes[0]; val buffer = plane.buffer
         val rowStride = plane.rowStride; val pixelStride = plane.pixelStride
         val width = image.width; val height = image.height
-        val threshold = (16383 * 0.98f).toInt()
         var saturated = 0L; val step = 8
         for (y in 0 until height step step) {
             val rowStart = y * rowStride
             for (x in 0 until width step step) {
                 val off = rowStart + x * pixelStride
                 if (off + 1 < buffer.limit()) {
-                    val v = (buffer.get(off).toInt() and 0xFF) or
-                            ((buffer.get(off + 1).toInt() and 0xFF) shl 8)
+                    val v = (buffer.get(off).toInt() and 0xFF) or ((buffer.get(off + 1).toInt() and 0xFF) shl 8)
                     if (v >= threshold) saturated++
                 }
             }
@@ -374,24 +323,30 @@ class CameraManager(private val context: Context) {
     private fun saveDng(image: Image, metadata: CaptureMetadata, result: TotalCaptureResult) {
         val chars = cameraCharacteristics ?: return
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
-        val file = File(
-            context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "FSSA_RAW_$ts.dng"
-        )
+        val file = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "FSSA_RAW_$ts.dng")
         try {
             val dngCreator = DngCreator(chars, result)
             dngCreator.setOrientation(android.media.ExifInterface.ORIENTATION_NORMAL)
             FileOutputStream(file).use { dngCreator.writeImage(it, image) }
             dngCreator.close()
+            file.canonicalFile.setLastModified(System.currentTimeMillis())
+            if (file.length() < 1024) {
+                onError?.invoke("DNG file too small (${file.length()} bytes) — possible write failure")
+                file.delete()
+                return
+            }
             onDngSaved?.invoke(file, metadata)
-            Log.d(TAG, "DNG saved: ${file.absolutePath}")
+            Log.d(TAG, "DNG saved: ${file.absolutePath} (${file.length()} bytes)")
         } catch (e: Exception) {
-            onError?.invoke("DNG save failed: ${e.message}"); file.delete()
+            onError?.invoke("DNG save failed: ${e.message}")
+            file.delete()
         }
     }
 
     fun close() {
         try { captureSession?.close(); cameraDevice?.close(); rawImageReader?.close() } catch (_: Exception) {}
         captureSession = null; cameraDevice = null; rawImageReader = null; previewSurface = null
+        captureInFlight = false
         _isReady.value = false
         stopThreads()
     }

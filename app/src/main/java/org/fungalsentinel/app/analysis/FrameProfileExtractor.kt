@@ -7,6 +7,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.max
@@ -22,21 +23,21 @@ data class FrameProfile(
 
 /**
  * DNG/RAW parity with Python image_processing.read_dng_linear_rgb.
- *  - DNG parsed FIRST (BitmapFactory must never capture the embedded JPEG preview);
- *  - black level (tag 50714) then exposure (tag 33434 RATIONAL);
- *  - 【v1.4.5-fix】CFA phase from tag 50706 (CFAPattern); default BGGR [2,1,1,0],
- *    which is the effective phase of cv2.COLOR_BayerRG2RGB on our rig.
- *    A wrong phase swaps R/B and flips the wavelength-mapping slope sign.
- *  - column projection = 99.5th percentile over rows; profiles = ROI column MEAN.
- * Bitmap (JPEG/PNG) path: inverse-sRGB only (display-referred convenience mode).
+ * - SubIFD 递归解析 CFA (Tag 50706)，兼容 0-based / 1-based 编码
+ * - file:// 与 content:// 双协议读取
+ * - forceRbSwap：Step 1 检测到 R/B 标签互换后由 ViewModel 置位，解码源头交换，保证 Step 2/3 标签一致
  */
 object FrameProfileExtractor {
     private const val MAX_FILE_BYTES = 80_000_000
     private const val MAX_PIXELS = 40_000_000L
     private const val DEFAULT_BLACK_LEVEL = 64.0f
 
-    /** Effective CFA phase of cv2.COLOR_BayerRG2RGB on the project rig: (0,0)=B. */
-    private val DEFAULT_CFA = intArrayOf(2, 1, 1, 0)   // r0c0, r0c1, r1c0, r1c1 (0=R,1=G,2=B)
+    // 绝大多数手机 (Redmi, Samsung, Huawei, OnePlus) 主摄为 RGGB：0=R, 1=G, 2=B
+    private val DEFAULT_CFA = intArrayOf(0, 1, 1, 2)
+
+    /** 【v2.2.6】R/B 标签交换开关（Step 1 反序自检结论） */
+    @Volatile
+    var forceRbSwap: Boolean = false
 
     private class TopK(private val k: Int) {
         val v = FloatArray(k) { -Float.MAX_VALUE }
@@ -59,10 +60,19 @@ object FrameProfileExtractor {
     }
 
     fun extract(context: Context, uri: Uri): FrameProfile? = runCatching {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
-        if (bytes.size < 64 || bytes.size > MAX_FILE_BYTES) return null
+        val bytes: ByteArray? = when (uri.scheme?.lowercase()) {
+            "file" -> {
+                val f = File(uri.path ?: return null)
+                if (f.exists() && f.length() in 64..MAX_FILE_BYTES) f.readBytes() else null
+            }
+            "content" -> context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            else -> context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }
+        if (bytes == null || bytes.size < 64 || bytes.size > MAX_FILE_BYTES) return null
         val exifExposure = readExposure(bytes)
-        profileFromDng(bytes, exifExposure) ?: profileFromBitmap(bytes, exifExposure)
+        val p = profileFromDng(bytes, exifExposure) ?: profileFromBitmap(bytes, exifExposure)
+        // 【v2.2.6】源头交换 R/B，保证全链路通道标签一致
+        p?.let { if (forceRbSwap) it.copy(redProfile = it.blueProfile, blueProfile = it.redProfile) else it }
     }.getOrNull()
 
     private fun readExposure(bytes: ByteArray): Double = runCatching {
@@ -74,6 +84,10 @@ object FrameProfileExtractor {
         val c = v8 / 255.0
         return (if (c <= 0.04045) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)).toFloat()
     }
+
+    /** 已停用：方向由波长映射斜率符号自适应处理，避免样品颜色干扰质心判断 */
+    private fun autoRotateRgb(rgb: FloatArray, w: Int, h: Int): Triple<FloatArray, Int, Int> =
+        Triple(rgb, w, h)
 
     private fun autoDetectXRoi(colProfile: FloatArray, width: Int): Pair<Int, Int> {
         if (colProfile.isEmpty()) return (width * 0.35).toInt() to (width * 0.65).toInt()
@@ -94,8 +108,7 @@ object FrameProfileExtractor {
             }
         }
         if (segments.isEmpty()) return (width * 0.35).toInt() to (width * 0.65).toInt()
-        val longest = segments.maxByOrNull { it.second - it.first }
-            ?: return (width * 0.35).toInt() to (width * 0.65).toInt()
+        val longest = segments.maxByOrNull { it.second - it.first } ?: return (width * 0.35).toInt() to (width * 0.65).toInt()
         return max(0, longest.first - 80) to min(width, longest.second + 80)
     }
 
@@ -116,60 +129,58 @@ object FrameProfileExtractor {
         return out
     }
 
-    // ─────────── Bitmap (JPEG/PNG): inverse-sRGB, no BL, no exposure div ───────────
     private fun profileFromBitmap(bytes: ByteArray, exposure: Double): FrameProfile? = runCatching {
         val decoded: Bitmap? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             ImageDecoder.decodeBitmap(ImageDecoder.createSource(ByteBuffer.wrap(bytes))) { d, _, _ ->
                 d.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
             }
-        } else {
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        }
+        } else BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         decoded ?: return null
-        val bm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            decoded.config == Bitmap.Config.HARDWARE
-        ) {
+        val bm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && decoded.config == Bitmap.Config.HARDWARE) {
             val soft = decoded.copy(Bitmap.Config.ARGB_8888, false)
             decoded.recycle()
             soft
         } else decoded
         val w = bm.width; val h = bm.height
         if (w <= 0 || h <= 0 || w.toLong() * h > MAX_PIXELS) { bm.recycle(); return null }
-
-        val kTop = maxOf(4, (h * 0.005).toInt() + 4)
-        val tops = Array(w) { TopK(kTop) }
+        val rgb0 = FloatArray(w * h * 3)
         val row = IntArray(w)
         for (y in 0 until h) {
             bm.getPixels(row, 0, w, 0, y, w, 1)
             for (x in 0 until w) {
                 val c = row[x]
-                tops[x].add(
-                    srgbToLinear((c shr 16) and 0xFF) +
-                            srgbToLinear((c shr 8) and 0xFF) +
-                            srgbToLinear(c and 0xFF)
-                )
+                val i3 = (y * w + x) * 3
+                rgb0[i3] = srgbToLinear((c shr 16) and 0xFF)
+                rgb0[i3 + 1] = srgbToLinear((c shr 8) and 0xFF)
+                rgb0[i3 + 2] = srgbToLinear(c and 0xFF)
             }
         }
-        val colE = FloatArray(w) { x -> tops[x].p995(h) }
-        val (rs, re) = autoDetectXRoi(colE, w)
+        bm.recycle()
+        val (rgb, finalW, finalH) = autoRotateRgb(rgb0, w, h)
+        val kTop = maxOf(4, (finalH * 0.005).toInt() + 4)
+        val tops = Array(finalW) { TopK(kTop) }
+        for (y in 0 until finalH) {
+            val base = y * finalW
+            for (x in 0 until finalW) {
+                val i3 = (base + x) * 3
+                tops[x].add(rgb[i3] + rgb[i3 + 1] + rgb[i3 + 2])
+            }
+        }
+        val colE = FloatArray(finalW) { x -> tops[x].p995(finalH) }
+        val (rs, re) = autoDetectXRoi(colE, finalW)
         val roiW = (re - rs + 1).coerceAtLeast(1)
-
-        val rP = FloatArray(h); val gP = FloatArray(h); val bP = FloatArray(h)
-        for (y in 0 until h) {
-            bm.getPixels(row, 0, w, 0, y, w, 1)
+        val rP = FloatArray(finalH); val gP = FloatArray(finalH); val bP = FloatArray(finalH)
+        for (y in 0 until finalH) {
+            val base = y * finalW
             for (x in rs..re) {
-                val c = row[x]
-                rP[y] += srgbToLinear((c shr 16) and 0xFF)
-                gP[y] += srgbToLinear((c shr 8) and 0xFF)
-                bP[y] += srgbToLinear(c and 0xFF)
+                val i3 = (base + x) * 3
+                rP[y] += rgb[i3]; gP[y] += rgb[i3 + 1]; bP[y] += rgb[i3 + 2]
             }
             rP[y] /= roiW; gP[y] /= roiW; bP[y] /= roiW
         }
-        bm.recycle()
-        FrameProfile(w, h, rP, gP, bP, colE, exposure, "bitmap", rs, re)
+        FrameProfile(finalW, finalH, rP, gP, bP, colE, exposure, "bitmap", rs, re)
     }.getOrNull()
 
-    // ─────────── DNG/RAW: true linear physics, CFA-phase aware ───────────
     private data class RawGrid(
         val width: Int, val height: Int, val samples: IntArray,
         val blackLevel: Float, val tiffExposure: Double, val cfa: IntArray
@@ -186,52 +197,45 @@ object FrameProfileExtractor {
         val cfa = grid.cfa
         val w = grid.width; val h = grid.height
         val ef = exp.toFloat()
-
-        // Demosaic with the device CFA phase (bilinear, approximates cv2 interpolation)
-        val rgb = FloatArray(w * h * 3)
+        val rgb0 = FloatArray(w * h * 3)
         for (y in 0 until h) {
             for (x in 0 until w) {
                 val idx = (y * w + x) * 3
                 val ci = cfa[(y and 1) * 2 + (x and 1)].coerceIn(0, 2)
                 val rawVal = max(0f, grid.samples[y * w + x].toFloat() - black) / ef
-                rgb[idx + ci] = rawVal
+                rgb0[idx + ci] = rawVal
                 for (c in 0..2) {
                     if (c == ci) continue
-                    rgb[idx + c] = neigh(grid, x, y, w, h, black, ef, cfa, c)
+                    rgb0[idx + c] = neigh(grid, x, y, w, h, black, ef, cfa, c)
                 }
             }
         }
-
-        val kTop = maxOf(4, (h * 0.005).toInt() + 4)
-        val tops = Array(w) { TopK(kTop) }
-        for (y in 0 until h) {
-            val base = y * w
-            for (x in 0 until w) {
-                val i3 = base * 3 + x * 3
+        val (rgb, finalW, finalH) = autoRotateRgb(rgb0, w, h)
+        val kTop = maxOf(4, (finalH * 0.005).toInt() + 4)
+        val tops = Array(finalW) { TopK(kTop) }
+        for (y in 0 until finalH) {
+            val base = y * finalW
+            for (x in 0 until finalW) {
+                val i3 = (base + x) * 3
                 tops[x].add(rgb[i3] + rgb[i3 + 1] + rgb[i3 + 2])
             }
         }
-        val colE = FloatArray(w) { x -> tops[x].p995(h) }
-        val (rs, re) = autoDetectXRoi(colE, w)
+        val colE = FloatArray(finalW) { x -> tops[x].p995(finalH) }
+        val (rs, re) = autoDetectXRoi(colE, finalW)
         val roiW = (re - rs + 1).coerceAtLeast(1)
-
-        val rP = FloatArray(h); val gP = FloatArray(h); val bP = FloatArray(h)
-        for (y in 0 until h) {
-            val base = y * w
+        val rP = FloatArray(finalH); val gP = FloatArray(finalH); val bP = FloatArray(finalH)
+        for (y in 0 until finalH) {
+            val base = y * finalW
             for (x in rs..re) {
-                val i3 = base * 3 + x * 3
+                val i3 = (base + x) * 3
                 rP[y] += rgb[i3]; gP[y] += rgb[i3 + 1]; bP[y] += rgb[i3 + 2]
             }
             rP[y] /= roiW; gP[y] /= roiW; bP[y] /= roiW
         }
-        FrameProfile(w, h, rP, gP, bP, colE, exp, "dng", rs, re)
+        FrameProfile(finalW, finalH, rP, gP, bP, colE, exp, "dng", rs, re)
     }.getOrNull()
 
-    /** Bilinear average of same-color neighbours for channel c under the CFA phase. */
-    private fun neigh(
-        grid: RawGrid, x: Int, y: Int, w: Int, h: Int,
-        black: Float, ef: Float, cfa: IntArray, c: Int
-    ): Float {
+    private fun neigh(grid: RawGrid, x: Int, y: Int, w: Int, h: Int, black: Float, ef: Float, cfa: IntArray, c: Int): Float {
         var sum = 0f; var cnt = 0
         for (dy in -1..1) for (dx in -1..1) {
             if (dx == 0 && dy == 0) continue
@@ -257,40 +261,23 @@ object FrameProfileExtractor {
             val off0 = bb.int.toInt()
             if (off0 !in 1 until b.size - 1) return null
 
-            var width = 0; var height = 0; var bits = 16; var compression = 1
-            var black = DEFAULT_BLACK_LEVEL
-            var exposure = 0.0
-            var cfa: IntArray? = null
-            var offsets = IntArray(0); var counts = IntArray(0)
+            val tags = mutableMapOf<Int, Any?>()
+            parseIfd(bb, off0, tags)
 
-            // IFD0 only
-            bb.position(off0)
-            val n = bb.short.toInt() and 0xFFFF
-            for (i in 0 until n) {
-                if (bb.remaining() < 12) break
-                val tag = bb.short.toInt() and 0xFFFF
-                val type = bb.short.toInt() and 0xFFFF
-                val cnt = bb.int.toInt()
-                val valPos = bb.position()
-                val inline = bb.int.toInt()
-                when (tag) {
-                    256 -> width = first(type, cnt, valPos, inline)
-                    257 -> height = first(type, cnt, valPos, inline)
-                    258 -> bits = first(type, cnt, valPos, inline)
-                    259 -> compression = first(type, cnt, valPos, inline)
-                    273 -> offsets = many(type, cnt, valPos, inline)
-                    279 -> counts = many(type, cnt, valPos, inline)
-                    50714 -> black = readFirstRational(type, cnt, inline).toFloat()
-                    33434 -> exposure = readFirstRational(type, cnt, inline)
-                    50706 -> cfa = cfaPattern(type, cnt, valPos, inline)   // CFAPattern
-                }
-            }
+            val width = tags[256] as? Int ?: 0
+            val height = tags[257] as? Int ?: 0
+            val bits = tags[258] as? Int ?: 16
+            val compression = tags[259] as? Int ?: 1
+            val black = (tags[50714] as? Double ?: DEFAULT_BLACK_LEVEL.toDouble()).toFloat()
+            val exposure = tags[33434] as? Double ?: 0.0
+            val cfa = tags[50706] as? IntArray
+            val offsets = tags[273] as? IntArray ?: IntArray(0)
+            val counts = tags[279] as? IntArray ?: IntArray(0)
+
             if (width <= 0 || height <= 0 || compression != 1 || offsets.isEmpty()) return null
             if (width.toLong() * height > MAX_PIXELS) return null
 
-            val totalBytes = offsets.indices.sumOf { s ->
-                if (s < counts.size) counts[s].coerceAtLeast(0) else 0
-            }
+            val totalBytes = offsets.indices.sumOf { s -> if (s < counts.size) counts[s].coerceAtLeast(0) else 0 }
             val data = ByteArray(totalBytes)
             var pos = 0
             for (s in offsets.indices) {
@@ -340,8 +327,37 @@ object FrameProfileExtractor {
             RawGrid(width, height, samples, black, exposure, cfa ?: DEFAULT_CFA)
         }.getOrNull()
 
-        /** DNG CFAPattern: 4 bytes = 2x2 phase, values 0=R,1=G,2=B (row0c0,r0c1,r1c0,r1c1). */
-        /** DNG 50706 / EXIF 33421 CFAPattern: normalize to 0=R,1=G,2=B; validate {R,G,G,B}. */
+        private fun parseIfd(bb: ByteBuffer, offset: Int, tags: MutableMap<Int, Any?>) {
+            if (offset < 0 || offset + 2 > b.size) return
+            bb.position(offset)
+            if (bb.remaining() < 2) return
+            val n = bb.short.toInt() and 0xFFFF
+            if (n > 100 || bb.remaining() < n * 12) return
+            for (i in 0 until n) {
+                if (bb.remaining() < 12) break
+                val tag = bb.short.toInt() and 0xFFFF
+                val type = bb.short.toInt() and 0xFFFF
+                val cnt = bb.int.toInt()
+                val valPos = bb.position()
+                val inline = bb.int.toInt()
+                when (tag) {
+                    256 -> tags[256] = firstVal(type, cnt, valPos, inline)
+                    257 -> tags[257] = firstVal(type, cnt, valPos, inline)
+                    258 -> tags[258] = firstVal(type, cnt, valPos, inline)
+                    259 -> tags[259] = firstVal(type, cnt, valPos, inline)
+                    273 -> tags[273] = manyVals(type, cnt, valPos, inline)
+                    279 -> tags[279] = manyVals(type, cnt, valPos, inline)
+                    50714 -> tags[50714] = readFirstRational(type, cnt, inline)
+                    33434 -> tags[33434] = readFirstRational(type, cnt, inline)
+                    50706 -> tags[50706] = cfaPattern(type, cnt, valPos, inline)
+                    330 -> {
+                        val subOffsets = manyVals(type, cnt, valPos, inline)
+                        for (subOff in subOffsets) { if (subOff > 0) parseIfd(bb, subOff, tags) }
+                    }
+                }
+            }
+        }
+
         private fun cfaPattern(type: Int, cnt: Int, valPos: Int, inline: Int): IntArray? {
             if (cnt < 4) return null
             val elem = when (type) { 1, 2, 6, 7 -> 1; else -> 0 }
@@ -349,15 +365,14 @@ object FrameProfileExtractor {
             val base = if (cnt <= 4) valPos else inline
             if (base < 0 || base + 4 > b.size) return null
             val raw = IntArray(4) { b[base + it].toInt() and 0xFF }
-            val norm = IntArray(4) { i ->
-                when (val v = raw[i]) {
-                    in 0..2 -> v          // DNG convention 0=R,1=G,2=B
-                    in 1..3 -> v - 1      // EXIF convention 1=R,2=G,3=B
-                    else -> return null
-                }
+            val norm = IntArray(4)
+            val minV = raw.min(); val maxV = raw.max()
+            when {
+                minV == 0 && maxV == 2 -> for (i in 0..3) norm[i] = raw[i]
+                minV == 1 && maxV == 3 -> for (i in 0..3) norm[i] = raw[i] - 1
+                else -> return null
             }
             val sorted = norm.sorted()
-            // Must be exactly {R, G, G, B} = {0, 1, 1, 2}
             if (sorted[0] != 0 || sorted[1] != 1 || sorted[2] != 1 || sorted[3] != 2) return null
             return norm
         }
@@ -385,10 +400,10 @@ object FrameProfileExtractor {
             }
         }
 
-        private fun first(type: Int, cnt: Int, valPos: Int, inline: Int): Int =
-            many(type, cnt, valPos, inline).firstOrNull() ?: inline
+        private fun firstVal(type: Int, cnt: Int, valPos: Int, inline: Int): Int =
+            manyVals(type, cnt, valPos, inline).firstOrNull() ?: inline
 
-        private fun many(type: Int, cnt: Int, valPos: Int, inline: Int): IntArray {
+        private fun manyVals(type: Int, cnt: Int, valPos: Int, inline: Int): IntArray {
             val elem = when (type) { 3 -> 2; 4, 13 -> 4; 1, 2 -> 1; else -> 0 }
             if (elem == 0 || cnt <= 0 || cnt > 1_000_000) return IntArray(0)
             val total = elem * cnt

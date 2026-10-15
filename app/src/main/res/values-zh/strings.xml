@@ -116,7 +116,7 @@
     <string name="lbl_blank_captures">空白拍摄</string>
     <string name="lbl_sample_captures">样品拍摄</string>
     <string name="lbl_standard_groups">标准组（%1$d）</string>
-    <string name="note_blank_single">空白模式：单次——共用一个空白流程；步骤4仍按组采集空白。</string>
+    <string name="note_blank_single">空白模式：单次——步骤3的空白同时用于样品与所有标准组；步骤4仅采集样品。</string>
     <string name="note_blank_full">空白模式：全面——步骤4为每个标准组单独采集空白。</string>
     <string name="st_idle1">空闲——尚无定位帧</string>
     <string name="st_idle2">空闲——尚无SPD帧</string>
@@ -152,4 +152,41 @@
     <string name="step2_short">光谱响应</string>
     <string name="step3_short">样品分析</string>
     <string name="step4_short">标准曲线</string>
+    <string name="settings_focus">手动对焦（屈光度）</string>
+    <string name="settings_focus_hint">0 = 无穷远。增大直到实时预览中谱线最窄。</string>
+    <string name="st4_blocked_blank">受阻——请先在步骤3采集共享空白</string>
+    <string name="new_project_filter_title">已安装蓝色滤光片</string>
+    <string name="new_project_filter_desc">使用 G+R 两点拟合（B 通道被滤光片吸收）</string>
+    <string name="camera_hint_align">对准光源并点击快门</string>
+    <string name="camera_starting">正在启动相机…</string>
+    <string name="camera_toggle_controls">展开/收起手动控件</string>
+    <string name="camera_label_exp">曝光</string>
+    <string name="camera_label_foc">对焦</string>
+    <string name="camera_permission_denied">相机权限被拒绝</string>
+    <string name="dng_save_failed">存入相册失败</string>
+    <string name="dng_last_saved">最近保存：%1$s</string>
+    <string name="settings_auto_focus">自动对焦（AF）</string>
+    <string name="warn_saturation">高浓度信号反而下降——疑似传感器饱和（过曝）。请降低曝光时间。</string>
+    <string name="warn_negative_area">存在负标准面积——检查空白配对/SPD 校正</string>
+    <string name="warn_negative_sample">样品面积为负——预测不可靠</string>
+    <string name="warn_low_r2">R² 偏低（&lt;0.95）——曲线可能不可靠</string>
+    <string name="warn_negative_pred">预测值为负——检查空白/校准</string>
+    <string name="warn_out_of_range">预测超出校准范围</string>
+    <string name="warn_log_switch">线性 R² 偏低（%.2f），已切换为对数拟合。</string>
+    <string name="st_filter_mode"> [滤光片模式]</string>
+    <string name="step1_g_error_filter">—（滤光片模式）</string>
+    <string name="report_fig3_filter">图 3：两点拟合（G+R）[滤光片模式]</string>
+    <string name="report_fit_filter">拟合：p = %1$.4fλ %2$+.2f   训练 (G, R)   [滤光片模式]</string>
+    <string name="cam_err_no_raw">未找到支持 RAW 的相机</string>
+    <string name="cam_err_device">相机设备错误：%1$d</string>
+    <string name="cam_err_session">会话配置失败</string>
+    <string name="cam_err_preview">预览启动失败：%1$s</string>
+    <string name="cam_err_capture_failed">拍摄失败：原因=%1$d</string>
+    <string name="cam_err_no_result">该帧无捕获结果</string>
+    <string name="cam_err_dng_small">DNG 文件过小（%1$d 字节）——可能写入失败</string>
+    <string name="cam_err_dng_save">DNG 保存失败：%1$s</string>
+    <string name="cam_err_raw_proc">RAW 处理失败：%1$s</string>
+    <string name="cam_err_permission">未授予相机权限</string>
+    <string name="cam_err_access">相机访问错误：%1$s</string>
+    <string name="cam_err_dispatch">拍摄请求下发失败：%1$s</string>
 </resources>

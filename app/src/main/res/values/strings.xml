@@ -116,7 +116,7 @@
     <string name="lbl_blank_captures">Blank captures</string>
     <string name="lbl_sample_captures">Sample captures</string>
     <string name="lbl_standard_groups">Standard groups (%1$d)</string>
-    <string name="note_blank_single">Blank mode: SINGLE - one shared blank workflow; Step4 still captures per-group blanks.</string>
+    <string name="note_blank_single">Blank mode: SINGLE - the Step 3 blank is reused for the sample and all standard groups; Step 4 captures samples only.</string>
     <string name="note_blank_full">Blank mode: FULL - Step 4 captures a separate blank per standard group.</string>
     <string name="st_idle1">Idle — no positioning frames yet</string>
     <string name="st_idle2">Idle — no SPD frames yet</string>
@@ -152,4 +152,41 @@
     <string name="step2_short">Spectral Response</string>
     <string name="step3_short">Sample Analysis</string>
     <string name="step4_short">Standard Curve</string>
+    <string name="settings_focus">Manual focus (diopters)</string>
+    <string name="settings_focus_hint">0 = infinity. Increase until spectral lines look narrowest in the live preview.</string>
+    <string name="st4_blocked_blank">Blocked — capture the shared blank in Step 3 first</string>
+    <string name="new_project_filter_title">Blue Filter Installed</string>
+    <string name="new_project_filter_desc">Use G+R two-point fit (B channel absorbed by filter)</string>
+    <string name="camera_hint_align">Align light &amp; tap Shutter</string>
+    <string name="camera_starting">Starting camera…</string>
+    <string name="camera_toggle_controls">Toggle manual controls</string>
+    <string name="camera_label_exp">EXP</string>
+    <string name="camera_label_foc">FOC</string>
+    <string name="camera_permission_denied">Camera permission denied</string>
+    <string name="dng_save_failed">Failed to save to gallery</string>
+    <string name="dng_last_saved">Last: %1$s</string>
+    <string name="settings_auto_focus">Auto focus (AF)</string>
+    <string name="warn_saturation">Signal drops at high concentration — possible sensor saturation (overexposure). Reduce exposure time.</string>
+    <string name="warn_negative_area">Negative standard area(s) — check blank pairing / SPD correction</string>
+    <string name="warn_negative_sample">Negative sample area — prediction unreliable</string>
+    <string name="warn_low_r2">Low R² (&lt;0.95) — curve may not be reliable</string>
+    <string name="warn_negative_pred">Negative prediction — check blank / calibration</string>
+    <string name="warn_out_of_range">Prediction outside calibration range</string>
+    <string name="warn_log_switch">Low Linear R² (%.2f), switched to Logarithmic fit.</string>
+    <string name="st_filter_mode"> [filter mode]</string>
+    <string name="step1_g_error_filter">— (filter mode)</string>
+    <string name="report_fig3_filter">Figure 3: Two-point Fit (G+R) [Filter Mode]</string>
+    <string name="report_fit_filter">Fit: p = %1$.4fλ %2$+.2f   Train (G, R)   [Filter Mode]</string>
+    <string name="cam_err_no_raw">No RAW-capable camera found</string>
+    <string name="cam_err_device">Camera device error: %1$d</string>
+    <string name="cam_err_session">Session configuration failed</string>
+    <string name="cam_err_preview">Preview start failed: %1$s</string>
+    <string name="cam_err_capture_failed">Capture failed: reason=%1$d</string>
+    <string name="cam_err_no_result">No capture result for this frame</string>
+    <string name="cam_err_dng_small">DNG file too small (%1$d bytes) — possible write failure</string>
+    <string name="cam_err_dng_save">DNG save failed: %1$s</string>
+    <string name="cam_err_raw_proc">RAW processing failed: %1$s</string>
+    <string name="cam_err_permission">Camera permission not granted</string>
+    <string name="cam_err_access">Camera access error: %1$s</string>
+    <string name="cam_err_dispatch">Capture dispatch failed: %1$s</string>
 </resources>

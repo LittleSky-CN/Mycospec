@@ -2,6 +2,7 @@ package org.fungalsentinel.app.ui.capture
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -10,31 +11,27 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.FlipCameraAndroid
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import org.fungalsentinel.app.camera.CameraManager
+import org.fungalsentinel.app.camera.CameraParams
 import org.fungalsentinel.app.camera.CameraPreviewView
+import org.fungalsentinel.app.data.AppPreferences
+import org.fungalsentinel.app.data.AppSettings
+import org.fungalsentinel.app.ui.theme.AppColors
 
-/**
- * Full-screen inline RAW camera — mockup 2 layout:
- * flip icon (top-left, rear-only notice), dark-green hint pill (top-center),
- * glowing circular shutter (right-center), green down-arrow exit (bottom-right).
- */
 @Composable
 fun InlineCameraOverlay(
     onCaptured: (Uri) -> Unit,
@@ -43,8 +40,15 @@ fun InlineCameraOverlay(
     val context = LocalContext.current
     val cameraManager = remember { CameraManager(context) }
     val isReady by cameraManager.isReady.collectAsState()
+    val settings by AppPreferences.getSettings(context).collectAsState(initial = AppSettings())
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    val rearOnlyMessage = "RAW capture uses the rear camera only"
+    // 本地状态：打开时继承全局设置，拍摄中独立调整（不写回全局）
+    var localAutoExposure by remember { mutableStateOf(settings.autoExposure) }
+    var localExposureMs by remember { mutableStateOf(settings.exposureMs) }
+    var localAutoFocus by remember { mutableStateOf(settings.autoFocus) }
+    var localFocusDiopter by remember { mutableStateOf(settings.focusDiopter) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -61,102 +65,116 @@ fun InlineCameraOverlay(
         }
         cameraManager.onDngSaved = { file, _ -> onCaptured(Uri.fromFile(file)) }
         cameraManager.onError = { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
-        org.fungalsentinel.app.data.AppPreferences.getSettings(context).collect { s ->
-            cameraManager.updateParams(
-                org.fungalsentinel.app.camera.CameraParams(
-                    autoExposure = s.autoExposure,
-                    exposureMs = s.exposureMs
-                )
+    }
+
+    // 全局设置变化时同步本地状态
+    LaunchedEffect(settings) {
+        localAutoExposure = settings.autoExposure
+        localExposureMs = settings.exposureMs
+        localAutoFocus = settings.autoFocus
+        localFocusDiopter = settings.focusDiopter
+    }
+
+    // 本地状态变化时下发相机参数
+    LaunchedEffect(localAutoExposure, localExposureMs, localAutoFocus, localFocusDiopter) {
+        cameraManager.updateParams(
+            CameraParams(
+                autoExposure = localAutoExposure,
+                exposureMs = localExposureMs,
+                autoFocus = localAutoFocus,
+                focusDiopter = localFocusDiopter
             )
-        }
+        )
     }
     DisposableEffect(Unit) { onDispose { cameraManager.close() } }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .border(2.dp, Color.Black, RoundedCornerShape(0.dp)) // 统一黑色边框
+    ) {
         CameraPreviewView(cameraManager = cameraManager, modifier = Modifier.fillMaxSize())
 
-        // top-left: flip icon (rear-only notice)
-        Icon(
-            Icons.Default.FlipCameraAndroid,
-            contentDescription = rearOnlyMessage,
-            tint = Color.White,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(14.dp)
-                .size(38.dp)
-                .clickable { Toast.makeText(context, rearOnlyMessage, Toast.LENGTH_SHORT).show() }
-        )
-
-        // top-center: dark-green hint pill
-        Box(
+        // 顶部：退出键 + 提示胶囊（避开状态栏）
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 18.dp)
-                .background(Color(0xFF122B12), androidx.compose.foundation.shape.RoundedCornerShape(50.dp))
-                .padding(horizontal = 18.dp, vertical = 8.dp)
+                .statusBarsPadding()
+                .padding(top = 8.dp)
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (!isReady) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        color = Color(0xFF5CFF5C),
-                        strokeWidth = 2.dp
+                Box(
+                    modifier = Modifier
+                        .padding(start = 14.dp)
+                        .size(46.dp)
+                        .background(MaterialTheme.colorScheme.secondary, CircleShape)
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.ArrowDownward, contentDescription = "Back", tint = Color.White)
+                }
+                Spacer(Modifier.weight(1f))
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 8.dp)
+                    .background(AppColors.Surface, RoundedCornerShape(50.dp))
+                    .padding(horizontal = 18.dp, vertical = 8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!isReady) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = AppColors.Accent, strokeWidth = 2.dp)
+                    }
+                    Text(
+                        text = if (isReady) "Align light & tap Shutter" else "Starting camera…",
+                        color = AppColors.TextPrimary,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
-                Text(
-                    text = if (isReady) "Align the light source, then tap Capture" else "Starting camera…",
-                    color = Color(0xFFD9F7D0),
-                    style = MaterialTheme.typography.bodyLarge
-                )
             }
         }
 
-        // right-center: glowing circular shutter
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 22.dp)
-                .size(130.dp),
-            contentAlignment = Alignment.Center
-        ) {
+        // 快门：横屏在左，竖屏在下（与 DngCameraScreen 一致）
+        val shutterModifier = if (isLandscape) {
+            Modifier.align(Alignment.CenterStart).padding(start = 24.dp)
+        } else {
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 150.dp)
+        }
+        Box(modifier = shutterModifier.size(130.dp), contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            0f to MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f),
-                            1f to Color.Transparent
-                        )
-                    )
+                    .background(Brush.radialGradient(0f to AppColors.Accent.copy(alpha = 0.4f), 1f to Color.Transparent))
             )
             Button(
                 onClick = { cameraManager.captureRaw() },
                 enabled = isReady,
-                shape = androidx.compose.foundation.shape.CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFC9F5C9),
-                    disabledContainerColor = Color(0xFF39493A)
-                ),
-                modifier = Modifier
-                    .size(76.dp)
-                    .border(4.dp, MaterialTheme.colorScheme.secondary, androidx.compose.foundation.shape.CircleShape)
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(containerColor = AppColors.Accent, disabledContainerColor = AppColors.SurfaceRaised),
+                modifier = Modifier.size(76.dp).border(4.dp, AppColors.Accent, CircleShape)
             ) { }
         }
 
-        // bottom-right: green down-arrow exit
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .size(46.dp)
-                .background(MaterialTheme.colorScheme.secondary, androidx.compose.foundation.shape.CircleShape)
-                .clickable(onClick = onBack),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.ArrowDownward, contentDescription = "Back", tint = Color.White)
+        // 底部控制面板（避开导航栏）
+        Box(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
+            CameraControlPanel(
+                settings = AppSettings(
+                    autoExposure = localAutoExposure,
+                    exposureMs = localExposureMs,
+                    autoFocus = localAutoFocus,
+                    focusDiopter = localFocusDiopter
+                ),
+                onAutoExposureChange = { localAutoExposure = it },
+                onExposureChange = { localExposureMs = it },
+                onAutoFocusChange = { localAutoFocus = it },
+                onFocusChange = { localFocusDiopter = it }
+            )
         }
     }
 }
