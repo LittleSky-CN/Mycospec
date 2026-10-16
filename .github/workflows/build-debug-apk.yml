@@ -31,11 +31,43 @@ jobs:
           distribution: jetbrains
           java-version: '21'
 
+      # The runner image ships an Android SDK; android-actions/setup-android is
+      # broken on current runners (its bundled sdkmanager exits 1), so we drive
+      # sdkmanager directly. compileSdk 37 / build-tools 37.0.0 have to be
+      # installed explicitly because the image only ships older revisions.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          set -e
+          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          export ANDROID_SDK_ROOT="$SDK" ANDROID_HOME="$SDK"
+          CMDLINE="$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | tail -1)"
+          echo "sdkmanager: $CMDLINE"
+          mkdir -p "$SDK/licenses"
+          printf '24333f8a63b6825ea9c5514f83c2829b004d1fee\n' > "$SDK/licenses/android-sdk-license"
+          printf '84831b9409646a918e30573bab4c9c91346d8abd\n' > "$SDK/licenses/android-sdk-preview-license"
+          yes | "$CMDLINE" --licenses > /dev/null 2>&1 || true
+          "$CMDLINE" --install "platforms;android-37" "build-tools;37.0.0" "platform-tools"
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
+
+      # The wrapper points at a Tencent mirror (fast in China) that may not be
+      # reachable from GitHub's runners. Fall back to services.gradle.org if so.
+      # The committed file is left alone; only the checkout is patched.
+      - name: Ensure Gradle distribution is reachable
+        run: |
+          set -e
+          PROPS=gradle/wrapper/gradle-wrapper.properties
+          URL=$(sed -n 's/^distributionUrl=//p' "$PROPS" | tr -d '\r')
+          echo "wrapper points at: $URL"
+          if ! curl -sSfI --max-time 25 "$URL" > /dev/null 2>&1; then
+            VER=$(echo "$URL" | grep -oE 'gradle-[0-9.]+-bin\.zip')
+            echo "mirror unreachable; falling back to services.gradle.org for $VER"
+            sed -i "s|^distributionUrl=.*|distributionUrl=https\\\\://services.gradle.org/distributions/$VER|" "$PROPS"
+          fi
+          sed -n 's/^distributionUrl=//p' "$PROPS"
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --no-daemon
