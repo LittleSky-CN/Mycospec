@@ -24,8 +24,8 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
 
 class FssaApplication : Application() {
-    lateinit var database: AppDatabase; private set
-    lateinit var presetDatabase: PresetDatabase; private set
+    val database: AppDatabase by lazy { AppDatabase.getInstance(this) }
+    val presetDatabase: PresetDatabase by lazy { PresetDatabase.getInstance(this) }
 
     private val logQueue = ConcurrentLinkedQueue<String>()
     private val _logSize = MutableStateFlow(0L)
@@ -40,9 +40,6 @@ class FssaApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        database = AppDatabase.getInstance(this)
-        presetDatabase = PresetDatabase.getInstance(this)
-
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try { logException("UncaughtException", throwable); flushLogsToDisk() } catch (_: Exception) {}

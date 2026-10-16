@@ -36,8 +36,8 @@ object WavelengthCalibrator {
         val r = mean(frames) { it.redProfile }
         val g = mean(frames) { it.greenProfile }
         val b = mean(frames) { it.blueProfile }
-        val col = mean(frames) { it.columnEnergy }
-        val (rs, re) = autoRoi(col)
+        val rs = f0.xRoiStart
+        val re = f0.xRoiEnd
 
         // 【v2.2.6】反序自检：R 与 B 位于 G 的錯誤两侧 → 直接以交换态起手
         val pR0 = findPeak(r); val pG0 = findPeak(g); val pB0 = findPeak(b)
@@ -94,7 +94,7 @@ object WavelengthCalibrator {
             if (slope == 0.0 || slope.isNaN() || slope.isInfinite()) return null
             intercept = pR.center - slope * wlR
             residualPx = pG.center - (slope * wlG + intercept)
-            errorNm = -residualPx / slope
+            errorNm = residualPx / abs(slope)
             val a = abs(errorNm)
             quality = when { a <= 2.5 -> "PASS"; a <= 10.0 -> "WARNING"; else -> "FAILED" }
             peakWindows = listOf(pR.lo to pR.hi, pG.lo to pG.hi, pB.lo to pB.hi)
@@ -137,7 +137,7 @@ object WavelengthCalibrator {
         val fw = max(1, fwhmHi - fwhmLo)
         fun valleyBound(start: Int, step: Int): Int {
             var i = start
-            val limit = start + step * (2.0 * fw + 20).toInt()
+            val limit = start + step * (1.5 * fw + 10).toInt()
             while (i > validLo && i < validHi - 1 && i != limit) {
                 if (corrected[i + step] >= corrected[i]) break
                 i += step
@@ -207,17 +207,6 @@ object WavelengthCalibrator {
             }
         }
         return doubleArrayOf(b[0] / a[0][0], b[1] / a[1][1], b[2] / a[2][2])
-    }
-
-    private fun autoRoi(col: FloatArray): Pair<Int, Int> {
-        if (col.isEmpty()) return 0 to 0
-        var max = 0f; var mi = 0
-        for (i in col.indices) if (col[i] > max) { max = col[i]; mi = i }
-        if (max <= 0f) return 0 to col.lastIndex
-        val thr = max * 0.35f
-        var s = mi; while (s > 0 && col[s - 1] > thr) s--
-        var e = mi; while (e < col.lastIndex && col[e + 1] > thr) e++
-        return s to e
     }
 
     private fun movingAverage(p: FloatArray, window: Int): FloatArray {

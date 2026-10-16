@@ -8,6 +8,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -17,7 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.data.TutorialPrefs
 import org.fungalsentinel.app.ui.theme.AppColors
@@ -38,16 +40,16 @@ fun HelpTopBar(title: String, tutorial: TutorialController, onBack: (() -> Unit)
 }
 
 @Composable
-fun TutorialButton(onClick: () -> Unit) {
-    IconButton(onClick = onClick) { Icon(Icons.Default.Info, stringResource(R.string.tutorial_button_desc), tint = MaterialTheme.colorScheme.primary) }
+fun TutorialButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onClick, modifier = modifier) {
+        Icon(
+            Icons.Default.Info,
+            contentDescription = stringResource(R.string.tutorial_button_desc),
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
 }
 
-/**
- * 引导栏宿主组件。
- * 【v2.2.4 修复】改为“立即标记”策略：
- * 一旦检测到该页面从未显示过引导，立即写入“已显示”状态，然后再弹出对话框。
- * 这样无论用户点 Skip、点外部关闭还是点 Got it，都不会再次自动弹出。
- */
 @Composable
 fun TutorialHost(
     stepId: String,
@@ -57,27 +59,26 @@ fun TutorialHost(
     autoShowOnFirstLaunch: Boolean = true
 ): TutorialController {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var showDialog by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var showDialog by remember(stepId) { mutableStateOf(false) }
+    val controller = remember(stepId) { TutorialController() }
 
-    // 收集是否已显示的状态，初始设为 true 防止首次加载闪烁
-    val alreadyShown by TutorialPrefs.isShown(context, stepId).collectAsState(initial = true)
-
-    // 【核心修复】一旦检测到未显示，立即标记并弹出
-    LaunchedEffect(alreadyShown) {
-        if (autoShowOnFirstLaunch && !alreadyShown) {
-            // 1. 立即标记为已显示（写入 DataStore）
-            TutorialPrefs.markShown(context, stepId)
-            // 2. 等待首帧渲染，避免动画卡顿
-            kotlinx.coroutines.delay(400)
-            // 3. 弹出对话框
-            showDialog = true
+    LaunchedEffect(stepId, autoShowOnFirstLaunch, lifecycleOwner) {
+        if (autoShowOnFirstLaunch) {
+            // Avoid opening tutorials for destinations that are still leaving during navigation.
+            lifecycleOwner.lifecycle.currentStateFlow.first {
+                it.isAtLeast(Lifecycle.State.RESUMED)
+            }
+            if (!TutorialPrefs.isShown(context, stepId).first()) {
+                TutorialPrefs.markShown(context, stepId)
+                showDialog = true
+            }
         }
     }
 
-    val controller = remember { TutorialController() }
-    // 手动点击 Help 按钮时触发
-    controller.onShow = { showDialog = true }
+    SideEffect {
+        controller.onShow = { showDialog = true }
+    }
 
     if (showDialog) {
         Dialog(

@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import org.fungalsentinel.app.R
+import org.fungalsentinel.app.ui.components.HalfScreenLayout
 import org.fungalsentinel.app.ui.components.HelpTopBar
 import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.ui.theme.AppColors
@@ -35,7 +36,9 @@ import java.util.Locale
 @Composable
 fun ReportScreen(
     projectViewModel: ProjectViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isHalfScreen: Boolean = false,
+    coverRatio: Float = 0.5f
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
     val r = uiState.reportData
@@ -46,23 +49,25 @@ fun ReportScreen(
         bodyRes = R.string.tutorial_report_body
     )
 
-    Scaffold(
-        topBar = {
-            HelpTopBar(
-                title = "MycoSpec Analysis Report",
-                tutorial = tutorial,
-                onBack = onBack
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
+    HalfScreenLayout(forceHalfScreen = isHalfScreen, coverRatio = coverRatio) { screenModifier ->
+        Scaffold(
+            modifier = screenModifier.fillMaxSize(),
+            topBar = {
+                HelpTopBar(
+                    title = "MycoSpec Analysis Report",
+                    tutorial = tutorial,
+                    onBack = onBack
+                )
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
             Text(
                 text = "Project: ${uiState.currentProject?.name ?: "—"}",
                 style = MaterialTheme.typography.headlineSmall,
@@ -208,7 +213,7 @@ fun ReportScreen(
                     FigureLabel("Figure 7: Blank-subtracted & SPD-corrected spectrum vs Blank")
                     ProfileChart(r.blankSpectrum, r.sampleSpectrum, emptyList())
                     Text(
-                        "Green = corrected sample, Red = blank",
+                        "Green = corrected sample, Red = blank\nLow-response bands (<20% of channel peak) are excluded; isolated spikes are replaced locally.",
                         style = MaterialTheme.typography.bodySmall,
                         color = AppColors.TextSecondary
                     )
@@ -249,6 +254,7 @@ fun ReportScreen(
                         color = AppColors.Error,
                         style = MaterialTheme.typography.bodySmall
                     )
+                    }
                 }
             }
         }

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_welcome">Bienvenido a MycoSpec</string>
+    <string name="home_tagline">Analizador espectral portátil</string>
+    <string name="home_intro">Elige una acción para iniciar un experimento o continuar uno anterior.</string>
+    <string name="home_icon_desc">Icono de la aplicación MycoSpec</string>
+    <string name="home_new_project">Nuevo proyecto</string>
+    <string name="home_new_project_desc">Inicia un flujo completo de calibración y análisis</string>
+    <string name="home_dng_camera">Cámara DNG</string>
+    <string name="home_dng_camera_desc">Captura fotos DNG RAW y guárdalas en la galería</string>
+    <string name="home_history">Historial</string>
+    <string name="home_history_desc">Consulta, continúa, exporta o elimina experimentos anteriores</string>
+    <string name="home_settings">Ajustes</string>
+    <string name="home_settings_desc">Longitudes de onda, SPD, media pantalla y modo de blanco</string>
+    <string name="tutorial_button_desc">Mostrar ayuda</string>
+    <string name="back">Volver</string>
+    <string name="tutorial_home_title">Te damos la bienvenida a MycoSpec</string>
+    <string name="tutorial_home_body">Esta aplicación funciona con hardware específico para medir la concentración de fluorescencia y evaluar el riesgo de moho en las muestras.</string>
+    <string name="tutorial_project_title">Montar el hardware</string>
+    <string name="tutorial_project_body">Monta el hardware como se muestra y coloca el teléfono encima.</string>
+    <string name="tutorial_step4_title">Curva de calibración</string>
+    <string name="tutorial_step4_body">Para crear la curva de calibración, introduce cada patrón y su blanco en el puerto de muestra e indica la concentración correspondiente.</string>
+    <string name="tutorial_result_title">Ayuda de resultados</string>
+    <string name="tutorial_result_body">Revisa la fórmula de regresión, R² y la concentración predicha. Finalizar guarda el proyecto en el historial; un R² bajo o una predicción negativa indican que la curva puede no ser fiable.</string>
+    <string name="tutorial_half_preview_title">Vista previa de media pantalla</string>
+    <string name="tutorial_half_preview_body">Puedes girar el teléfono en cualquiera de las dos orientaciones horizontales. Cubre el sensor de luz frontal para probar la división y ajusta el área cubierta con el control deslizante.</string>
+    <string name="new_project_title">Nuevo proyecto</string>
+    <string name="new_project_name_label">Nombre del proyecto</string>
+    <string name="new_project_name_hint">Escribe un nombre para el proyecto</string>
+    <string name="new_project_name_empty">Introduce un nombre para el proyecto</string>
+    <string name="new_project_create">Crear proyecto y continuar</string>
+    <string name="new_project_filter_title">Filtro azul instalado</string>
+    <string name="new_project_filter_desc">Usa un ajuste de dos puntos G+R (el filtro absorbe el canal B)</string>
+    <string name="default_concentration_unit">mg/L</string>
+    <string name="value_not_set">—</string>
+    <string name="delete_standard_group">Eliminar grupo patrón</string>
+    <string name="step4_capture_title">%1$s — %2$s %3$s</string>
+    <string name="step4_concentration_invalid">Introduce una concentración válida y finita.</string>
+    <string name="step4_short">Curva de calibración</string>
+    <string name="step4_description">Construye la curva mediante mezcla espectral corregida por blanco: muestra = α·emisión de referencia + s·blanco + desplazamiento.</string>
+    <string name="step4_concentration_label">Concentración del patrón</string>
+    <string name="step4_unit_label">Unidad</string>
+    <string name="step4_build_curve">Crear curva</string>
+    <string name="next_step">Siguiente</string>
+    <string name="act_add_group">Añadir grupo patrón</string>
+    <string name="act_view_report">Ver informe</string>
+    <string name="lbl_blank_captures">Capturas del blanco</string>
+    <string name="lbl_sample_captures">Capturas de la muestra</string>
+    <string name="lbl_standard_groups">Grupos patrón (%1$d)</string>
+    <string name="lbl_group_counts">Blanco: %1$d | Muestra: %2$d</string>
+    <string name="note_step4_min">Añade al menos 2 grupos de concentración para crear la curva (se recomiendan 3 o más).</string>
+    <string name="st_idle4">Inactivo: aún no se ha creado la curva</string>
+    <string name="st4_blocked_groups">Bloqueado: añade al menos 2 grupos patrón</string>
+    <string name="st4_blocked_blank">Bloqueado: captura primero el blanco compartido en el paso 3</string>
+    <string name="st4_processing">Procesando: decodificando patrones y calculando regresión…</string>
+    <string name="st4_failed_groups">Error: solo hay %1$d grupo(s) patrón utilizable(s)</string>
+    <string name="st4_failed_reg">Error: regresión degenerada (¿concentraciones duplicadas?)</string>
+    <string name="st4_computed">Calculado: R²=%1$s, n=%2$d</string>
+    <string name="st_warn_count">; ⚠ %1$d advertencia(s)</string>
+    <string name="st_preset_loaded">Ajuste preestablecido cargado: %1$s</string>
+    <string name="result_title">Resultado del análisis</string>
+    <string name="result_regression">Regresión</string>
+    <string name="result_r2">R²</string>
+    <string name="result_predicted">Concentración predicha</string>
+    <string name="result_finish">Finalizar proyecto y guardar en el historial</string>
+    <string name="result_back_home">Volver al inicio</string>
+    <string name="result_formula_linear">Área sin mezclar = %1$.4f × concentración + %2$.2f</string>
+    <string name="result_formula_log">Área sin mezclar = %1$.4f × log₁₀(concentración) + %2$.2f</string>
+    <string name="warn_low_r2">R² bajo (&lt;0,95): la curva podría no ser fiable</string>
+    <string name="warn_negative_pred">Predicción negativa: comprueba el blanco y la calibración</string>
+</resources>

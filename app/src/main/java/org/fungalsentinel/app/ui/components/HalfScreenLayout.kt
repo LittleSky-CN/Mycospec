@@ -7,17 +7,18 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -38,10 +39,11 @@ fun HalfScreenLayout(
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp.dp
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     var isCovered by remember { mutableStateOf(false) }
+    val currentCovered by rememberUpdatedState(isCovered)
     val shouldListen = forceHalfScreen && isLandscape
+    val safeCoverRatio = coverRatio.coerceIn(0f, 0.95f)
 
     DisposableEffect(shouldListen) {
         if (!shouldListen) {
@@ -57,8 +59,8 @@ fun HalfScreenLayout(
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 val lux = event?.values?.get(0) ?: return
-                if (!isCovered && lux < 10f) isCovered = true
-                else if (isCovered && lux > 30f) isCovered = false
+                if (!currentCovered && lux < 10f) isCovered = true
+                else if (currentCovered && lux > 30f) isCovered = false
             }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
@@ -66,30 +68,31 @@ fun HalfScreenLayout(
         onDispose { sensorManager.unregisterListener(listener) }
     }
 
-    val availableWidth by animateDpAsState(
-        targetValue = if (isCovered) screenWidth * (1f - coverRatio) else screenWidth,
-        label = "halfScreenWidth"
-    )
-
     val borderModifier = Modifier
         .fillMaxSize()
         .padding(4.dp)
 
-    if (isCovered) {
-        Box(modifier = borderModifier) {
-            Box(modifier = Modifier.width(availableWidth).fillMaxHeight()) {
-                content(Modifier.fillMaxSize())
+    BoxWithConstraints(modifier = borderModifier) {
+        val containerWidth = maxWidth
+        val availableWidth by animateDpAsState(
+            targetValue = if (isCovered) containerWidth * (1f - safeCoverRatio) else containerWidth,
+            label = "halfScreenWidth"
+        )
+
+        if (isCovered) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.width(availableWidth).fillMaxHeight()) {
+                    content(Modifier.fillMaxSize())
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .width(containerWidth - availableWidth)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.background)
+                )
             }
-            Box(
-                modifier = Modifier
-                    .offset(x = availableWidth)
-                    .width(screenWidth - availableWidth)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.background)
-            )
-        }
-    } else {
-        Box(modifier = borderModifier) {
+        } else {
             content(Modifier.fillMaxSize())
         }
     }

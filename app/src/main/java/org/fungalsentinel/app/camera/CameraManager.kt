@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.fungalsentinel.app.R
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -60,6 +61,7 @@ class CameraManager(private val context: Context) {
         private val FOCUS_RANGE_D = 0f..5f
         private const val RESULT_WAIT_MS = 3000L     // 【v2.2.6】10s → 3s，缩短阻塞窗口
         private const val POLL_INTERVAL_MS = 20L
+        private const val CAPTURE_TIMEOUT_MS = 30_000L
     }
 
     private val androidCameraManager: AndroidCameraManager =
@@ -74,6 +76,10 @@ class CameraManager(private val context: Context) {
     private var rawImageReader: ImageReader? = null
     private var cameraCharacteristics: CameraCharacteristics? = null
     private var currentParams = CameraParams()
+    private val captureStateLock = Any()
+    private val cameraOpenLock = Any()
+    private var cameraOpenGeneration = 0L
+    private var cameraOpening = false
 
     var dngPolicy: DngPolicy = DngPolicy.ALL
 
@@ -81,9 +87,12 @@ class CameraManager(private val context: Context) {
     @Volatile private var captureFailed = false
     @Volatile private var lastPreviewResult: TotalCaptureResult? = null
     @Volatile private var captureInFlight = false   // 【v2.2.6】单帧在途互斥，防连点排队卡死
+    @Volatile private var captureTimeout: Runnable? = null
 
     private val _isReady = MutableStateFlow(false)
     val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
+    private val _isCapturing = MutableStateFlow(false)
+    val isCapturing: StateFlow<Boolean> = _isCapturing.asStateFlow()
     private val _lastMetadata = MutableStateFlow<CaptureMetadata?>(null)
     val lastMetadata: StateFlow<CaptureMetadata?> = _lastMetadata.asStateFlow()
 
@@ -107,26 +116,62 @@ class CameraManager(private val context: Context) {
     @SuppressLint("MissingPermission")
     fun openCamera(previewSurface: Surface) {
         if (!hasCameraPermission()) { onError?.invoke("Camera permission not granted"); return }
+        val generation = synchronized(cameraOpenLock) {
+            if (cameraOpening || cameraDevice != null) return
+            cameraOpening = true
+            cameraOpenGeneration += 1
+            this.previewSurface = previewSurface
+            cameraOpenGeneration
+        }
         startThreads()
-        this.previewSurface = previewSurface
         _isReady.value = false
         try {
-            val rawCameraId = findRawCapableCamera() ?: run { onError?.invoke("No RAW-capable camera found"); return }
+            val rawCameraId = findRawCapableCamera() ?: throw IllegalStateException("No RAW-capable camera found")
             cameraCharacteristics = androidCameraManager.getCameraCharacteristics(rawCameraId)
             val rawSize = chooseRawSize()
             rawImageReader = ImageReader.newInstance(rawSize.width, rawSize.height, ImageFormat.RAW_SENSOR, 2).apply {
                 setOnImageAvailableListener({ reader -> processHandler?.post { processRawImage(reader) } }, processHandler)
             }
             androidCameraManager.openCamera(rawCameraId, object : CameraDevice.StateCallback() {
-                override fun onOpened(camera: CameraDevice) { cameraDevice = camera; createCaptureSession() }
-                override fun onDisconnected(camera: CameraDevice) { camera.close(); cameraDevice = null; _isReady.value = false }
+                override fun onOpened(camera: CameraDevice) {
+                    val accepted = synchronized(cameraOpenLock) {
+                        if (generation != cameraOpenGeneration) false
+                        else {
+                            cameraOpening = false
+                            cameraDevice = camera
+                            true
+                        }
+                    }
+                    if (accepted) createCaptureSession(generation) else camera.close()
+                }
+                override fun onDisconnected(camera: CameraDevice) {
+                    synchronized(cameraOpenLock) {
+                        if (generation == cameraOpenGeneration) {
+                            cameraOpening = false
+                            if (cameraDevice === camera) cameraDevice = null
+                        }
+                    }
+                    camera.close()
+                    _isReady.value = false
+                }
                 override fun onError(camera: CameraDevice, error: Int) {
-                    camera.close(); cameraDevice = null; _isReady.value = false
+                    synchronized(cameraOpenLock) {
+                        if (generation == cameraOpenGeneration) {
+                            cameraOpening = false
+                            if (cameraDevice === camera) cameraDevice = null
+                        }
+                    }
+                    camera.close(); _isReady.value = false
                     captureInFlight = false
                     onError?.invoke("Camera device error: $error")
                 }
             }, backgroundHandler)
-        } catch (e: Exception) { onError?.invoke("Camera access error: ${e.message}") }
+        } catch (e: Exception) {
+            synchronized(cameraOpenLock) {
+                if (generation == cameraOpenGeneration) cameraOpening = false
+            }
+            onError?.invoke("Camera access error: ${e.message}")
+        }
     }
 
     private fun findRawCapableCamera(): String? {
@@ -146,15 +191,32 @@ class CameraManager(private val context: Context) {
     }
 
     @Suppress("DEPRECATION")
-    private fun createCaptureSession() {
+    private fun createCaptureSession(generation: Long) {
         try {
-            cameraDevice!!.createCaptureSession(
+            val device = synchronized(cameraOpenLock) {
+                if (generation != cameraOpenGeneration) return
+                cameraDevice
+            } ?: return
+            device.createCaptureSession(
                 listOf(previewSurface!!, rawImageReader!!.surface),
                 object : CameraCaptureSession.StateCallback() {
                     override fun onConfigured(session: CameraCaptureSession) {
-                        captureSession = session; startPreview(); _isReady.value = true
+                        val accepted = synchronized(cameraOpenLock) {
+                            if (generation != cameraOpenGeneration || cameraDevice !== device) false
+                            else {
+                                captureSession = session
+                                true
+                            }
+                        }
+                        if (!accepted) {
+                            session.close()
+                            return
+                        }
+                        startPreview()
+                        _isReady.value = true
                     }
                     override fun onConfigureFailed(session: CameraCaptureSession) {
+                        session.close()
                         onError?.invoke("Session configuration failed")
                     }
                 }, backgroundHandler
@@ -227,15 +289,54 @@ class CameraManager(private val context: Context) {
 
     /** 【v2.2.6】OnePlus/ColorOS 会话阻塞规避：拍摄前 stopRepeating，处理完重启预览；互斥锁防排队 */
     fun captureRaw() {
-        if (captureInFlight) { onError?.invoke("Capture busy — previous frame still processing"); return }
         val session = captureSession ?: run { onError?.invoke("Session not ready"); return }
         val device = cameraDevice ?: run { onError?.invoke("Camera not open"); return }
-        captureInFlight = true
+        val started = synchronized(captureStateLock) {
+            if (captureInFlight) false
+            else {
+                captureInFlight = true
+                _isCapturing.value = true
+                true
+            }
+        }
+        if (!started) { onError?.invoke("Capture busy — previous frame still processing"); return }
         try {
             pendingCaptureResult = null; captureFailed = false
             val request = device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
                 .apply { addTarget(rawImageReader!!.surface); applyManualControls(this) }.build()
-            runCatching { session.stopRepeating() }
+            try {
+                session.stopRepeating()
+            } catch (e: CameraAccessException) {
+                onError?.invoke("Could not prepare camera for capture: ${e.message}")
+                finishCaptureCycle()
+                return
+            }
+            lateinit var timeout: Runnable
+            timeout = Runnable {
+                val didTimeout = synchronized(captureStateLock) {
+                    if (captureTimeout !== timeout || !captureInFlight) false
+                    else {
+                        captureTimeout = null
+                        captureInFlight = false
+                        _isCapturing.value = false
+                        true
+                    }
+                }
+                if (!didTimeout) return@Runnable
+                onError?.invoke(context.getString(R.string.cam_err_capture_timeout))
+                try {
+                    session.abortCaptures()
+                } catch (e: CameraAccessException) {
+                    onError?.invoke(context.getString(R.string.cam_err_capture_recovery, e.message))
+                }
+                if (_isReady.value) startPreview()
+            }
+            synchronized(captureStateLock) { captureTimeout = timeout }
+            if (backgroundHandler?.postDelayed(timeout, CAPTURE_TIMEOUT_MS) != true) {
+                onError?.invoke("Could not schedule capture timeout")
+                finishCaptureCycle()
+                return
+            }
             session.capture(request, object : CameraCaptureSession.CaptureCallback() {
                 override fun onCaptureCompleted(s: CameraCaptureSession, r: CaptureRequest, result: TotalCaptureResult) {
                     pendingCaptureResult = result
@@ -246,14 +347,25 @@ class CameraManager(private val context: Context) {
                     finishCaptureCycle()
                 }
             }, backgroundHandler)
-        } catch (e: CameraAccessException) {
+        } catch (e: Exception) {
             onError?.invoke("Capture dispatch failed: ${e.message}")
             finishCaptureCycle()
         }
     }
 
+    private fun cancelCaptureTimeout() {
+        val timeout = synchronized(captureStateLock) {
+            captureTimeout.also { captureTimeout = null }
+        }
+        timeout?.let { backgroundHandler?.removeCallbacks(it) }
+    }
+
     private fun finishCaptureCycle() {
-        captureInFlight = false
+        cancelCaptureTimeout()
+        synchronized(captureStateLock) {
+            captureInFlight = false
+            _isCapturing.value = false
+        }
         if (_isReady.value) startPreview()
     }
 
@@ -269,6 +381,11 @@ class CameraManager(private val context: Context) {
 
     private fun processRawImage(reader: ImageReader) {
         val image: Image = reader.acquireLatestImage() ?: run { finishCaptureCycle(); return }
+        if (!captureInFlight) {
+            image.close()
+            return
+        }
+        cancelCaptureTimeout()
         try {
             val result = waitForResult() ?: lastPreviewResult
             if (result == null) {
@@ -344,9 +461,19 @@ class CameraManager(private val context: Context) {
     }
 
     fun close() {
+        cancelCaptureTimeout()
+        synchronized(cameraOpenLock) {
+            cameraOpenGeneration += 1
+            cameraOpening = false
+        }
         try { captureSession?.close(); cameraDevice?.close(); rawImageReader?.close() } catch (_: Exception) {}
-        captureSession = null; cameraDevice = null; rawImageReader = null; previewSurface = null
-        captureInFlight = false
+        captureSession = null
+        synchronized(cameraOpenLock) { cameraDevice = null }
+        rawImageReader = null; previewSurface = null
+        synchronized(captureStateLock) {
+            captureInFlight = false
+            _isCapturing.value = false
+        }
         _isReady.value = false
         stopThreads()
     }

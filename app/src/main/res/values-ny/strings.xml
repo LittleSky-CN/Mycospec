@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_welcome">Takulandirani ku MycoSpec</string>
+    <string name="home_tagline">Choyezera kuwala kwa sipekitiramu chonyamulika</string>
+    <string name="home_intro">Sankhani zochita kuti muyambe kuyesa kapena mupitirize zomwe munayamba kale.</string>
+    <string name="home_icon_desc">Chizindikiro cha pulogalamu ya MycoSpec</string>
+    <string name="home_new_project">Pulojekiti yatsopano</string>
+    <string name="home_new_project_desc">Yambani ntchito yonse yokonza ndi kusanthula</string>
+    <string name="home_dng_camera">Kamera ya DNG</string>
+    <string name="home_dng_camera_desc">Jambulani zithunzi za RAW DNG ndi kuzisunga mu gallery</string>
+    <string name="home_history">Mbiri</string>
+    <string name="home_history_desc">Onani, pitirizani, tumizani kapena fufutani mayeso akale</string>
+    <string name="home_settings">Zokonda</string>
+    <string name="home_settings_desc">Mafunde a kuwala, SPD, theka la sikirini ndi njira ya blank</string>
+    <string name="tutorial_button_desc">Onetsani thandizo</string>
+    <string name="back">Bwererani</string>
+    <string name="tutorial_home_title">Takulandirani ku MycoSpec</string>
+    <string name="tutorial_home_body">Pulogalamuyi imagwiritsa ntchito zida zapadera kuyeza kuchuluka kwa fluorescence ndi kuyesa chiopsezo cha nkhungu mu zitsanzo.</string>
+    <string name="tutorial_project_title">Konzani zida</string>
+    <string name="tutorial_project_body">Konzani zida monga momwe zasonyezedwera, ndipo ikani foni pamwamba pake.</string>
+    <string name="tutorial_step4_title">Mzere wa calibration</string>
+    <string name="tutorial_step4_body">Kuti mupange mzere wa calibration, ikani standard iliyonse ndi blank yake pamalo a sample ndipo lembani kuchuluka kwake.</string>
+    <string name="tutorial_result_title">Thandizo la zotsatira</string>
+    <string name="tutorial_result_body">Onani fomula ya regression, R² ndi kuchuluka komwe kunanenedweratu. Finish imasunga pulojekiti mu History; R² yotsika kapena kuneneratu kolakwika kumasonyeza kuti mzerewo ungakhale wosadalirika.</string>
+    <string name="tutorial_half_preview_title">Chiwonetsero cha theka la sikirini</string>
+    <string name="tutorial_half_preview_body">Mutha kutembenuza foni mbali iliyonse yopingasa. Phimbani sensa ya kuwala yakutsogolo kuti muyese kugawa, ndipo sinthani dera lophimbidwa pogwiritsa ntchito slider.</string>
+    <string name="new_project_title">Pulojekiti yatsopano</string>
+    <string name="new_project_name_label">Dzina la pulojekiti</string>
+    <string name="new_project_name_hint">Lembani dzina la pulojekiti</string>
+    <string name="new_project_name_empty">Lembani dzina la pulojekiti</string>
+    <string name="new_project_create">Pangani pulojekiti ndi kupitiriza</string>
+    <string name="new_project_filter_title">Fyuluta yabuluu yaikidwa</string>
+    <string name="new_project_filter_desc">Gwiritsani ntchito kuyeza kwa mfundo ziwiri za G+R (fyuluta imatenga njira ya B)</string>
+    <string name="default_concentration_unit">mg/L</string>
+    <string name="value_not_set">—</string>
+    <string name="delete_standard_group">Chotsani gulu la standard</string>
+    <string name="step4_capture_title">%1$s — %2$s %3$s</string>
+    <string name="step4_concentration_invalid">Lembani kuchuluka kovomerezeka kopanda malire.</string>
+    <string name="step4_short">Mzere wa calibration</string>
+    <string name="step4_description">Pangani mzere pogwiritsa ntchito spectral unmixing yokonza blank: sample = α·reference emission + s·blank + offset.</string>
+    <string name="step4_concentration_label">Kuchuluka kwa standard</string>
+    <string name="step4_unit_label">Chigawo</string>
+    <string name="step4_build_curve">Pangani mzere</string>
+    <string name="next_step">Pitani patsogolo</string>
+    <string name="act_add_group">Onjezani gulu la standard</string>
+    <string name="act_view_report">Onani lipoti</string>
+    <string name="lbl_blank_captures">Zithunzi za blank</string>
+    <string name="lbl_sample_captures">Zithunzi za sample</string>
+    <string name="lbl_standard_groups">Magulu a standard (%1$d)</string>
+    <string name="lbl_group_counts">Blank: %1$d | Sample: %2$d</string>
+    <string name="note_step4_min">Onjezani magulu osachepera awiri a kuchuluka kuti mupange mzere (magulu atatu kapena kupitilira apo ndi abwino).</string>
+    <string name="st_idle4">Yadikira: mzere sunapangidwe</string>
+    <string name="st4_blocked_groups">Yatsekedwa: onjezani magulu osachepera awiri a standard</string>
+    <string name="st4_blocked_blank">Yatsekedwa: jambulani blank yogawana mu sitepe 3 kaye</string>
+    <string name="st4_processing">Ikugwira ntchito: ikuwerenga ma standard ndi kupanga regression…</string>
+    <string name="st4_failed_groups">Yalephera: gulu la standard limodzi lokha kapena ochepa (%1$d) lingagwiritsidwe ntchito</string>
+    <string name="st4_failed_reg">Yalephera: regression sinagwire bwino (kodi kuchuluka kwafanana?)</string>
+    <string name="st4_computed">Yatha: R²=%1$s, n=%2$d</string>
+    <string name="st_warn_count">; ⚠ machenjezo %1$d</string>
+    <string name="st_preset_loaded">Preset yadzaza: %1$s</string>
+    <string name="result_title">Zotsatira za kusanthula</string>
+    <string name="result_regression">Regression</string>
+    <string name="result_r2">R²</string>
+    <string name="result_predicted">Kuchuluka konenedweratu</string>
+    <string name="result_finish">Malizitsani pulojekiti ndi kusunga mu History</string>
+    <string name="result_back_home">Bwererani pachiyambi</string>
+    <string name="result_formula_linear">Unmixed area = %1$.4f × concentration + %2$.2f</string>
+    <string name="result_formula_log">Unmixed area = %1$.4f × log₁₀(concentration) + %2$.2f</string>
+    <string name="warn_low_r2">R² yotsika (&lt;0.95): mzere ungakhale wosadalirika</string>
+    <string name="warn_negative_pred">Kuneneratu ndi nambala yolakwika: onani blank ndi calibration</string>
+</resources>

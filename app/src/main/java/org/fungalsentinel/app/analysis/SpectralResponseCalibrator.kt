@@ -8,6 +8,7 @@ import java.io.File
 import java.io.InputStreamReader
 import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.max
 
 data class SpdCalibrationResult(
     val wavelengths: FloatArray,
@@ -29,10 +30,9 @@ data class SpdCalibrationResult(
 )
 
 /**
- * FSSA v1.4.4 parity (core/fusion.py + details_window.py):
- *  resp_c = Lamp_c / (SPD_true + 1e-6), dual-masked
- *  【v2.2.4 Fix】Applied moving-average smoothing to resp_c to eliminate sharp spikes
- *  caused by minor wavelength misalignment or noise, which previously shifted the handoffs.
+ * FSSA core/calibration.py + core/fusion.py parity:
+ *  resp_c = Lamp_c / (SPD_true + 1e-6), range- and SPD-masked
+ *  No smoothing is applied to the response curves.
  *  Corrected_c = Pos_c / resp_c  (guarded division > 1e-6; INDEPENDENT numerator)
  *  weights: logistic handoff relay, width 15 nm, w_B+w_G+w_R = 1 pointwise
  *  Fused = w_B·Corr_B + w_G·Corr_G + w_R·Corr_R (single C0-continuous curve)
@@ -46,22 +46,6 @@ object SpectralResponseCalibrator {
     private fun logistic(x: Float): Float {
         val t = x.coerceIn(-500f, 500f).toDouble()
         return (1.0 / (1.0 + exp(-t))).toFloat()
-    }
-
-    // 【新增】移动平均平滑，消除响应曲线尖峰
-    private fun smooth(arr: FloatArray, window: Int): FloatArray {
-        if (window <= 1) return arr
-        val out = FloatArray(arr.size)
-        val half = window / 2
-        for (i in arr.indices) {
-            var sum = 0f; var cnt = 0
-            for (j in (i - half)..(i + half)) {
-                val idx = j.coerceIn(0, arr.lastIndex)
-                sum += arr[idx]; cnt++
-            }
-            out[i] = sum / cnt
-        }
-        return out
     }
 
     fun calibrate(
@@ -118,19 +102,14 @@ object SpectralResponseCalibrator {
         if (maskedCount < 10) return null
 
         // 计算原始响应
-        val rawRespR = FloatArray(n); val rawRespG = FloatArray(n); val rawRespB = FloatArray(n)
+        val respR = FloatArray(n); val respG = FloatArray(n); val respB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
-            val s = spdAt(lam[i].toDouble()).toFloat() + EPS
-            rawRespR[i] = lampR[i] / s; rawRespG[i] = lampG[i] / s; rawRespB[i] = lampB[i] / s
+            val s = max(EPS, spdAt(lam[i].toDouble()).toFloat())
+            respR[i] = lampR[i] / s; respG[i] = lampG[i] / s; respB[i] = lampB[i] / s
         }
 
-        // 【修复】应用平滑，消除尖峰
-        val respR = smooth(rawRespR, 5)
-        val respG = smooth(rawRespG, 5)
-        val respB = smooth(rawRespB, 5)
-
-        // 重新计算 handoff (基于平滑后的响应)
+        // Find channel handoffs on the unmodified response curves (for display/parameters).
         var hBG = DEFAULT_HBG; var best = Float.POSITIVE_INFINITY
         for (i in 0 until n) if (mask[i] && respB[i] > 0f && respG[i] > 0f) {
             val d = abs(respB[i] - respG[i])
@@ -142,23 +121,46 @@ object SpectralResponseCalibrator {
             if (d < best) { best = d; hGR = lam[i] }
         }
 
+        // 逐波长动态加权融合权重 (w_c = resp_c / sum_c resp_c)
         val wB = FloatArray(n); val wG = FloatArray(n); val wR = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
-            val t1 = logistic((lam[i] - hBG) / LOGISTIC_WIDTH_NM)
-            val t2 = logistic((lam[i] - hGR) / LOGISTIC_WIDTH_NM)
-            wB[i] = 1f - t1; wG[i] = t1 * (1f - t2); wR[i] = t2
+            val sumResp = respR[i] + respG[i] + respB[i] + EPS
+            wR[i] = respR[i] / sumResp
+            wG[i] = respG[i] / sumResp
+            wB[i] = respB[i] / sumResp
         }
+
+        // 相对地板保护：下游除法采用 "该通道响应峰值 5%" 作为地板，防止掩码边缘除零爆炸
+        val maxR = (0 until n).filter { mask[it] }.maxOfOrNull { respR[it] } ?: 1f
+        val maxG = (0 until n).filter { mask[it] }.maxOfOrNull { respG[it] } ?: 1f
+        val maxB = (0 until n).filter { mask[it] }.maxOfOrNull { respB[it] } ?: 1f
+        val floorR = max(EPS, 0.05f * maxR)
+        val floorG = max(EPS, 0.05f * maxG)
+        val floorB = max(EPS, 0.05f * maxB)
 
         val corrR = FloatArray(n); val corrG = FloatArray(n); val corrB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
-            if (respR[i] > EPS) corrR[i] = posR[i] / respR[i]
-            if (respG[i] > EPS) corrG[i] = posG[i] / respG[i]
-            if (respB[i] > EPS) corrB[i] = posB[i] / respB[i]
+            corrR[i] = posR[i] / max(respR[i], floorR)
+            corrG[i] = posG[i] / max(respG[i], floorG)
+            corrB[i] = posB[i] / max(respB[i], floorB)
         }
 
         val fused = FloatArray(n) { wB[it] * corrB[it] + wG[it] * corrG[it] + wR[it] * corrR[it] }
+
+        // Scale corrR, corrG, corrB to align peak amplitudes with fused curve for visual cross-channel agreement
+        val maxFused = (0 until n).filter { mask[it] }.maxOfOrNull { fused[it] } ?: 1f
+        val maxCR = (0 until n).filter { mask[it] }.maxOfOrNull { corrR[it] }.takeIf { it != null && it > 0f } ?: 1f
+        val maxCG = (0 until n).filter { mask[it] }.maxOfOrNull { corrG[it] }.takeIf { it != null && it > 0f } ?: 1f
+        val maxCB = (0 until n).filter { mask[it] }.maxOfOrNull { corrB[it] }.takeIf { it != null && it > 0f } ?: 1f
+        val sR = maxFused / maxCR; val sG = maxFused / maxCG; val sB = maxFused / maxCB
+        for (i in 0 until n) {
+            if (!mask[i]) continue
+            corrR[i] *= sR
+            corrG[i] *= sG
+            corrB[i] *= sB
+        }
 
         var devSum = 0.0; var cnt = 0
         for (i in 0 until n) if (mask[i]) {

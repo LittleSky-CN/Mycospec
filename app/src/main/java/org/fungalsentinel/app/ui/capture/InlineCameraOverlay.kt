@@ -1,12 +1,8 @@
 package org.fungalsentinel.app.ui.capture
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.net.Uri
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,8 +19,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
+import org.fungalsentinel.app.R
 import org.fungalsentinel.app.camera.CameraManager
 import org.fungalsentinel.app.camera.CameraParams
 import org.fungalsentinel.app.camera.CameraPreviewView
@@ -40,6 +37,8 @@ fun InlineCameraOverlay(
     val context = LocalContext.current
     val cameraManager = remember { CameraManager(context) }
     val isReady by cameraManager.isReady.collectAsState()
+    val isCapturing by cameraManager.isCapturing.collectAsState()
+    var hasCameraPermission by remember { mutableStateOf(cameraManager.hasCameraPermission()) }
     val settings by AppPreferences.getSettings(context).collectAsState(initial = AppSettings())
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -50,21 +49,12 @@ fun InlineCameraOverlay(
     var localAutoFocus by remember { mutableStateOf(settings.autoFocus) }
     var localFocusDiopter by remember { mutableStateOf(settings.focusDiopter) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) {
-            Toast.makeText(context, "Camera permission denied", Toast.LENGTH_SHORT).show()
-            onBack()
-        }
-    }
-
     LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            permissionLauncher.launch(Manifest.permission.CAMERA)
-        }
         cameraManager.onDngSaved = { file, _ -> onCaptured(Uri.fromFile(file)) }
         cameraManager.onError = { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
+        cameraManager.onSaturationWarning = {
+            Toast.makeText(context, R.string.warn_saturation, Toast.LENGTH_LONG).show()
+        }
     }
 
     // 全局设置变化时同步本地状态
@@ -94,8 +84,13 @@ fun InlineCameraOverlay(
             .background(Color.Black)
             .border(2.dp, Color.Black, RoundedCornerShape(0.dp)) // 统一黑色边框
     ) {
-        CameraPreviewView(cameraManager = cameraManager, modifier = Modifier.fillMaxSize())
+        CameraPreviewView(
+            cameraManager = cameraManager,
+            modifier = Modifier.fillMaxSize(),
+            onPermissionChanged = { hasCameraPermission = it }
+        )
 
+        if (hasCameraPermission) {
         // 顶部：退出键 + 提示胶囊（避开状态栏）
         Column(
             modifier = Modifier
@@ -132,7 +127,13 @@ fun InlineCameraOverlay(
                         CircularProgressIndicator(modifier = Modifier.size(14.dp), color = AppColors.Accent, strokeWidth = 2.dp)
                     }
                     Text(
-                        text = if (isReady) "Align light & tap Shutter" else "Starting camera…",
+                        text = stringResource(
+                            when {
+                                isCapturing -> R.string.camera_capturing
+                                isReady -> R.string.camera_hint_align
+                                else -> R.string.camera_starting
+                            }
+                        ),
                         color = AppColors.TextPrimary,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -154,7 +155,7 @@ fun InlineCameraOverlay(
             )
             Button(
                 onClick = { cameraManager.captureRaw() },
-                enabled = isReady,
+                enabled = isReady && !isCapturing,
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(containerColor = AppColors.Accent, disabledContainerColor = AppColors.SurfaceRaised),
                 modifier = Modifier.size(76.dp).border(4.dp, AppColors.Accent, CircleShape)
@@ -175,6 +176,16 @@ fun InlineCameraOverlay(
                 onAutoFocusChange = { localAutoFocus = it },
                 onFocusChange = { localFocusDiopter = it }
             )
+        }
+        } else {
+            Box(
+                modifier = Modifier.align(Alignment.TopStart).padding(top = 36.dp, start = 12.dp)
+                    .size(46.dp).background(MaterialTheme.colorScheme.secondary, CircleShape)
+                    .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.ArrowDownward, contentDescription = "Back", tint = Color.White)
+            }
         }
     }
 }

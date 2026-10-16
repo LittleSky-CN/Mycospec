@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -50,7 +51,7 @@ fun NeonBackPill(onBack: () -> Unit) {
             .clickable(onClick = onBack),
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = AppColors.OnAccent)
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = AppColors.OnAccent)
     }
 }
 
@@ -78,14 +79,13 @@ fun NeonHeader(stepLabel: String?, title: String, onBack: () -> Unit, tutorial: 
             ) {
                 Text(
                     text = title, color = AppColors.TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp,
-                    textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.padding(horizontal = 44.dp)
+                    textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 44.dp)
                 )
                 if (tutorial != null) {
-                    Icon(
-                        Icons.Default.Info, contentDescription = stringResource(R.string.tutorial_button_desc),
-                        tint = AppColors.TextSecondary,
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp).size(22.dp)
-                            .clickable { tutorial.show() }
+                    TutorialButton(
+                        onClick = tutorial::show,
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp)
                     )
                 }
             }

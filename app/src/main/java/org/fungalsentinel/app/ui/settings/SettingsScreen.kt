@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.FssaApplication
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.analysis.SpdLoader
+import org.fungalsentinel.app.ui.components.HalfScreenLayout
 import org.fungalsentinel.app.ui.components.HelpTopBar
 import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.ui.theme.AppColors
@@ -49,7 +50,8 @@ fun SettingsScreen(
     onCalibrationProtectionChange: (Boolean) -> Unit = {},
     onAutoExposureChange: (Boolean) -> Unit = {}, onExposureChange: (Long) -> Unit = {},
     onAutoFocusChange: (Boolean) -> Unit = {}, onFocusDiopterChange: (Float) -> Unit = {}, // New Focus Callbacks
-    onOpenPreview: () -> Unit = {}, onBack: () -> Unit
+    onOpenPreview: () -> Unit = {}, onBack: () -> Unit,
+    isHalfScreen: Boolean = false
 ) {
     var wR by remember { mutableStateOf(wavelengthR) }
     var wG by remember { mutableStateOf(wavelengthG) }
@@ -85,13 +87,15 @@ fun SettingsScreen(
 
     val tutorial = TutorialHost(stepId = "settings", titleRes = R.string.tutorial_settings_title, bodyRes = R.string.tutorial_settings_body)
 
-    Scaffold(
-        topBar = { HelpTopBar(title = stringResource(R.string.settings_title), tutorial = tutorial, onBack = onBack) }
-    ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
+    HalfScreenLayout(forceHalfScreen = isHalfScreen, coverRatio = coverRatio) { screenModifier ->
+        Scaffold(
+            modifier = screenModifier.fillMaxSize(),
+            topBar = { HelpTopBar(title = stringResource(R.string.settings_title), tutorial = tutorial, onBack = onBack) }
+        ) { padding ->
+            Column(
+                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
             SettingsSection(stringResource(R.string.settings_language)) {
                 LanguageRadio(LanguageManager.SYSTEM, stringResource(R.string.language_system), currentLang, selectLanguage)
                 LanguageRadio("en", stringResource(R.string.language_english), currentLang, selectLanguage)
@@ -181,6 +185,7 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.height(32.dp))
+            }
         }
     }
 }

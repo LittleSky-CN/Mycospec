@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.data.model.ProjectEntity
 import org.fungalsentinel.app.data.preset.PresetEntity
+import org.fungalsentinel.app.ui.components.HalfScreenLayout
 import org.fungalsentinel.app.ui.components.HelpTopBar
 import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
@@ -32,10 +33,13 @@ fun HistoryScreen(
     onBack: () -> Unit,
     onOpenProject: (ProjectEntity) -> Unit,
     onDelete: (ProjectEntity) -> Unit = {},
-    onExport: (ProjectEntity) -> Unit = {}
+    onExport: (ProjectEntity) -> Unit = {},
+    isHalfScreen: Boolean = false,
+    coverRatio: Float = 0.5f
 ) {
     val wlPresets by projectViewModel.wlPresets.collectAsState()
     val spdPresets by projectViewModel.spdPresets.collectAsState()
+    val curvePresets by projectViewModel.curvePresets.collectAsState()
 
     var tab by remember { mutableIntStateOf(0) }
     var editingPreset by remember { mutableStateOf<PresetEntity?>(null) }
@@ -48,91 +52,102 @@ fun HistoryScreen(
         bodyRes = R.string.tutorial_history_body
     )
 
-    Scaffold(
-        topBar = {
-            HelpTopBar(
-                title = stringResource(R.string.history_title),
-                tutorial = tutorial,
-                onBack = onBack
-            )
-        }
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            TabRow(selectedTabIndex = tab) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Projects") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("λ Presets") })
-                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("SPD Presets") })
+    HalfScreenLayout(forceHalfScreen = isHalfScreen, coverRatio = coverRatio) { screenModifier ->
+        Scaffold(
+            modifier = screenModifier.fillMaxSize(),
+            topBar = {
+                HelpTopBar(
+                    title = stringResource(R.string.history_title),
+                    tutorial = tutorial,
+                    onBack = onBack
+                )
             }
+        ) { padding ->
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                TabRow(selectedTabIndex = tab) {
+                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Projects") })
+                    Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("λ Presets") })
+                    Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("SPD Presets") })
+                    Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text(stringResource(R.string.history_curve_presets)) })
+                }
 
-            when (tab) {
-                0 -> if (projects.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.history_empty))
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(projects) { project ->
-                            Card(
-                                onClick = {
-                                    if (project.status == "IN_PROGRESS") onOpenProject(project)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                when (tab) {
+                    0 -> if (projects.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(stringResource(R.string.history_empty))
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(projects) { project ->
+                                Card(
+                                    onClick = {
+                                        if (project.status == "IN_PROGRESS") onOpenProject(project)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(project.name, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            dateFormat.format(Date(project.createdAt)),
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                        Text(
-                                            if (project.status == "IN_PROGRESS") {
-                                                "In progress — tap to continue"
-                                            } else {
-                                                "Finished"
-                                            },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (project.status == "IN_PROGRESS") {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            }
-                                        )
-                                    }
-                                    Row {
-                                        IconButton(onClick = { onExport(project) }) {
-                                            Icon(Icons.Default.FileDownload, contentDescription = "Export")
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(project.name, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                dateFormat.format(Date(project.createdAt)),
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                            Text(
+                                                if (project.status == "IN_PROGRESS") {
+                                                    "In progress – tap to continue"
+                                                } else {
+                                                    "Finished"
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (project.status == "IN_PROGRESS") {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                }
+                                            )
                                         }
-                                        IconButton(onClick = { onDelete(project) }) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                                        Row {
+                                            IconButton(onClick = { onExport(project) }) {
+                                                Icon(Icons.Default.FileDownload, contentDescription = "Export")
+                                            }
+                                            IconButton(onClick = { onDelete(project) }) {
+                                                Icon(Icons.Default.Delete, contentDescription = "Delete")
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
+
+                    1 -> PresetList(
+                        presets = wlPresets,
+                        emptyText = "No wavelength presets yet. Save one from Step 1.",
+                        onEdit = { editingPreset = it },
+                        onDelete = { deleteTarget = it }
+                    )
+
+                    2 -> PresetList(
+                        presets = spdPresets,
+                        emptyText = "No SPD presets yet. Save one from Step 2.",
+                        onEdit = { editingPreset = it },
+                        onDelete = { deleteTarget = it }
+                    )
+
+                    3 -> PresetList(
+                        presets = curvePresets,
+                        emptyText = stringResource(R.string.history_curve_presets_empty),
+                        onEdit = { editingPreset = it },
+                        onDelete = { deleteTarget = it }
+                    )
                 }
-
-                1 -> PresetList(
-                    presets = wlPresets,
-                    emptyText = "No wavelength presets yet. Save one from Step 1.",
-                    onEdit = { editingPreset = it },
-                    onDelete = { deleteTarget = it }
-                )
-
-                2 -> PresetList(
-                    presets = spdPresets,
-                    emptyText = "No SPD presets yet. Save one from Step 2.",
-                    onEdit = { editingPreset = it },
-                    onDelete = { deleteTarget = it }
-                )
             }
         }
     }
@@ -197,12 +212,17 @@ private fun PresetList(
                             Text(p.name, fontWeight = FontWeight.Bold)
                             Text(p.deviceModel, style = MaterialTheme.typography.bodySmall)
                             Text(
-                                if (p.type == "WAVELENGTH") {
-                                    "slope=${p.slope?.let { String.format("%.4f", it) } ?: "—"} " +
-                                            "intercept=${p.intercept?.let { String.format("%.2f", it) } ?: "—"}"
-                                } else {
-                                    "R=${p.coeffR?.let { String.format("%.4f", it) } ?: "—"} " +
-                                            "B=${p.coeffB?.let { String.format("%.4f", it) } ?: "—"}"
+                                when (p.type) {
+                                    "WAVELENGTH" ->
+                                        "slope=${p.slope?.let { String.format("%.4f", it) } ?: "—"} " +
+                                                "intercept=${p.intercept?.let { String.format("%.2f", it) } ?: "—"}"
+                                    "CURVE" ->
+                                        "slope=${p.slope?.let { String.format("%.4f", it) } ?: "—"} " +
+                                                "intercept=${p.intercept?.let { String.format("%.2f", it) } ?: "—"} " +
+                                                "R²=${p.quality ?: "—"}"
+                                    else ->
+                                        "R=${p.coeffR?.let { String.format("%.4f", it) } ?: "—"} " +
+                                                "B=${p.coeffB?.let { String.format("%.4f", it) } ?: "—"}"
                                 },
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -243,7 +263,7 @@ private fun PresetEditDialog(
                 if (preset.type == "WAVELENGTH") {
                     OutlinedTextField(slope, { slope = it }, label = { Text("Slope (px/nm)") }, singleLine = true)
                     OutlinedTextField(intercept, { intercept = it }, label = { Text("Intercept (px)") }, singleLine = true)
-                } else {
+                } else if (preset.type == "SPD") {
                     OutlinedTextField(coeffR, { coeffR = it }, label = { Text("R/G coefficient") }, singleLine = true)
                     OutlinedTextField(coeffB, { coeffB = it }, label = { Text("B/G coefficient") }, singleLine = true)
                 }

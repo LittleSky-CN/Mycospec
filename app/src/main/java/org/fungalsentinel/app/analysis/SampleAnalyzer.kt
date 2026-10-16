@@ -1,6 +1,7 @@
 package org.fungalsentinel.app.analysis
 
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.sqrt
 
 data class SampleAnalysisResult(
@@ -25,6 +26,25 @@ object SampleAnalyzer {
     private const val VIS_LO = 400.0
     private const val VIS_HI = 700.0
 
+    private fun removeIsolatedSpikes(values: FloatArray): FloatArray {
+        val radius = 2
+        if (values.size < 2 * radius + 2) return values.copyOf()
+        val amplitudeFloor = (values.maxOfOrNull { abs(it) } ?: 0f) * 0.02f
+        val result = values.copyOf()
+        for (index in radius until values.size - radius) {
+            val neighbors = FloatArray(radius * 2) { offset ->
+                if (offset < radius) values[index - radius + offset]
+                else values[index + 1 + offset - radius]
+            }.sorted()
+            val median = (neighbors[radius - 1] + neighbors[radius]) / 2f
+            val deviations = neighbors.map { abs(it - median) }.sorted()
+            val mad = (deviations[radius - 1] + deviations[radius]) / 2f
+            val threshold = max(4.5f * 1.4826f * mad, amplitudeFloor)
+            if (abs(values[index] - median) > threshold) result[index] = median
+        }
+        return result
+    }
+
     fun analyze(
         blankFrames: List<FrameProfile>,
         sampleFrames: List<FrameProfile>,
@@ -37,7 +57,7 @@ object SampleAnalyzer {
         respR: FloatArray? = null,
         respG: FloatArray? = null,
         respB: FloatArray? = null,
-        floorFraction: Float = 0.05f
+        responseThresholdFraction: Float = 0.20f
     ): SampleAnalysisResult? {
         if (blankFrames.isEmpty() || sampleFrames.isEmpty()) return null
         val channel = when (fluorophore) {
@@ -66,7 +86,16 @@ object SampleAnalyzer {
 
         val meanSample = meanOf(sampleFrames)
         val meanBlank = meanOf(blankFrames)
-        val net = FloatArray(n) { meanSample[it] - meanBlank[it] }
+        val netReplicates = sampleFrames.map { frame ->
+            val profile = sel(frame)
+            FloatArray(n) { i ->
+                max(0f, (if (i < profile.size) profile[i] else 0f) - meanBlank[i])
+            }
+        }
+        val net = FloatArray(n)
+        for (replicate in netReplicates) {
+            for (i in 0 until n) net[i] += replicate[i] / sampleFrames.size
+        }
         val lam = FloatArray(n) { i -> ((i - intercept) / slope).toFloat() }
 
         val respSel: FloatArray? = when (channel) { "R" -> respR; "B" -> respB; else -> respG }
@@ -75,7 +104,8 @@ object SampleAnalyzer {
         fun respAt(l: Float): Float {
             val w = wavelengths ?: return 0f
             val r = respSel ?: return 0f
-            if (l < w[0] || l > w[w.lastIndex]) return 0f
+            if (l <= w[0]) return r[0]
+            if (l >= w[w.lastIndex]) return r[r.lastIndex]
             var lo = 0; var hi = w.lastIndex
             while (lo < hi - 1) {
                 val mid = (lo + hi) / 2
@@ -92,18 +122,15 @@ object SampleAnalyzer {
         val hi = maxOf(p0, p1).coerceIn(0, n - 1)
         if (lo >= hi) return null
 
-        var floor = 0f
-        if (applied) {
-            var pk = 0f
-            for (i in lo..hi) { val v = respAt(lam[i]); if (v > pk) pk = v }
-            floor = floorFraction * pk
-        }
+        val floor = if (applied) {
+            max(1e-9f, responseThresholdFraction * (respSel.maxOrNull() ?: 0f))
+        } else 0f
 
         fun itru(arr: FloatArray, i: Int): Float {
             if (!applied) return arr[i]
             val rv = respAt(lam[i])
-            if (rv <= 1e-6f) return 0f
-            return arr[i] / maxOf(rv, floor)
+            if (!rv.isFinite() || rv <= floor) return 0f
+            return arr[i] / rv
         }
 
         fun trapzRaw(arr: FloatArray): Double {
@@ -114,24 +141,23 @@ object SampleAnalyzer {
             return a
         }
 
-        fun trapzItru(arr: FloatArray): Double {
+        fun trapzCorrected(arr: FloatArray): Double {
             var a = 0.0
             for (i in lo until hi) {
-                a += (itru(arr, i) + itru(arr, i + 1)) / 2.0 * abs(lam[i + 1] - lam[i])
+                a += (arr[i] + arr[i + 1]) / 2.0 * abs(lam[i + 1] - lam[i])
             }
             return a
         }
 
         val rawSample = trapzRaw(meanSample)
         val rawBlank = trapzRaw(meanBlank)
-        val corrected = trapzItru(net)
-
-        val frameAreas = sampleFrames.map { f ->
-            val pf = sel(f)
-            val m = minOf(n, pf.size)
-            val netF = FloatArray(n) { i -> (if (i < m) pf[i] else 0f) - meanBlank[i] }
-            trapzItru(netF)
+        val cleanedReplicates = netReplicates.map { replicate ->
+            removeIsolatedSpikes(FloatArray(n) { i -> itru(replicate, i) })
         }
+        val cleanedNet = removeIsolatedSpikes(FloatArray(n) { i -> itru(net, i) })
+        val cleanedBlank = removeIsolatedSpikes(FloatArray(n) { i -> itru(meanBlank, i) })
+        val frameAreas = cleanedReplicates.map(::trapzCorrected)
+        val corrected = frameAreas.average()
         val sd = if (frameAreas.size > 1) {
             sqrt(frameAreas.sumOf { (it - corrected) * (it - corrected) } / (frameAreas.size - 1))
         } else 0.0
@@ -142,7 +168,7 @@ object SampleAnalyzer {
         val ints = DoubleArray(windowSize)
         for (i in 0 until windowSize) {
             wls[i] = lam[lo + i].toDouble()
-            ints[i] = itru(net, lo + i).toDouble()
+            ints[i] = cleanedNet[lo + i].toDouble()
         }
         if (windowSize > 1 && wls[0] > wls[windowSize - 1]) {
             wls.reverse()
@@ -192,8 +218,9 @@ object SampleAnalyzer {
             val k = maxOf(1, visIdx.size / 180)
             return visIdx.filterIndexed { i, _ -> i % k == 0 }.map { transform(arr, it) }
         }
-        val corrSpec = crop(net) { a, i -> itru(a, i) }
-        val blankSpec = crop(meanBlank) { a, i -> itru(a, i) }
+        val corrSpec = crop(cleanedNet) { a, i -> a[i] }
+        val rawBlankSpec = crop(cleanedBlank) { a, i -> a[i] }
+        val blankSpec = smoothList(rawBlankSpec, 7)
 
         return SampleAnalysisResult(
             channel = channel, responseApplied = applied,
@@ -203,5 +230,22 @@ object SampleAnalyzer {
             peakNm = peakNm, peakIntensity = peakI, fwhmNm = fwhmNm, centroidNm = centroidNm,
             correctedSpectrum = corrSpec, blankSpectrum = blankSpec
         )
+    }
+
+    private fun smoothList(list: List<Float>, window: Int): List<Float> {
+        if (list.size <= window) return list
+        val out = FloatArray(list.size)
+        val half = window / 2
+        for (i in list.indices) {
+            var sum = 0f; var count = 0
+            for (j in (i - half)..(i + half)) {
+                if (j in list.indices) {
+                    sum += list[j]
+                    count++
+                }
+            }
+            out[i] = if (count > 0) sum / count else list[i]
+        }
+        return out.toList()
     }
 }

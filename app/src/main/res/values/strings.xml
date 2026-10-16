@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MycoSpec</string>
-    <string name="home_welcome">MycoSpec\nPocket Spectral Analyzer</string>
+    <string name="home_welcome">Welcome to MycoSpec</string>
+    <string name="home_tagline">Pocket Spectral Analyzer</string>
+    <string name="home_intro">Choose an action to start an experiment or continue a previous one.</string>
+    <string name="home_icon_desc">MycoSpec app icon</string>
     <string name="home_new_project">New Project</string>
     <string name="home_new_project_desc">Start a full calibration &amp; analysis workflow</string>
     <string name="home_dng_camera">DNG Camera</string>
@@ -12,8 +15,16 @@
     <string name="home_settings_desc">Wavelengths, SPD, half-screen, blank mode</string>
     <string name="new_project_title">New Project</string>
     <string name="new_project_name_label">Project name</string>
+    <string name="new_project_name_hint">Enter a project name</string>
     <string name="new_project_create">Create project &amp; continue</string>
     <string name="new_project_name_empty">Please enter a project name</string>
+    <string name="default_concentration_unit">mg/L</string>
+    <string name="value_not_set">—</string>
+    <string name="delete_standard_group">Delete standard group</string>
+    <string name="step4_capture_title">%1$s — %2$s %3$s</string>
+    <string name="step4_concentration_invalid">Enter a valid finite concentration.</string>
+    <string name="result_formula_linear">Unmixed area = %1$.4f × concentration + %2$.2f</string>
+    <string name="result_formula_log">Unmixed area = %1$.4f × log₁₀(concentration) + %2$.2f</string>
     <string name="capture_photo">Capture</string>
     <string name="upload_gallery">Gallery</string>
     <string name="upload_files">Files / DNG</string>
@@ -34,10 +45,15 @@
     <string name="step3_capture_blank_title">Blank captures</string>
     <string name="step3_capture_sample_title">Sample captures</string>
     <string name="step4_title">Step 4: Standard Curve</string>
-    <string name="step4_description">Build a concentration–fluorescence regression curve with standard groups.</string>
+    <string name="step4_description">Build the curve from blank-corrected spectral unmixing: sample = α·reference emission + s·blank + offset.</string>
     <string name="step4_concentration_label">Standard concentration</string>
     <string name="step4_unit_label">Unit</string>
     <string name="step4_build_curve">Build curve</string>
+    <string name="step4_apply_preset">Apply saved curve</string>
+    <string name="step4_curve_preset_summary">%1$s · %2$s · R²=%3$s</string>
+    <string name="step4_curve_preset_active">Loaded curve: %1$s</string>
+    <string name="step4_preset_standard_ignored">Standard groups are hidden and will not be used while this preset is active.</string>
+    <string name="act_clear_preset">Clear</string>
     <string name="next_step">Next step</string>
     <string name="result_title">Analysis Result</string>
     <string name="result_regression">Regression</string>
@@ -49,6 +65,8 @@
     <string name="dng_capture">Capture RAW</string>
     <string name="dng_saved">DNG saved to gallery</string>
     <string name="history_title">History</string>
+    <string name="history_curve_presets">Curve presets</string>
+    <string name="history_curve_presets_empty">No curve presets yet. Save one from Step 4.</string>
     <string name="history_empty">No experiments yet</string>
     <string name="settings_title">Settings</string>
     <string name="settings_wavelength">Wavelength parameters</string>
@@ -67,6 +85,7 @@
     <string name="tutorial_skip">Skip</string>
     <string name="tutorial_got_it">Got it</string>
     <string name="tutorial_button_desc">Show help</string>
+    <string name="back">Back</string>
     <string name="tutorial_home_title">Welcome to MycoSpec</string>
     <string name="tutorial_home_body">This app works with dedicated hardware to measure fluorescence concentration and assess mold risk in your samples.</string>
     <string name="tutorial_project_title">Assemble the hardware</string>
@@ -102,6 +121,8 @@
     <string name="settings_open_preview">Open half-screen preview</string>
     <string name="half_preview_title">Half-screen preview</string>
     <string name="half_preview_hint">Cover the front light sensor to test the trigger; drag the slider below to move the boundary.</string>
+    <string name="tutorial_half_preview_title">Half-screen preview</string>
+    <string name="tutorial_half_preview_body">Rotate the phone to either landscape orientation. Cover the front light sensor to test the split; use the slider to adjust how much of the screen is covered.</string>
     <string name="half_preview_covered">Covered</string>
     <string name="half_preview_uncovered">Uncovered</string>
     <string name="settings_exposure">Exposure</string>
@@ -139,6 +160,10 @@
     <string name="st_computed_sample">Computed — ch=%1$s, resp=%2$s; blank %3$s; sample %4$s</string>
     <string name="st4_blocked_groups">Blocked — add ≥2 standard groups</string>
     <string name="st4_processing">Processing — decoding standards &amp; regressing…</string>
+    <string name="st4_processing_preset">Processing — applying saved curve to current sample…</string>
+    <string name="st4_preset_applied">Saved curve applied — R²=%1$s, n=%2$d</string>
+    <string name="st_curve_preset_loaded">Curve preset loaded — %1$s. Apply it to the current sample.</string>
+    <string name="st_curve_preset_reapply">Loaded curve preset — reapply it to the updated sample.</string>
     <string name="st4_failed_groups">Failed — only %1$d usable standard group(s)</string>
     <string name="st4_failed_reg">Failed — degenerate regression (duplicate concentrations?)</string>
     <string name="st4_computed">Computed — R²=%1$s, n=%2$d</string>
@@ -159,10 +184,16 @@
     <string name="new_project_filter_desc">Use G+R two-point fit (B channel absorbed by filter)</string>
     <string name="camera_hint_align">Align light &amp; tap Shutter</string>
     <string name="camera_starting">Starting camera…</string>
+    <string name="camera_capturing">Capturing RAW…</string>
+    <string name="cam_err_capture_timeout">Capture timed out waiting for a RAW image. Please try again.</string>
+    <string name="cam_err_capture_recovery">Could not recover camera after capture timeout: %1$s</string>
     <string name="camera_toggle_controls">Toggle manual controls</string>
     <string name="camera_label_exp">EXP</string>
     <string name="camera_label_foc">FOC</string>
     <string name="camera_permission_denied">Camera permission denied</string>
+    <string name="camera_permission_required">Camera access is required to capture RAW images.</string>
+    <string name="camera_permission_retry">Request camera access</string>
+    <string name="camera_permission_settings">Open app settings</string>
     <string name="dng_save_failed">Failed to save to gallery</string>
     <string name="dng_last_saved">Last: %1$s</string>
     <string name="settings_auto_focus">Auto focus (AF)</string>

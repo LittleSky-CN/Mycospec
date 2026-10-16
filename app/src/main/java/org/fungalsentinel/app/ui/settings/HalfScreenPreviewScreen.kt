@@ -22,6 +22,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
+import org.fungalsentinel.app.ui.components.TutorialButton
+import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.ui.theme.AppColors
 import kotlin.math.roundToInt
 
@@ -45,9 +47,15 @@ fun HalfScreenPreviewScreen(
     DisposableEffect(Unit) {
         val previous = activity?.requestedOrientation
             ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         onDispose { activity?.requestedOrientation = previous }
     }
+
+    val tutorial = TutorialHost(
+        stepId = "half_screen_preview",
+        titleRes = R.string.tutorial_half_preview_title,
+        bodyRes = R.string.tutorial_half_preview_body
+    )
 
     // Live lux readout (same hysteresis as HalfScreenLayout)
     var lux by remember { mutableFloatStateOf(-1f) }
@@ -78,7 +86,8 @@ fun HalfScreenPreviewScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                actions = { TutorialButton(onClick = tutorial::show) }
             )
         }
     ) { padding ->

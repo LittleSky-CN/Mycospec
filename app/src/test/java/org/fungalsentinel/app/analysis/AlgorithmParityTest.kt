@@ -1,0 +1,259 @@
+package org.fungalsentinel.app.analysis
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import kotlin.math.exp
+import kotlin.math.sqrt
+
+class AlgorithmParityTest {
+    @Test
+    fun sampleReplicatesAreClippedBeforeAveraging() {
+        val blank = profile(FloatArray(10) { 2f })
+        val lowSample = profile(FloatArray(10) { 1f })
+        val highSample = profile(FloatArray(10) { 5f })
+
+        val result = SampleAnalyzer.analyze(
+            blankFrames = listOf(blank),
+            sampleFrames = listOf(lowSample, highSample),
+            bandStartNm = 0.0,
+            bandEndNm = 9.0,
+            slope = 1.0,
+            intercept = 0.0,
+            fluorophore = "EGFP"
+        )
+
+        assertNotNull(result)
+        assertEquals(13.5, result!!.correctedArea, 1e-5)
+        assertEquals(sqrt(364.5), result.sampleSD, 1e-5)
+    }
+
+    @Test
+    fun sampleResponseExcludesValuesBelowTheGlobalThreshold() {
+        val blank = profile(FloatArray(10) { 0f })
+        val sample = profile(FloatArray(10) { 1f })
+        val wavelengths = FloatArray(10) { it + 2f }
+        val response = FloatArray(10) { if (it == 9) 100f else 2f }
+
+        val result = SampleAnalyzer.analyze(
+            blankFrames = listOf(blank),
+            sampleFrames = listOf(sample),
+            bandStartNm = 0.0,
+            bandEndNm = 9.0,
+            slope = 1.0,
+            intercept = 0.0,
+            fluorophore = "EGFP",
+            wavelengths = wavelengths,
+            respG = response
+        )
+
+        assertNotNull(result)
+        assertTrue(result!!.responseApplied)
+        assertEquals(0.0, result.correctedArea, 1e-5)
+    }
+
+    @Test
+    fun sampleResponseDoesNotAmplifySignalBelowResponseFloor() {
+        val blank = profile(FloatArray(30) { 20f })
+        val sample = profile(FloatArray(30) { if (it < 5) 120f else 30f })
+        val wavelengths = FloatArray(30) { 400f + it }
+        val response = FloatArray(30) { if (it < 5) 0.01f else 1f }
+
+        val result = SampleAnalyzer.analyze(
+            blankFrames = listOf(blank),
+            sampleFrames = listOf(sample),
+            bandStartNm = 410.0,
+            bandEndNm = 420.0,
+            slope = 1.0,
+            intercept = -400.0,
+            fluorophore = "EGFP",
+            wavelengths = wavelengths,
+            respG = response
+        )
+
+        assertNotNull(result)
+        assertEquals(100.0, result!!.correctedArea, 1e-5)
+        assertEquals(0f, result.correctedSpectrum.first(), 1e-6f)
+        assertEquals(10f, result.correctedSpectrum[5], 1e-6f)
+        assertEquals(0f, result.blankSpectrum.first(), 1e-6f)
+    }
+
+    @Test
+    fun sampleAnalysisRemovesIsolatedSpikeAndPreservesBroadPeak() {
+        val blankValues = FloatArray(60)
+        val sampleValues = FloatArray(60) { i ->
+            exp(-0.5 * ((i - 30.0) / 5.0) * ((i - 30.0) / 5.0)).toFloat()
+        }
+        sampleValues[5] = 1f
+        val blank = profile(blankValues)
+        val sample = profile(sampleValues)
+
+        val result = SampleAnalyzer.analyze(
+            blankFrames = listOf(blank),
+            sampleFrames = listOf(sample),
+            bandStartNm = 400.0,
+            bandEndNm = 459.0,
+            slope = 1.0,
+            intercept = -400.0,
+            fluorophore = "EGFP"
+        )
+
+        assertNotNull(result)
+        assertTrue(result!!.correctedSpectrum[5] < 0.01f)
+        assertTrue(result.correctedSpectrum[30] > result.correctedSpectrum[5])
+        assertTrue(result.correctedSpectrum[28] < result.correctedSpectrum[30])
+        assertTrue(result.correctedSpectrum[32] < result.correctedSpectrum[30])
+    }
+
+    @Test
+    fun concentrationFitRemainsLinearWhenLogWouldFitBetter() {
+        val points = listOf(1.0 to 1.0, 10.0 to 2.0, 100.0 to 3.0)
+
+        val result = ConcentrationRegressor.fit(points)
+
+        assertNotNull(result)
+        assertFalse(result!!.isLogarithmic)
+        assertEquals(3.0, ConcentrationRegressor.predict(result, 3.0 * result.slope + result.intercept), 1e-10)
+    }
+
+    @Test
+    fun responseCalibrationDoesNotSmoothRawResponse() {
+        val n = 31
+        val lamp = profile(FloatArray(n) { if (it == 15) 100f else 10f })
+        val positioning = profile(FloatArray(n) { 10f })
+        val spd = (0 until n).map { (430.0 + it) to 1.0 }
+
+        val result = SpectralResponseCalibrator.calibrate(
+            lampFrames = listOf(lamp),
+            posFrames = listOf(positioning),
+            spdTrue = spd,
+            slope = 1.0,
+            intercept = -430.0,
+            spdSource = "test"
+        )
+
+        assertNotNull(result)
+        assertTrue(result!!.respG[15] > result.respG[14] * 5f)
+        assertTrue(result.respG[15] > result.respG[16] * 5f)
+    }
+
+    @Test
+    fun wavelengthValidationErrorUsesAbsoluteSlopeForPositiveMapping() {
+        val width = 3000
+        fun gaussian(center: Double): FloatArray =
+            FloatArray(width) { i -> exp(-0.5 * ((i - center) / 10.0) * ((i - center) / 10.0)).toFloat() }
+
+        val frame = FrameProfile(
+            width = width,
+            height = 10,
+            redProfile = gaussian(2500.0),
+            greenProfile = gaussian(2275.0),
+            blueProfile = gaussian(2100.0),
+            columnEnergy = FloatArray(width),
+            exposureSeconds = 0.3,
+            sourceKind = "test",
+            xRoiStart = 100,
+            xRoiEnd = 200
+        )
+
+        val result = WavelengthCalibrator.calibrate(listOf(frame), 622.5, 522.5, 462.5)
+
+        assertNotNull(result)
+        assertEquals(10.0, result!!.gErrorNm, 0.2)
+    }
+
+    @Test
+    fun unmixingRecoversPythonMetricCoefficients() {
+        val wavelengths = DoubleArray(8) { 500.0 + it }
+        val emission = doubleArrayOf(0.0, 1.0, 0.5, 2.0, 1.5, 0.3, 0.1, 0.0)
+        val blank = doubleArrayOf(1.0, 0.0, 2.0, 0.5, 3.0, 1.5, 0.2, 2.5)
+        val sample = DoubleArray(wavelengths.size) {
+            1.7 * emission[it] + 0.4 * blank[it] + 3.0
+        }
+
+        val result = SpectralUnmixer.unmixSpectrum(
+            sample,
+            emission,
+            blank,
+            BooleanArray(wavelengths.size) { true }
+        )
+
+        assertEquals(1.7, result.alpha, 1e-10)
+        assertEquals(0.4, result.scatterScale, 1e-10)
+        assertEquals(3.0, result.offset, 1e-10)
+        assertEquals(1.0, result.r2, 1e-10)
+    }
+
+    @Test
+    fun referenceEmissionUsesLargestPositiveInBandAuc() {
+        val wavelengths = doubleArrayOf(500.0, 510.0, 520.0)
+        val result = SpectralUnmixer.selectReferenceEmission(
+            wavelengths,
+            listOf(
+                SpectralCandidate(doubleArrayOf(0.0, 1.0, 0.0), doubleArrayOf(0.0, 0.0, 0.0)),
+                SpectralCandidate(doubleArrayOf(0.0, 2.0, 0.0), doubleArrayOf(0.0, 0.0, 0.0))
+            ),
+            booleanArrayOf(true, true, true)
+        )
+
+        assertEquals(1, result.candidateIndex)
+        assertEquals(20.0, result.auc, 1e-10)
+    }
+
+    @Test
+    fun unmixingKeepsEmissionScaleWhenBlankAndOffsetAreCollinear() {
+        val emission = doubleArrayOf(0.0, 1.0, 0.0, 2.0, 1.0, 0.0, 3.0)
+        val blank = DoubleArray(emission.size) { 2.0 }
+        val sample = DoubleArray(emission.size) { 2.0 * emission[it] + 3.0 * blank[it] + 4.0 }
+
+        val result = SpectralUnmixer.unmixSpectrum(
+            sample,
+            emission,
+            blank,
+            BooleanArray(emission.size) { true }
+        )
+
+        assertEquals(2.0, result.alpha, 1e-10)
+        assertEquals(1.0, result.r2, 1e-10)
+    }
+
+    @Test
+    fun descendingWavelengthAxisKeepsSpectraAlignedForReferenceSelection() {
+        val wavelengths = doubleArrayOf(530.0, 520.0, 510.0, 505.0, 500.0, 495.0, 490.0)
+        val sample = profile(floatArrayOf(0f, 0f, 0f, 0f, 10f, 0f, 0f))
+        val blank = profile(FloatArray(7))
+        val sampleSpectrum = SpectralUnmixer.extractChannelSpectra(
+            listOf(sample), wavelengths, "EGFP", null
+        ).single()
+        val blankSpectrum = SpectralUnmixer.extractChannelSpectra(
+            listOf(blank), wavelengths, "EGFP", null
+        ).single()
+        val mask = SpectralUnmixer.integrationMask(wavelengths, 502.0, 10.0)
+
+        val reference = SpectralUnmixer.selectReferenceEmission(
+            wavelengths,
+            listOf(SpectralCandidate(sampleSpectrum, blankSpectrum)),
+            mask
+        )
+
+        assertEquals(25.0, reference.auc, 1e-10)
+    }
+
+    private fun profile(green: FloatArray): FrameProfile {
+        val empty = FloatArray(green.size)
+        return FrameProfile(
+            width = green.size,
+            height = 1,
+            redProfile = green.copyOf(),
+            greenProfile = green,
+            blueProfile = green.copyOf(),
+            columnEnergy = empty,
+            exposureSeconds = 1.0,
+            sourceKind = "test",
+            xRoiStart = 0,
+            xRoiEnd = green.lastIndex
+        )
+    }
+}

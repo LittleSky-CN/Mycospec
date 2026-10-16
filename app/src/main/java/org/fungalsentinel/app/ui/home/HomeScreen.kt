@@ -1,11 +1,16 @@
 package org.fungalsentinel.app.ui.home
 
 import android.content.res.Configuration
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.History
@@ -16,132 +21,114 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.components.HalfScreenLayout
-import org.fungalsentinel.app.ui.components.HelpTopBar
+import org.fungalsentinel.app.ui.components.TutorialButton
 import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.ui.theme.AppColors
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNewProject: () -> Unit,
     onDngCamera: () -> Unit,
     onHistory: () -> Unit,
     onSettings: () -> Unit,
-    isHalfScreen: Boolean = false
+    isHalfScreen: Boolean = false,
+    coverRatio: Float = 0.5f
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    // FIX: the controller makes the top-bar ⓘ button actually open the dialog
     val tutorial = TutorialHost(
         stepId = "home",
         titleRes = R.string.tutorial_home_title,
         bodyRes = R.string.tutorial_home_body
     )
 
-    HalfScreenLayout(forceHalfScreen = isHalfScreen) { innerModifier ->
-        Scaffold(
-            modifier = innerModifier,
-            topBar = {
-                HelpTopBar(title = "MycoSpec", tutorial = tutorial)
+    HalfScreenLayout(forceHalfScreen = isHalfScreen, coverRatio = coverRatio) { innerModifier ->
+        Column(
+            modifier = innerModifier
+                .fillMaxSize()
+                .background(AppColors.Bg)
+                .verticalScroll(rememberScrollState())
+                .padding(if (isLandscape) 14.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isLandscape) 14.dp else 18.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Image(
+                    painter = painterResource(R.mipmap.mycospec_icon_foreground),
+                    contentDescription = stringResource(R.string.home_icon_desc),
+                    modifier = Modifier.size(54.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        color = AppColors.TextPrimary,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.home_tagline),
+                        color = AppColors.TextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                TutorialButton(onClick = tutorial::show)
             }
-        ) { padding ->
+
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth()
+                    .background(AppColors.Surface, RoundedCornerShape(12.dp))
+                    .border(1.dp, AppColors.Accent, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = stringResource(R.string.home_welcome),
-                    style = MaterialTheme.typography.headlineSmall,
+                    color = AppColors.TextPrimary,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = stringResource(R.string.home_intro),
+                    color = AppColors.TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+            }
 
-                if (isLandscape) {
-                    // Landscape: two columns so nothing is clipped
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            HomeCard(
-                                icon = Icons.Default.Add,
-                                title = stringResource(R.string.home_new_project),
-                                subtitle = stringResource(R.string.home_new_project_desc),
-                                onClick = onNewProject
-                            )
-                            HomeCard(
-                                icon = Icons.Default.CameraAlt,
-                                title = stringResource(R.string.home_dng_camera),
-                                subtitle = stringResource(R.string.home_dng_camera_desc),
-                                onClick = onDngCamera
-                            )
-                        }
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            HomeCard(
-                                icon = Icons.Default.History,
-                                title = stringResource(R.string.home_history),
-                                subtitle = stringResource(R.string.home_history_desc),
-                                onClick = onHistory
-                            )
-                            HomeCard(
-                                icon = Icons.Default.Settings,
-                                title = stringResource(R.string.home_settings),
-                                subtitle = stringResource(R.string.home_settings_desc),
-                                onClick = onSettings
-                            )
-                        }
+            if (isLandscape) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        HomeCard(Icons.Default.Add, R.string.home_new_project, R.string.home_new_project_desc, onNewProject)
+                        HomeCard(Icons.Default.CameraAlt, R.string.home_dng_camera, R.string.home_dng_camera_desc, onDngCamera)
                     }
-                } else {
-                    // Portrait: single column
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        HomeCard(
-                            icon = Icons.Default.Add,
-                            title = stringResource(R.string.home_new_project),
-                            subtitle = stringResource(R.string.home_new_project_desc),
-                            onClick = onNewProject
-                        )
-                        HomeCard(
-                            icon = Icons.Default.CameraAlt,
-                            title = stringResource(R.string.home_dng_camera),
-                            subtitle = stringResource(R.string.home_dng_camera_desc),
-                            onClick = onDngCamera
-                        )
-                        HomeCard(
-                            icon = Icons.Default.History,
-                            title = stringResource(R.string.home_history),
-                            subtitle = stringResource(R.string.home_history_desc),
-                            onClick = onHistory
-                        )
-                        HomeCard(
-                            icon = Icons.Default.Settings,
-                            title = stringResource(R.string.home_settings),
-                            subtitle = stringResource(R.string.home_settings_desc),
-                            onClick = onSettings
-                        )
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        HomeCard(Icons.Default.History, R.string.home_history, R.string.home_history_desc, onHistory)
+                        HomeCard(Icons.Default.Settings, R.string.home_settings, R.string.home_settings_desc, onSettings)
                     }
                 }
-                Spacer(modifier = Modifier.height(32.dp))
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeCard(Icons.Default.Add, R.string.home_new_project, R.string.home_new_project_desc, onNewProject)
+                    HomeCard(Icons.Default.CameraAlt, R.string.home_dng_camera, R.string.home_dng_camera_desc, onDngCamera)
+                    HomeCard(Icons.Default.History, R.string.home_history, R.string.home_history_desc, onHistory)
+                    HomeCard(Icons.Default.Settings, R.string.home_settings, R.string.home_settings_desc, onSettings)
+                }
             }
         }
     }
@@ -151,41 +138,46 @@ fun HomeScreen(
 @Composable
 private fun HomeCard(
     icon: ImageVector,
-    title: String,
-    subtitle: String,
+    titleRes: Int,
+    subtitleRes: Int,
     onClick: () -> Unit
 ) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = AppColors.Surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Outline)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(32.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
+            Box(
+                modifier = Modifier.size(42.dp).background(AppColors.Accent, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = AppColors.OnAccent, modifier = Modifier.size(22.dp))
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    title,
+                    text = stringResource(titleRes),
+                    color = AppColors.TextPrimary,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.TextSecondary
+                    text = stringResource(subtitleRes),
+                    color = AppColors.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = AppColors.Accent
+            )
         }
     }
 }

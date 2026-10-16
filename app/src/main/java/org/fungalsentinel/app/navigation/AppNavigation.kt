@@ -60,18 +60,20 @@ fun AppNavigation(navController: NavHostController) {
                 onDngCamera = { navController.navigate(Routes.DNG_CAMERA) },
                 onHistory = { navController.navigate(Routes.HISTORY) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
-                isHalfScreen = settings.halfScreenEnabled
+                isHalfScreen = settings.halfScreenEnabled,
+                coverRatio = settings.coverRatio
             )
         }
 
-        // 【修复】这里必须匹配 NewProjectScreen 的签名 (String, Boolean) -> Unit
         composable(Routes.NEW_PROJECT) {
             NewProjectScreen(
                 onProjectCreated = { name, hasBlueFilter ->
                     projectViewModel.createProject(name, hasBlueFilter)
                     navController.navigate(Routes.STEP1) { popUpTo(Routes.HOME) }
                 },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                isHalfScreen = settings.halfScreenEnabled,
+                coverRatio = settings.coverRatio
             )
         }
 
@@ -123,9 +125,14 @@ fun AppNavigation(navController: NavHostController) {
 
         composable(Routes.RESULT) {
             ResultScreen(
-                regressionFormula = projectState.reportData.regressionFormula,
+                slope = projectState.reportData.curveSlope,
+                intercept = projectState.reportData.curveIntercept,
+                isLogFit = projectState.reportData.isLogFit,
+                fallbackFormula = projectState.reportData.regressionFormula,
                 rSquared = projectState.reportData.regressionR2.toDoubleOrNull() ?: Double.NaN,
                 predictedConcentration = projectState.reportData.predictedConcentration.toDoubleOrNull(),
+                isHalfScreen = settings.halfScreenEnabled,
+                coverRatio = settings.coverRatio,
                 onFinish = {
                     projectViewModel.finishProject()
                     navController.navigate(Routes.HOME) {
@@ -143,12 +150,18 @@ fun AppNavigation(navController: NavHostController) {
         composable(Routes.REPORT) {
             ReportScreen(
                 projectViewModel = projectViewModel,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                isHalfScreen = settings.halfScreenEnabled,
+                coverRatio = settings.coverRatio
             )
         }
 
         composable(Routes.DNG_CAMERA) {
-            DngCameraScreen(onBack = { navController.popBackStack() })
+            DngCameraScreen(
+                onBack = { navController.popBackStack() },
+                isHalfScreen = settings.halfScreenEnabled,
+                coverRatio = settings.coverRatio
+            )
         }
 
         composable(Routes.HISTORY) {
@@ -170,7 +183,9 @@ fun AppNavigation(navController: NavHostController) {
                 onDelete = { project ->
                     scope.launch { dao.deleteProject(project) }
                 },
-                onExport = { /* TODO: ZIP export */ }
+                onExport = { /* TODO: ZIP export */ },
+                isHalfScreen = settings.halfScreenEnabled,
+                coverRatio = settings.coverRatio
             )
         }
 
@@ -207,7 +222,8 @@ fun AppNavigation(navController: NavHostController) {
                 onAutoExposureChange = { settingsViewModel.updateAutoExposure(it) },
                 onExposureChange = { settingsViewModel.updateExposureMs(it) },
                 onOpenPreview = { navController.navigate(Routes.HALF_PREVIEW) },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                isHalfScreen = settings.halfScreenEnabled
             )
         }
     }

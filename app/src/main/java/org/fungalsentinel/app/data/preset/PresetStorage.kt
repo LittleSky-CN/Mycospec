@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 object PresetTypes {
     const val WAVELENGTH = "WAVELENGTH"
     const val SPD = "SPD"
+    const val CURVE = "CURVE"
 }
 
 @Entity(tableName = "presets")

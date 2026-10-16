@@ -30,7 +30,7 @@ the device. It is **not** a general camera app and **not** an AI image classifie
 | 1 · Wavelength calibration | 1–5 R/G/B positioning frames | Pixel↔nm mapping (B+R two-point fit), auto X-ROI, G-point validation, quality grade |
 | 2 · Spectral response | 1–5 frames of a characterized source | Exposure-normalized R/G/B response coefficients |
 | 3 · Sample analysis | 1–5 Blank + 1–5 Sample frames | Blank-subtracted integrated area in the fluorophore band, replicate SD, corrected spectrum |
-| 4 · Standard curve | 2–10 concentration groups (Blank + Sample each) | OLS regression (formula, R²), predicted concentration, quality warnings |
+| 4 · Standard curve | 2–10 concentration groups (Blank + Sample each), or a saved curve preset | OLS regression (formula, R²), predicted concentration, quality warnings |
 
 A four-page **Analysis Report** (the *View Report* button on every step) collects
 all figures and parameters: positioning preview with ROI overlay, 1-D channel
@@ -49,6 +49,9 @@ blank-corrected spectrum, and the standard curve.
   triggered, cover ratio adjustable with a large preview in Settings
 - Standalone DNG camera (RAW saved to gallery), History records, Settings for
   positioning wavelengths / SPD source / blank mode / calibration protection
+- Save/load Step 4 curve presets locally; reference spectra are stored on a
+  wavelength (nm) axis, with the curve and SPD calibration, so a saved curve can
+  be applied to new Step 3 samples without reusing sensor pixel coordinates
 - No network permission and no uploads; results live in the local Room database
   and DataStore
 
@@ -127,7 +130,7 @@ MycoSpec 将支持 Camera2 RAW 的 Android 手机与固定的狭缝–光栅–�
 | 1 · 波长校准 | 1–5 张 R/G/B 定位帧 | 像素↔波长映射（B+R 两点拟合）、自动 X-ROI、G 点验证、质量等级 |
 | 2 · 光谱响应 | 1–5 张标准光源帧 | 曝光归一化的 R/G/B 通道响应系数 |
 | 3 · 样品分析 | 1–5 张 Blank + 1–5 张 Sample | 荧光波段扣空白积分面积、重复 SD、校正光谱 |
-| 4 · 标准曲线 | 2–10 个浓度组（各含 Blank+Sample） | 最小二乘回归（公式、R²）、预测浓度、质量警告 |
+| 4 · 标准曲线 | 2–10 个浓度组（各含 Blank+Sample），或载入已保存曲线预设 | 最小二乘回归（公式、R²）、预测浓度、质量警告 |
 
 每个步骤均提供 **View Report** 按钮，打开四页**分析报告**：定位预览与 ROI
 叠加图、三通道 1-D 轮廓、两点拟合 + G 点验证、响应轮廓、扣空白光谱与标准曲线。
@@ -144,6 +147,8 @@ MycoSpec 将支持 Camera2 RAW 的 Android 手机与固定的狭缝–光栅–�
 - 独立 DNG 相机（RAW 存入相册）、历史记录、设置页（定位波长 / SPD 来源 / 空白模式
   / 校准保护）
 - 无网络权限、无自动上传；数据仅存本地 Room 数据库与 DataStore
+- 支持本地保存/载入步骤 4 曲线预设；参考发射谱以波长（nm）保存，并一同保存
+  标准曲线与 SPD 校准，可应用于新的步骤 3 样品，不依赖传感器像素坐标
 
 ### 安装
 1. 从 [Releases](https://github.com/LittleSky-CN/Mycospec/releases) 下载最新 APK；

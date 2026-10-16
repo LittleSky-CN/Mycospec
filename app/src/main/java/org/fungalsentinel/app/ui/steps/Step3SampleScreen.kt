@@ -147,20 +147,18 @@ fun Step3SampleScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FluorophoreDropdown(
     selected: Fluorophore?, expanded: Boolean, onExpanded: (Boolean) -> Unit,
     onSelect: (Fluorophore) -> Unit, fillWidth: Boolean
 ) {
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = onExpanded) {
+    Box {
         Box(
             Modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
                 .background(AppColors.Surface, RoundedCornerShape(8.dp))
                 .border(1.dp, if (selected == null) AppColors.Error else AppColors.Outline, RoundedCornerShape(8.dp))
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 .clickable { onExpanded(true) }
+                .padding(horizontal = 10.dp, vertical = 6.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
