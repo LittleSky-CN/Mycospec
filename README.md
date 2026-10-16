@@ -3,15 +3,27 @@
 
 [English](#english) ｜ [中文](#中文)
 
+> **MycoSpec — v2.2.6** (Android frontend of the Fungal Sentinel software stack)
+>
 > **Naming / 命名说明**
-> | 名称 | 含义 |
-> |---|---|
-> | **Fungal Sentinel** | iGEM team project (wet lab + hardware + software) / iGEM 大项目名 |
-> | **OptiX** | Hardware project / 硬件项目 |
-> | **FSSA v1.3.4** | Python desktop spectral analyzer (reference implementation) / Python 桌面版参考实现 |
-> | **MycoSpec** | This Android app / 本 Android 应用 |
+> | 名称 | 版本 | 含义 |
+> |---|---|---|
+> | **Fungal Sentinel** | — | iGEM team project (wet lab + hardware + software) / iGEM 大项目名 |
+> | **OptiX** | — | Hardware project / 硬件项目 |
+> | **FSSA** | v1.4.5 | Python desktop spectral analyzer (reference implementation) / Python 桌面版参考实现 |
+> | **MycoSpec** | v2.2.6 | This Android app / 本 Android 应用 |
+>
+> The Android app was originally shipped under the same name **FSSA** during its
+> 1.x releases. It was renamed **MycoSpec** from v2.0.0 onwards so that the
+> desktop reference implementation and the mobile client could be told apart in
+> papers, reports and the wiki. The two are distinct deliverables: FSSA is the
+> Python code base, MycoSpec is this Kotlin/Android code base.
 >
 > The Android application ID remains `org.fungalsentinel.app` so signed upgrades install over older builds. / 应用 ID 保持 `org.fungalsentinel.app`，保证旧版覆盖安装兼容。
+>
+> MycoSpec 在 1.x 时期曾沿用 **FSSA** 之名；自 v2.0.0 起更名为 **MycoSpec**，以便与
+> Python 桌面参考实现 FSSA 区分。两者是彼此独立的交付物：FSSA 指 Python 代码库，
+> MycoSpec 指本 Kotlin/Android 代码库。
 
 ---
 
@@ -96,12 +108,18 @@ app/src/main/java/org/fungalsentinel/app/
 - Emulators validate UI and flow only — never spectral accuracy.
 - Live Camera2 RAW capture is under integration in this milestone; use
   **Gallery / Files (DNG)** upload to exercise the analysis pipeline.
-- Cross-check formal results against Python FSSA v1.3.4 on the same DNG set.
+- Cross-check formal results against Python FSSA v1.4.5 on the same DNG set.
 
 ### Versioning
-Repository milestone **v2.0.0** (first public Android milestone); app module
-`versionName 1.3.8 / versionCode 10`; workflow semantics aligned with Python
-FSSA v1.3.4.
+Current version **v2.2.6** — the single authoritative version number across this
+repository, the app module (`versionName 2.2.6 / versionCode 226`), in-app text
+and every cross-reference to this build. Earlier public milestones (v2.0.0,
+v2.0.1) are retained only as Git history / tags.
+
+Analysis semantics are aligned with Python **FSSA v1.4.5**; in particular the
+Step 2 channel fusion uses response-proportional normalisation on both sides
+(`w_c = resp_c / Σ resp_c`, `Σ w_c = 1`), so the same DNG gives the same result
+on phone and desktop.
 
 ### Roadmap
 - Live Camera2 RAW capture with manual exposure / ISO / focus / WB
@@ -111,8 +129,9 @@ FSSA v1.3.4.
 - Tutorial illustrations & animations; accessibility (TalkBack) pass
 
 ### License & citation
-License: see `LICENSE` (to be added). Developed by the iGEM Fungal Sentinel team
-as part of the project software submission.
+License: **MIT** (see `LICENSE`) — the same OSI-approved license used by the
+Python FSSA repository. Developed by the iGEM Fungal Sentinel team as part of
+the project software submission.
 
 ---
 
@@ -172,11 +191,15 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 - 正式定量需固定光路、已知 R/G/B 波长、匹配 SPD 的标准光源与规范的空白/标准品；
 - 模拟器只能验证界面与流程，不能验证光谱准确性；
 - 本里程碑实时 Camera2 RAW 拍摄仍在接入中，分析流程请用相册 / 文件（DNG）导入验证；
-- 正式结果应与 Python FSSA v1.3.4 在同一批 DNG 上对照。
+- 正式结果应与 Python FSSA v1.4.5 在同一批 DNG 上对照。
 
 ### 版本
-仓库里程碑 **v2.0.0**（首个公开 Android 里程碑）；应用模块 `versionName 1.3.8 /
-versionCode 10`；流程语义与 Python FSSA v1.3.4 对齐。
+当前版本 **v2.2.6** —— 本仓库、应用模块（`versionName 2.2.6 / versionCode 226`）、
+应用内文案与所有交叉引用统一使用这一个版本号。更早的公开里程碑（v2.0.0、v2.0.1）
+仅作为 Git 历史/标签保留。
+
+分析语义与 Python **FSSA v1.4.5** 对齐；尤其步骤 2 的通道融合两端均采用响应比例
+归一（`w_c = resp_c / Σ resp_c`，`Σ w_c = 1`），同一批 DNG 在手机与桌面端得到一致结果。
 
 ### 路线图
 - 实时 Camera2 RAW 拍摄与手动曝光 / ISO / 焦距 / 白平衡

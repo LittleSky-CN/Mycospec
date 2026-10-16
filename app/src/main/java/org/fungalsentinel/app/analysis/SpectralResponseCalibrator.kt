@@ -7,7 +7,6 @@ import org.json.JSONObject
 import java.io.File
 import java.io.InputStreamReader
 import kotlin.math.abs
-import kotlin.math.exp
 import kotlin.math.max
 
 data class SpdCalibrationResult(
@@ -20,8 +19,9 @@ data class SpdCalibrationResult(
     val mask: BooleanArray,
     val effectiveBandNm: Pair<Float, Float>,
     val maskedCount: Int, val totalCount: Int, val thresholdRatio: Float,
-    val handoffBG: Float, val handoffGR: Float,
-    val logisticWidthNm: Float,
+    // Diagnostic only: wavelengths where two adjacent channels have EQUAL
+    // responsivity. These do NOT drive the fusion weights.
+    val crossingBG: Float, val crossingGR: Float,
     val agreementPct: Float,
     val peakRespR: Pair<Float, Float>, val peakRespG: Pair<Float, Float>, val peakRespB: Pair<Float, Float>,
     val fusedPeak: Pair<Float, Float>,
@@ -30,23 +30,21 @@ data class SpdCalibrationResult(
 )
 
 /**
- * FSSA core/calibration.py + core/fusion.py parity:
+ * Python FSSA core/calibration.py + core/fusion.py parity:
  *  resp_c = Lamp_c / (SPD_true + 1e-6), range- and SPD-masked
  *  No smoothing is applied to the response curves.
  *  Corrected_c = Pos_c / resp_c  (guarded division > 1e-6; INDEPENDENT numerator)
- *  weights: logistic handoff relay, width 15 nm, w_B+w_G+w_R = 1 pointwise
- *  Fused = w_B·Corr_B + w_G·Corr_G + w_R·Corr_R (single C0-continuous curve)
+ *  weights: RESPONSE-PROPORTIONAL normalisation
+ *           w_c(λ) = resp_c(λ) / (resp_R + resp_G + resp_B + eps), Σ w_c = 1 pointwise
+ *  Fused = w_B·Corr_B + w_G·Corr_G + w_R·Corr_R (single continuous curve)
+ *
+ * The Python build implements byte-for-byte the same rule in core/fusion.py,
+ * so Step 2 results are interchangeable between desktop and phone.
  */
 object SpectralResponseCalibrator {
     private const val EPS = 1e-6f
-    private const val LOGISTIC_WIDTH_NM = 15.0f
-    private const val DEFAULT_HBG = 483.0f
-    private const val DEFAULT_HGR = 577.0f
-
-    private fun logistic(x: Float): Float {
-        val t = x.coerceIn(-500f, 500f).toDouble()
-        return (1.0 / (1.0 + exp(-t))).toFloat()
-    }
+    private const val DEFAULT_CROSSING_BG = 483.0f
+    private const val DEFAULT_CROSSING_GR = 577.0f
 
     fun calibrate(
         lampFrames: List<FrameProfile>, posFrames: List<FrameProfile>,
@@ -109,19 +107,22 @@ object SpectralResponseCalibrator {
             respR[i] = lampR[i] / s; respG[i] = lampG[i] / s; respB[i] = lampB[i] / s
         }
 
-        // Find channel handoffs on the unmodified response curves (for display/parameters).
-        var hBG = DEFAULT_HBG; var best = Float.POSITIVE_INFINITY
+        // Diagnostic only: responsivity crossings on the unmodified response
+        // curves (reported as figures of merit; they do NOT build the weights).
+        var xBG = DEFAULT_CROSSING_BG; var best = Float.POSITIVE_INFINITY
         for (i in 0 until n) if (mask[i] && respB[i] > 0f && respG[i] > 0f) {
             val d = abs(respB[i] - respG[i])
-            if (d < best) { best = d; hBG = lam[i] }
+            if (d < best) { best = d; xBG = lam[i] }
         }
-        var hGR = DEFAULT_HGR; best = Float.POSITIVE_INFINITY
-        for (i in 0 until n) if (mask[i] && respG[i] > 0f && respR[i] > 0f && lam[i] > hBG + 20f) {
+        var xGR = DEFAULT_CROSSING_GR; best = Float.POSITIVE_INFINITY
+        for (i in 0 until n) if (mask[i] && respG[i] > 0f && respR[i] > 0f && lam[i] > xBG + 20f) {
             val d = abs(respG[i] - respR[i])
-            if (d < best) { best = d; hGR = lam[i] }
+            if (d < best) { best = d; xGR = lam[i] }
         }
 
-        // 逐波长动态加权融合权重 (w_c = resp_c / sum_c resp_c)
+        // RESPONSE-PROPORTIONAL FUSION WEIGHTS: w_c = resp_c / Σresp_c  (Σ w_c = 1)
+        // Each wavelength is carried by whichever channel is genuinely most
+        // sensitive there. Identical to Python FSSA core/fusion.py.
         val wB = FloatArray(n); val wG = FloatArray(n); val wR = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
@@ -189,7 +190,7 @@ object SpectralResponseCalibrator {
             lam, respR, respG, respB, posR, posG, posB, corrR, corrG, corrB,
             wB, wG, wR, fused, mask,
             (order.firstOrNull()?.let { lam[it] } ?: 0f) to (order.lastOrNull()?.let { lam[it] } ?: 0f),
-            maskedCount, n, thresholdRatio, hBG, hGR, LOGISTIC_WIDTH_NM, agreementPct,
+            maskedCount, n, thresholdRatio, xBG, xGR, agreementPct,
             peakOf(respR), peakOf(respG), peakOf(respB),
             fPeak to fPeakL, exposure, lampFrames.size, spdSource
         )
@@ -209,8 +210,7 @@ object SpectralResponseCalibrator {
         o.put("bandLo", r.effectiveBandNm.first.toDouble()); o.put("bandHi", r.effectiveBandNm.second.toDouble())
         o.put("maskedCount", r.maskedCount); o.put("totalCount", r.totalCount)
         o.put("thresholdRatio", r.thresholdRatio.toDouble())
-        o.put("handoffBG", r.handoffBG.toDouble()); o.put("handoffGR", r.handoffGR.toDouble())
-        o.put("logisticWidth", r.logisticWidthNm.toDouble())
+        o.put("crossingBG", r.crossingBG.toDouble()); o.put("crossingGR", r.crossingGR.toDouble())
         o.put("agreementPct", r.agreementPct.toDouble())
         fun jp(p: Pair<Float, Float>) = JSONArray().put(p.first.toDouble()).put(p.second.toDouble())
         o.put("peakR", jp(r.peakRespR)); o.put("peakG", jp(r.peakRespG)); o.put("peakB", jp(r.peakRespB))
@@ -235,10 +235,10 @@ object SpectralResponseCalibrator {
             fa("fused"), BooleanArray(ma.length()) { ma.getInt(it) == 1 },
             o.getDouble("bandLo").toFloat() to o.getDouble("bandHi").toFloat(),
             o.getInt("maskedCount"), o.getInt("totalCount"), o.getDouble("thresholdRatio").toFloat(),
-            if (version >= 2) o.getDouble("handoffBG").toFloat() else (if (o.isNull("handoffBG")) DEFAULT_HBG else o.getDouble("handoffBG").toFloat()),
-            if (version >= 2) o.getDouble("handoffGR").toFloat() else (if (o.isNull("handoffGR")) DEFAULT_HGR else o.getDouble("handoffGR").toFloat()),
-            if (version >= 2) o.getDouble("logisticWidth").toFloat() else LOGISTIC_WIDTH_NM,
-            if (version >= 2) o.getDouble("agreementPct").toFloat() else 0f,
+            val readBG = o.optDouble("crossingBG", o.optDouble("handoffBG", DEFAULT_CROSSING_BG.toDouble())).toFloat()
+            val readGR = o.optDouble("crossingGR", o.optDouble("handoffGR", DEFAULT_CROSSING_GR.toDouble())).toFloat()
+            readBG, readGR,
+            o.optDouble("agreementPct", 0.0).toFloat(),
             pa("peakR"), pa("peakG"), pa("peakB"), pa("fusedPeak"), o.getDouble("exposure"), o.getInt("frames"),
             o.optString("spdSource", "preset"), o.optBoolean("rbSwapped", false)
         )

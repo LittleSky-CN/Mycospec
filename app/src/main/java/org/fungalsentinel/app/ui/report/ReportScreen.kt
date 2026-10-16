@@ -75,7 +75,7 @@ fun ReportScreen(
                 color = AppColors.TextPrimary
             )
 
-            // ═══════ PAGE 1 — Wavelength calibration (v1.4.5 estimator) ═══════
+            // ═══════ PAGE 1 — Wavelength calibration (parity: FSSA v1.4.5) ═══════
             PageCard(page = 1, title = "Step 1: Wavelength Calibration") {
                 StatusLine(r.step1Status)
                 if (r.previewUri != null && r.roiStart != null && r.roiEnd != null && r.sensorWidth != null) {
@@ -159,8 +159,8 @@ fun ReportScreen(
                 QualityBadge(r.wavelengthQuality)
             }
 
-            // ══════ PAGE 2 — SPD response & logistic fusion (v1.4.4) ═══════
-            PageCard(page = 2, title = "Step 2: Spectral Response & Fusion (v1.4.4)") {
+            // ══════ PAGE 2 — SPD response & response-proportional fusion ═══════
+            PageCard(page = 2, title = "Step 2: Spectral Response & Fusion — MycoSpec v2.2.6") {
                 StatusLine(r.step2Status)
                 if (r.spdLambda.isNotEmpty()) {
                     if (r.spdPosR.isNotEmpty()) {
@@ -184,20 +184,20 @@ fun ReportScreen(
                         r.spdRespG to AppColors.Chart.G,
                         r.spdRespB to AppColors.Chart.B
                     ))
-                    FigureLabel("Figure 4d: Logistic channel weights (sum = 1) with handoffs")
+                    FigureLabel("Figure 4d: Response-proportional channel weights (sum = 1) with responsivity crossings")
                     MultiLineChartX(r.spdLambda, listOf(
                         r.spdWB to AppColors.Chart.B,
                         r.spdWG to AppColors.Chart.G,
                         r.spdWR to AppColors.Chart.R
                     ), widths = listOf(2.5f, 2.5f, 2.5f),
-                        vLines = listOf(r.spdHandoffBG, r.spdHandoffGR))
+                        vLines = listOf(r.spdCrossingBG, r.spdCrossingGR))
                     Spacer(Modifier.height(8.dp))
                 }
                 SectionTitle("SPD Response & Fusion Parameters")
                 ReportLine("Status / source", "${r.spdStatus} · ${r.spdSource}")
                 ReportLine("Frames / Exposure", "${r.spdFrames} / ${r.spdExposure}")
                 ReportLine("[Effective Band]", "${r.spdEffectiveBand} | masked px ${r.spdMasked} | ratio 0.1")
-                ReportLine("[Handoff Wavelengths]", r.spdHandoffs)
+                ReportLine("[Responsivity Crossings (diagnostic only)]", r.spdHandoffs)
                 ReportLine("[Cross-channel Agreement]", r.spdAgreement)
                 ReportLine("[Fused Curve Peak]", r.spdFusedPeak)
                 ReportLine("[Response Peaks (absolute)]", r.spdPeaks)

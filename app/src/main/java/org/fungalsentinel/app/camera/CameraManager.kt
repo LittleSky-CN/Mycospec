@@ -440,7 +440,7 @@ class CameraManager(private val context: Context) {
     private fun saveDng(image: Image, metadata: CaptureMetadata, result: TotalCaptureResult) {
         val chars = cameraCharacteristics ?: return
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
-        val file = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "FSSA_RAW_$ts.dng")
+        val file = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "MycoSpec_RAW_$ts.dng")
         try {
             val dngCreator = DngCreator(chars, result)
             dngCreator.setOrientation(android.media.ExifInterface.ORIENTATION_NORMAL)

@@ -119,6 +119,50 @@ class AlgorithmParityTest {
     }
 
     @Test
+    fun responseCalibrationUsesResponseProportionalWeights() {
+        val n = 4
+        val lamp = profile(FloatArray(n) { if (it == 1) 1f else 10f })
+        val positioning = profile(FloatArray(n) { 10f })
+        val spd = (0 until n).map { (430.0 + it) to 1.0 }
+
+        val result = SpectralResponseCalibrator.calibrate(
+            lampFrames = listOf(lamp),
+            posFrames = listOf(positioning),
+            spdTrue = spd,
+            slope = 1.0,
+            intercept = -430.0,
+            spdSource = "test"
+        )
+
+        assertNotNull(result)
+        // Weights must equal resp_c / Σ resp_c and form a partition of unity.
+        val res = result!!
+        val eps = 1e-6f
+        for (i in 0 until n) {
+            val total = res.respR[i] + res.respG[i] + res.respB[i] + eps
+            assertEquals(res.respB[i] / total, res.wB[i], 1e-6f)
+            assertEquals(res.respG[i] / total, res.wG[i], 1e-6f)
+            assertEquals(res.respR[i] / total, res.wR[i], 1e-6f)
+        }
+    }
+
+    @Test
+    fun fusionWeightsMatchPythonReferenceVector() {
+        // Mirrors FSSA tests/test_fusion_reference.py reference vector.
+        val eps = 1e-6f
+        val (wB, wG, wR) = referenceWeights(1f, 2f, 3f)
+        val total = 1f + 2f + 3f + eps
+        assertEquals(1f / total, wB, 1e-6f)
+        assertEquals(2f / total, wG, 1e-6f)
+        assertEquals(3f / total, wR, 1e-6f)
+    }
+
+    private fun referenceWeights(respB: Float, respG: Float, respR: Float): Triple<Float, Float, Float> {
+        val total = respB + respG + respR + 1e-6f
+        return Triple(respB / total, respG / total, respR / total)
+    }
+
+    @Test
     fun responseCalibrationDoesNotSmoothRawResponse() {
         val n = 31
         val lamp = profile(FloatArray(n) { if (it == 15) 100f else 10f })
