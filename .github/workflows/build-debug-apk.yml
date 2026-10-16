@@ -47,10 +47,28 @@ jobs:
           mkdir -p "$SDK/licenses"
           printf '24333f8a63b6825ea9c5514f83c2829b004d1fee\n' > "$SDK/licenses/android-sdk-license"
           printf '84831b9409646a918e30573bab4c9c91346d8abd\n' > "$SDK/licenses/android-sdk-preview-license"
-          # compileSdk is 37, which is only published on the canary channel
-          # (repository2-3.xml); the stable channel tops out at 36.
-          yes | "$CMDLINE" --licenses --channel=3 > /dev/null 2>&1 || true
-          "$CMDLINE" --channel=3 --install "platforms;android-37" "build-tools;37.0.0"
+          # compileSdk is 37. That platform is absent from the stable channel
+          # (which tops out at 36), and on the canary channel it is published as
+          # "platforms;android-37.0", so `sdkmanager --install platforms;android-37`
+          # reports "Failed to find package" even with --channel=3. Fetch the
+          # archives straight from dl.google.com and unpack them under the names
+          # the Android Gradle Plugin looks for.
+          yes | "$CMDLINE" --licenses > /dev/null 2>&1 || true
+          install_pkg() {
+            curl -fsSL -o /tmp/pkg.zip "$1"
+            rm -rf /tmp/pkgx && mkdir -p /tmp/pkgx
+            unzip -q /tmp/pkg.zip -d /tmp/pkgx
+            src="$(find /tmp/pkgx -mindepth 1 -maxdepth 1 -type d | head -1)"
+            rm -rf "$2"
+            mkdir -p "$(dirname "$2")"
+            mv "$src" "$2"
+            echo "installed $2"
+          }
+          install_pkg "https://dl.google.com/android/repository/platform-37.0_r01.zip" \
+                      "$SDK/platforms/android-37"
+          install_pkg "https://dl.google.com/android/repository/build-tools_r37_linux.zip" \
+                      "$SDK/build-tools/37.0.0"
+          ls "$SDK/platforms" "$SDK/build-tools"
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
