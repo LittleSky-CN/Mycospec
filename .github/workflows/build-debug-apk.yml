@@ -1,0 +1,107 @@
+name: Build debug APK
+
+# Builds the debug APK from the current source and, on a tag, publishes it as a
+# pre-release. Also runnable by hand from the Actions tab for a one-off build.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-debug-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: assembleDebug
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # gradle/gradle-daemon-jvm.properties pins a JetBrains JDK 21 toolchain.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: jetbrains
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/MycoSpec-${GITHUB_REF_NAME}-debug.apk"
+          ls -lh dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mycospec-debug-apk
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Write release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          cat > dist/notes.md <<'EOF'
+          ## MycoSpec — debug pre-release
+
+          MycoSpec is the Android front end of the Fungal Sentinel software stack.
+          Paired with the OptiX grating hardware, it turns a RAW-capable phone into a
+          calibrated fluorescence spectrometer and runs the whole analysis on-device,
+          fully offline.
+
+          **This is a `debug` build** — unsigned with the public debug key, not
+          optimised, and intended for testing and for iGEM review. Do not use it to
+          produce measurements you intend to publish.
+
+          ### What is included
+
+          - Wavelength calibration from three known LED peaks, validated on a held-out third peak.
+          - Spectral-response calibration against a characterised lamp SPD.
+          - Sample analysis with spectral unmixing (emission separated from scatter and offset before integration).
+          - Concentration quantification with a fitted standard curve.
+          - Exportable calibration and standard-curve presets (reference spectra stored on a wavelength axis, not in sensor pixels).
+
+          ### Notes on this build
+
+          - Channel fusion uses response-proportional weighting, `w_c(λ) = resp_c / Σ resp_c` with `Σ w_c = 1`, identical to the Python reference implementation FSSA v1.4.5. The retired logistic handoff relay is gone from both the code and the UI.
+          - Version reporting is unified: `versionName 2.2.6`, `versionCode 226`.
+
+          ### Requirements
+
+          Android 7.0 (API 24) or later, and a camera that exposes RAW frames through Camera2.
+
+          ### Known limitations
+
+          - Quantification currently fits by ordinary least squares; weighted regression and IUPAC LoD/LoQ reporting are not yet ported to Android (they exist in FSSA).
+          - No network permission is requested and no telemetry is collected.
+          EOF
+
+      - name: Publish pre-release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --title "MycoSpec ${GITHUB_REF_NAME} (debug pre-release)" \
+            --notes-file dist/notes.md \
+            dist/*.apk

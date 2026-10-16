@@ -227,6 +227,9 @@ object SpectralResponseCalibrator {
         val ma = o.getJSONArray("mask")
         val version = o.optInt("version", 1)
         val empty = FloatArray(0)
+        // v2 renamed handoffBG/GR -> crossingBG/GR; keep reading the old keys.
+        val readBG = o.optDouble("crossingBG", o.optDouble("handoffBG", DEFAULT_CROSSING_BG.toDouble())).toFloat()
+        val readGR = o.optDouble("crossingGR", o.optDouble("handoffGR", DEFAULT_CROSSING_GR.toDouble())).toFloat()
         SpdCalibrationResult(
             fa("wavelengths"), fa("respR"), fa("respG"), fa("respB"),
             if (version >= 2) fa("posR") else empty, if (version >= 2) fa("posG") else empty, if (version >= 2) fa("posB") else empty,
@@ -235,8 +238,6 @@ object SpectralResponseCalibrator {
             fa("fused"), BooleanArray(ma.length()) { ma.getInt(it) == 1 },
             o.getDouble("bandLo").toFloat() to o.getDouble("bandHi").toFloat(),
             o.getInt("maskedCount"), o.getInt("totalCount"), o.getDouble("thresholdRatio").toFloat(),
-            val readBG = o.optDouble("crossingBG", o.optDouble("handoffBG", DEFAULT_CROSSING_BG.toDouble())).toFloat()
-            val readGR = o.optDouble("crossingGR", o.optDouble("handoffGR", DEFAULT_CROSSING_GR.toDouble())).toFloat()
             readBG, readGR,
             o.optDouble("agreementPct", 0.0).toFloat(),
             pa("peakR"), pa("peakG"), pa("peakB"), pa("fusedPeak"), o.getDouble("exposure"), o.getInt("frames"),

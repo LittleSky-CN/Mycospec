@@ -120,8 +120,15 @@ class AlgorithmParityTest {
 
     @Test
     fun responseCalibrationUsesResponseProportionalWeights() {
-        val n = 4
-        val lamp = profile(FloatArray(n) { if (it == 1) 1f else 10f })
+        // calibrate() requires n >= 10 and >= 10 masked wavelengths.
+        val n = 31
+        // Distinct per-channel lamp responses, so the proportions are non-trivial
+        // (a shared profile would degenerate to w = 1/3 everywhere).
+        val lamp = profile3(
+            red = FloatArray(n) { 1f + it * 0.5f },
+            green = FloatArray(n) { 8f },
+            blue = FloatArray(n) { 16f - it * 0.4f }
+        )
         val positioning = profile(FloatArray(n) { 10f })
         val spd = (0 until n).map { (430.0 + it) to 1.0 }
 
@@ -138,12 +145,17 @@ class AlgorithmParityTest {
         // Weights must equal resp_c / Σ resp_c and form a partition of unity.
         val res = result!!
         val eps = 1e-6f
+        var checked = 0
         for (i in 0 until n) {
+            if (!res.mask[i]) continue
             val total = res.respR[i] + res.respG[i] + res.respB[i] + eps
-            assertEquals(res.respB[i] / total, res.wB[i], 1e-6f)
-            assertEquals(res.respG[i] / total, res.wG[i], 1e-6f)
             assertEquals(res.respR[i] / total, res.wR[i], 1e-6f)
+            assertEquals(res.respG[i] / total, res.wG[i], 1e-6f)
+            assertEquals(res.respB[i] / total, res.wB[i], 1e-6f)
+            assertEquals(1f, res.wR[i] + res.wG[i] + res.wB[i], 1e-5f)
+            checked++
         }
+        assertTrue("expected at least 10 masked wavelengths, got $checked", checked >= 10)
     }
 
     @Test
@@ -283,6 +295,21 @@ class AlgorithmParityTest {
         )
 
         assertEquals(25.0, reference.auc, 1e-10)
+    }
+
+    private fun profile3(red: FloatArray, green: FloatArray, blue: FloatArray): FrameProfile {
+        return FrameProfile(
+            width = red.size,
+            height = 1,
+            redProfile = red,
+            greenProfile = green,
+            blueProfile = blue,
+            columnEnergy = FloatArray(red.size),
+            exposureSeconds = 1.0,
+            sourceKind = "test",
+            xRoiStart = 0,
+            xRoiEnd = red.lastIndex
+        )
     }
 
     private fun profile(green: FloatArray): FrameProfile {
