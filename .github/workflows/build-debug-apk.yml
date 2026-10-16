@@ -73,6 +73,27 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
+      # settings.gradle.kts puts the Aliyun mirrors first so that builds in China
+      # are fast. Those mirrors do not resolve com.google.devtools.ksp from the
+      # GitHub network, and Gradle reports the plugin as simply "not found".
+      # Drop them for CI runs and use the upstream repositories instead.
+      - name: Use upstream repositories for CI
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cat > "$HOME/.gradle/init.d/ci-repos.gradle" <<'EOF'
+          settingsEvaluated { settings ->
+              settings.pluginManagement.repositories.clear()
+              settings.pluginManagement.repositories.gradlePluginPortal()
+              settings.pluginManagement.repositories.mavenCentral()
+              settings.pluginManagement.repositories.google()
+
+              settings.dependencyResolutionManagement.repositories.clear()
+              settings.dependencyResolutionManagement.repositories.google()
+              settings.dependencyResolutionManagement.repositories.mavenCentral()
+          }
+          EOF
+          cat "$HOME/.gradle/init.d/ci-repos.gradle"
+
       # The wrapper points at a Tencent mirror (fast in China) that may not be
       # reachable from GitHub's runners. Fall back to services.gradle.org if so.
       # The committed file is left alone; only the checkout is patched.
@@ -151,9 +172,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --prerelease \
-            --title "MycoSpec ${GITHUB_REF_NAME} (debug pre-release)" \
-            --notes-file dist/notes.md \
-            dist/*.apk
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "release already exists; replacing its APK"
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" dist/*.apk --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --prerelease \
+              --title "MycoSpec ${GITHUB_REF_NAME} (debug pre-release)" \
+              --notes-file dist/notes.md \
+              dist/*.apk
+          fi
