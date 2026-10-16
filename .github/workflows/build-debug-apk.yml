@@ -47,8 +47,10 @@ jobs:
           mkdir -p "$SDK/licenses"
           printf '24333f8a63b6825ea9c5514f83c2829b004d1fee\n' > "$SDK/licenses/android-sdk-license"
           printf '84831b9409646a918e30573bab4c9c91346d8abd\n' > "$SDK/licenses/android-sdk-preview-license"
-          yes | "$CMDLINE" --licenses > /dev/null 2>&1 || true
-          "$CMDLINE" --install "platforms;android-37" "build-tools;37.0.0" "platform-tools"
+          # compileSdk is 37, which is only published on the canary channel
+          # (repository2-3.xml); the stable channel tops out at 36.
+          yes | "$CMDLINE" --licenses --channel=3 > /dev/null 2>&1 || true
+          "$CMDLINE" --channel=3 --install "platforms;android-37" "build-tools;37.0.0"
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
