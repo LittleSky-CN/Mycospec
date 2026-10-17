@@ -19,16 +19,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.fungalsentinel.app.R
+import org.fungalsentinel.app.data.model.Fluorophore
+import org.fungalsentinel.app.data.model.canonicalFluorophore
 import org.fungalsentinel.app.ui.capture.CaptureUploadScreen
 import org.fungalsentinel.app.ui.components.*
 import org.fungalsentinel.app.ui.theme.AppColors
 import org.fungalsentinel.app.ui.theme.statusTextColor
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
-
-enum class Fluorophore(val displayName: String, val bandNm: String) {
-    YPET("Ypet", "500-530 nm"), EGFP("EGFP", "500-540 nm"), MCHERRY("mCherry", "590-630nm"),
-    CFP("CFP", "460-490 nm"), MTURQUOISE2("mTurquoise2", "460-490 nm"), FLUORESCEIN("Fluorescein", "500-540 nm")
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +39,9 @@ fun Step3SampleScreen(
     val sampleCaptures = uiState.sampleCaptures
     val report = uiState.reportData
 
-    val reportFluor = Fluorophore.values().find { it.name == report.sampleFluorophore }
+    // 经由 canonicalFluorophore 解析：Python FSSA 导出的 preset 可能带 "mCherry" /
+    // "Fluorescein (sodium salt)" 这类非 canonical 写法，精确匹配会静默丢值
+    val reportFluor = canonicalFluorophore(report.sampleFluorophore)
     var selectedFluorophore by remember(report.sampleFluorophore) { mutableStateOf(reportFluor) }
     var showBlankCapture by remember { mutableStateOf(false) }
     var showSampleCapture by remember { mutableStateOf(false) }
@@ -162,7 +161,7 @@ private fun FluorophoreDropdown(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    selected?.let { "${it.displayName} (${it.bandNm})" } ?: "— 请选择荧光物质 —",
+                    selected?.let { "${it.displayName} (${it.integrationRangeNm})" } ?: "— 请选择荧光物质 —",
                     color = if (selected == null) AppColors.Error else AppColors.TextPrimary,
                     fontWeight = FontWeight.SemiBold, fontSize = 13.sp
                 )
@@ -172,7 +171,7 @@ private fun FluorophoreDropdown(
         DropdownMenu(expanded, { onExpanded(false) }, Modifier.background(AppColors.Surface)) {
             Fluorophore.values().forEach { f ->
                 DropdownMenuItem(
-                    text = { Text("${f.displayName} (${f.bandNm})", color = AppColors.TextPrimary,
+                    text = { Text("${f.displayName} (${f.integrationRangeNm})", color = AppColors.TextPrimary,
                         fontWeight = if (f == selected) FontWeight.Bold else FontWeight.Normal, fontSize = 13.sp) },
                     onClick = { onSelect(f); onExpanded(false) }
                 )

@@ -3,6 +3,8 @@ package org.fungalsentinel.app.analysis
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.sqrt
+import org.fungalsentinel.app.data.model.Fluorophore
+import org.fungalsentinel.app.data.model.canonicalFluorophore
 
 data class SampleAnalysisResult(
     val channel: String,
@@ -65,9 +67,11 @@ object SampleAnalyzer {
         responseThresholdFraction: Float = 0.20f
     ): SampleAnalysisResult? {
         if (blankFrames.isEmpty() || sampleFrames.isEmpty()) return null
-        val channel = when (fluorophore) {
-            "MCHERRY" -> "R"
-            "CFP", "MTURQUOISE2" -> "B"
+        // 走 canonicalFluorophore：原来这里是大小写敏感的精确匹配，"mCherry"
+        // 会被判成默认的 "G" 通道（真 bug），现在按 enum 分支不会被写法规避过去
+        val channel = when (canonicalFluorophore(fluorophore)) {
+            Fluorophore.MCHERRY -> "R"
+            Fluorophore.CFP, Fluorophore.MTURQUOISE2 -> "B"
             else -> "G"
         }
         val sel: (FrameProfile) -> FloatArray = when (channel) {

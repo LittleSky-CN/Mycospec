@@ -2,6 +2,8 @@ package org.fungalsentinel.app.analysis
 
 import kotlin.math.max
 import kotlin.math.sqrt
+import org.fungalsentinel.app.data.model.Fluorophore
+import org.fungalsentinel.app.data.model.canonicalFluorophore
 
 data class SpectralCandidate(
     val sampleMean: DoubleArray,
@@ -48,9 +50,9 @@ object SpectralUnmixer {
         }) {
             "Wavelength axis must be strictly ordered"
         }
-        val channel = when (fluorophore.uppercase()) {
-            "MCHERRY" -> 0
-            "CFP", "MTURQUOISE2" -> 2
+        val channel = when (canonicalFluorophore(fluorophore)) {
+            Fluorophore.MCHERRY -> 0
+            Fluorophore.CFP, Fluorophore.MTURQUOISE2 -> 2
             else -> 1
         }
         val response = spd?.let {

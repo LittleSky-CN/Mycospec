@@ -35,8 +35,10 @@ import org.fungalsentinel.app.analysis.recomputeWith
 import org.fungalsentinel.app.data.AppSettings
 import org.fungalsentinel.app.data.AppPreferences
 import org.fungalsentinel.app.data.model.CaptureEntity
+import org.fungalsentinel.app.data.model.Fluorophore
 import org.fungalsentinel.app.data.model.ProjectEntity
 import org.fungalsentinel.app.data.model.StandardGroupEntity
+import org.fungalsentinel.app.data.model.canonicalFluorophore
 import org.fungalsentinel.app.data.model.reportDataFromJson
 import org.fungalsentinel.app.data.model.toJsonString
 import org.fungalsentinel.app.data.preset.CurvePresetPayload
@@ -741,16 +743,19 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setFluorophore(name: String) {
-        val band = fluorophoreBand(name)
+        // 唯一的写入点在这里卡成 canonical —— 保证 projects.fluorophore 落库的
+        // 永远是 Fluorophore.X.name（存量数据本来就是 canonical，无需迁移）
+        val canonical = requireKnownFluorophore(name, "the Step 3 selection").name
+        val band = fluorophoreBand(canonical)
         val state = _uiState.value
-        val changedFluorophore = state.reportData.sampleFluorophore != name
-        val updatedProject = state.currentProject?.copy(fluorophore = name)
+        val changedFluorophore = state.reportData.sampleFluorophore != canonical
+        val updatedProject = state.currentProject?.copy(fluorophore = canonical)
         _uiState.value = state.copy(
             currentProject = updatedProject,
             curveReferencePreset = if (changedFluorophore) null else state.curveReferencePreset,
             activeCurvePreset = if (changedFluorophore) null else state.activeCurvePreset,
             reportData = state.reportData.copy(
-                sampleFluorophore = name,
+                sampleFluorophore = canonical,
                 sampleBand = "${band.first}–${band.second} nm",
                 standardRows = if (changedFluorophore) emptyList() else state.reportData.standardRows,
                 regressionFormula = if (changedFluorophore) "—" else state.reportData.regressionFormula,
@@ -1056,8 +1061,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             require(st.blankCaptures.isNotEmpty() && st.sampleCaptures.isNotEmpty()) {
                 "Capture a current blank and sample in Step 3 before applying the curve"
             }
-            require(report.sampleFluorophore == preset.fluorophore) {
-                "This curve is for ${preset.fluorophore}; select that fluorophore in Step 3"
+            // 跨端 preset 的 fluorophore 可能是 "mCherry" 这类非 canonical 写法，
+            // 一律先解析；解析不出来就报错，不要静默走到错误的通道上
+            val curveFluorophore = requireKnownFluorophore(preset.fluorophore, "this curve preset")
+            val selectedFluorophore = canonicalFluorophore(report.sampleFluorophore)
+            require(curveFluorophore == selectedFluorophore) {
+                "This curve is for ${curveFluorophore.displayName}; select that fluorophore in Step 3"
             }
             setStep4("PROCESSING|" + str(R.string.st4_processing_preset))
             val context = getApplication<Application>()
@@ -1077,9 +1086,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     ?: error("Saved SPD calibration in this curve preset is invalid")
             }
             val blankSpectra = SpectralUnmixer.extractChannelSpectra(
-                analysisBlank, wavelengths, preset.fluorophore, spd)
+                analysisBlank, wavelengths, curveFluorophore.name, spd)
             val sampleSpectra = SpectralUnmixer.extractChannelSpectra(
-                analysisSample, wavelengths, preset.fluorophore, spd)
+                analysisSample, wavelengths, curveFluorophore.name, spd)
             val blankMean = SpectralUnmixer.meanSpectra(blankSpectra)
             val emission = preset.emissionAt(wavelengths)
             val unmixingMask = BooleanArray(wavelengths.size) { index ->
@@ -1117,7 +1126,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 String.format(Locale.US, "%.3f %s → %.1f", it.concentration, it.unit, it.signal)
             }
             _uiState.value = _uiState.value.copy(
-                curveReferencePreset = preset,
+                curveReferencePreset = preset.copy(fluorophore = curveFluorophore.name),
                 reportData = _uiState.value.reportData.copy(
                     standardRows = rows,
                     regressionFormula = formula,
@@ -1181,12 +1190,17 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     "Saved SPD calibration in this curve preset is invalid"
                 }
             }
-            require(payload.fluorophore == _uiState.value.reportData.sampleFluorophore) {
-                "This curve is for ${payload.fluorophore}; select that fluorophore in Step 3"
+            // Python FSSA 导出的 preset 带的是它自己的显示名（"mCherry"、
+            // "Fluorescein (sodium salt)"…），先解析成 canonical 再往下走；
+            // 解析不出来就明确报错，绝不停留在"看起来加载成功了"的状态
+            val payloadFluorophore = requireKnownFluorophore(payload.fluorophore, "this curve preset")
+            val selectedFluorophore = canonicalFluorophore(_uiState.value.reportData.sampleFluorophore)
+            require(payloadFluorophore == selectedFluorophore) {
+                "This curve is for ${payloadFluorophore.displayName}; select that fluorophore in Step 3"
             }
             val current = _uiState.value
             _uiState.value = current.copy(
-                curveReferencePreset = payload,
+                curveReferencePreset = payload.copy(fluorophore = payloadFluorophore.name),
                 activeCurvePreset = presetEntity,
                 reportData = current.reportData.copy(
                     standardRows = emptyList(),
@@ -1753,18 +1767,33 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun pythonEmissionBand(name: String): Pair<Double, Double> =
-        when (name.uppercase(Locale.US)) {
-            "YPET" -> 527.0 to 20.0
-            "MCHERRY" -> 610.0 to 25.0
-            "CFP" -> 475.0 to 20.0
-            "MTURQUOISE2" -> 482.0 to 20.0
+        when (canonicalFluorophore(name)) {
+            Fluorophore.YPET -> 527.0 to 20.0
+            Fluorophore.MCHERRY -> 610.0 to 25.0
+            Fluorophore.CFP -> 475.0 to 20.0
+            Fluorophore.MTURQUOISE2 -> 482.0 to 20.0
             else -> 509.0 to 20.0
         }
 
-    private fun fluorophoreBand(name: String): Pair<Int, Int> = when (name) {
-        "YPET" -> 500 to 530
-        "MCHERRY" -> 590 to 630
-        "CFP", "MTURQUOISE2" -> 460 to 490
+    private fun fluorophoreBand(name: String): Pair<Int, Int> = when (canonicalFluorophore(name)) {
+        Fluorophore.YPET -> 500 to 530
+        Fluorophore.MCHERRY -> 590 to 630
+        Fluorophore.CFP, Fluorophore.MTURQUOISE2 -> 460 to 490
+        // 荧光素钠 520 nm 发射，落在 500–540；原先靠 else 兜底刚好正确，
+        // 显式写出来，避免将来改 else 时悄悄改坏它
+        Fluorophore.FLUORESCEIN -> 500 to 540
         else -> 500 to 540
     }
+
+    /**
+     * 解析「外部写进来的」荧光素名字（曲线预设的 `fluorophore` 字段）。
+     *
+     * 解析失败抛 [IllegalArgumentException] —— 调用方在 `runCatching` 里，
+     * 这条消息会原样出现在 Step 4 的状态栏上，而不是静默降级到一个错的通道。
+     */
+    private fun requireKnownFluorophore(raw: String, context: String): Fluorophore =
+        canonicalFluorophore(raw) ?: error(
+            "Unrecognised fluorophore '$raw' in $context; supported: " +
+                Fluorophore.values().joinToString(", ") { it.displayName }
+        )
 }
