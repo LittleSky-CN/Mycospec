@@ -19,7 +19,12 @@ data class SampleAnalysisResult(
     val fwhmNm: Double,
     val centroidNm: Double,
     val correctedSpectrum: List<Float>,
-    val blankSpectrum: List<Float>
+    val blankSpectrum: List<Float>,
+    /**
+     * Why SPD correction was NOT applied (DEF-A03): `null` when it WAS applied.
+     * One of "NO_SPD_PRESET" / "TOO_FEW_POINTS" / "LENGTH_MISMATCH".
+     */
+    val spdSkipReason: String? = null
 )
 
 object SampleAnalyzer {
@@ -99,7 +104,15 @@ object SampleAnalyzer {
         val lam = FloatArray(n) { i -> ((i - intercept) / slope).toFloat() }
 
         val respSel: FloatArray? = when (channel) { "R" -> respR; "B" -> respB; else -> respG }
-        val applied = respSel != null && wavelengths != null && wavelengths.size >= 2 && respSel.size == wavelengths.size
+        // DEF-A03: make the "silently skipped" path explainable instead of a bare
+        // `responseApplied == false`.
+        val skipReason: String? = when {
+            respSel == null -> "NO_SPD_PRESET"
+            wavelengths == null || wavelengths.size < 2 -> "TOO_FEW_POINTS"
+            respSel.size != wavelengths.size -> "LENGTH_MISMATCH"
+            else -> null
+        }
+        val applied = skipReason == null
 
         fun respAt(l: Float): Float {
             val w = wavelengths ?: return 0f
@@ -123,7 +136,7 @@ object SampleAnalyzer {
         if (lo >= hi) return null
 
         val floor = if (applied) {
-            max(1e-9f, responseThresholdFraction * (respSel.maxOrNull() ?: 0f))
+            max(1e-9f, responseThresholdFraction * (respSel!!.maxOrNull() ?: 0f))
         } else 0f
 
         fun itru(arr: FloatArray, i: Int): Float {
@@ -228,7 +241,8 @@ object SampleAnalyzer {
             sampleSD = sd, replicates = sampleFrames.size,
             windowStartPx = lo, windowEndPx = hi,
             peakNm = peakNm, peakIntensity = peakI, fwhmNm = fwhmNm, centroidNm = centroidNm,
-            correctedSpectrum = corrSpec, blankSpectrum = blankSpec
+            correctedSpectrum = corrSpec, blankSpectrum = blankSpec,
+            spdSkipReason = skipReason
         )
     }
 

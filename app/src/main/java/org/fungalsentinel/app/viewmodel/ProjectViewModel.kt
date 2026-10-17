@@ -19,6 +19,7 @@ import kotlinx.coroutines.sync.withLock
 import org.fungalsentinel.app.FssaApplication
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.analysis.ConcentrationRegressor
+import org.fungalsentinel.app.analysis.DriftLevel
 import org.fungalsentinel.app.analysis.FrameProfile
 import org.fungalsentinel.app.analysis.FrameProfileExtractor
 import org.fungalsentinel.app.analysis.SampleAnalyzer
@@ -28,6 +29,8 @@ import org.fungalsentinel.app.analysis.SpdCalibrationResult
 import org.fungalsentinel.app.analysis.SpdLoader
 import org.fungalsentinel.app.analysis.SpectralResponseCalibrator
 import org.fungalsentinel.app.analysis.WavelengthCalibrator
+import org.fungalsentinel.app.analysis.mappingDriftNm
+import org.fungalsentinel.app.analysis.recomputeWith
 import org.fungalsentinel.app.data.AppSettings
 import org.fungalsentinel.app.data.AppPreferences
 import org.fungalsentinel.app.data.model.CaptureEntity
@@ -131,6 +134,8 @@ data class ReportData(
     val curveIntercept: Double? = null,
     val curvePoints: List<Pair<Double, Double>> = emptyList(),
     val curveWarnings: List<String> = emptyList(),
+    /** 【v2.2.6】SPD preset 加载期的软提示（L2/L3），永不阻断。 */
+    val spdWarnings: List<String> = emptyList(),
     val isLogFit: Boolean = false,
     val step1Status: String = "IDLE",
     val step2Status: String = "IDLE",
@@ -831,7 +836,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     sensorWidth = r.sensorWidth, sensorHeight = r.sensorHeight,
                     peakR = r.peakR?.roundToInt(), peakG = r.peakG?.roundToInt(), peakB = r.peakB?.roundToInt(),
                     wlR = r.wlR, wlG = r.wlG, wlB = r.wlB,
-                    exposureSeconds = r.exposureTime.removeSuffix(" s").toDoubleOrNull()
+                    exposureSeconds = r.exposureTime.removeSuffix(" s").toDoubleOrNull(),
+                    // 【v2.2.6】DEF-A01：真值来自 analyzePositioning() 已置位的解码器标志
+                    rbSwapped = FrameProfileExtractor.forceRbSwap
                 )
             )
         }
@@ -840,6 +847,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun saveSpdPreset(name: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val r = _uiState.value.reportData
+            val result = spdResult
             presetDao.insert(
                 PresetEntity(
                     name = name, type = PresetTypes.SPD, deviceModel = Build.MODEL,
@@ -847,7 +855,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     frames = r.spdFrames,
                     exposureSeconds = r.spdExposure.removeSuffix(" s").toDoubleOrNull(),
                     spdSource = r.spdSource,
-                    payloadJson = spdResult?.let { SpectralResponseCalibrator.toJson(it) }
+                    // 【v2.2.6】DEF-A04：溯源字段冗余写进顶层列（payloadJson 里也有一份）
+                    slope = result?.slope?.takeIf { !it.isNaN() } ?: r.slope,
+                    intercept = result?.intercept?.takeIf { !it.isNaN() } ?: r.intercept,
+                    gErrorNm = result?.gErrorNm ?: r.gErrorNm,
+                    rbSwapped = result?.rbSwapped,
+                    payloadJson = result?.let { SpectralResponseCalibrator.toJson(it) }
                 )
             )
         }
@@ -856,6 +869,15 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun loadWavelengthPreset(p: PresetEntity) {
         val slope = p.slope ?: return
         val intercept = p.intercept ?: return
+        // 【v2.2.6】DEF-A01：恢复通道交换结论，否则 MCHERRY / CFP / mTurquoise2 读错通道
+        FrameProfileExtractor.forceRbSwap = p.rbSwapped ?: false
+        // 【v2.2.6】DEF-A02：ROI 真正下发。analysisXRoi 非 null 后 decode() 会把它作为
+        // fixedXRegion 传给 FrameProfileExtractor.extract，从而跳过内容相关的
+        // autoDetectXRoi —— 定位图（亮 LED）与样品图（弱荧光）不再算出不同 ROI。
+        val rs = p.roiStart
+        val re = p.roiEnd
+        val restoredRoi = if (rs != null && re != null && rs <= re) rs to re else null
+        if (restoredRoi != null) analysisXRoi = restoredRoi
         _uiState.value = _uiState.value.copy(
             reportData = _uiState.value.reportData.copy(
                 wavelengthQuality = "PRESET",
@@ -879,7 +901,13 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             )
         )
         markLoadedCurveForReapply()
-        setStep1("PRESET|" + str(R.string.st_preset_loaded, p.quality ?: "—"))
+        setStep1(
+            "PRESET|" + str(R.string.st_preset_loaded, p.quality ?: "—") +
+                    (if (p.rbSwapped == true) " · " + str(R.string.st_preset_rb_restored) else "") +
+                    (if (restoredRoi != null) " · " + str(
+                        R.string.st_preset_roi_restored, restoredRoi.first, restoredRoi.second
+                    ) else "")
+        )
         viewModelScope.launch(Dispatchers.IO) {
             if (_uiState.value.spdCaptures.isNotEmpty()) analyzeSpd()
             analyzeSample()
@@ -887,25 +915,86 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun loadSpdPreset(p: PresetEntity) {
-        val restored = p.payloadJson?.let { SpectralResponseCalibrator.fromJson(it) }
-        spdRbSwapRetried = restored?.rbSwapped ?: false
-        spdResult = restored
-        if (restored != null) {
-            applySpdResult(restored.copy(spdSource = p.spdSource ?: restored.spdSource))
-            setStep2("PRESET|" + str(R.string.st_preset_loaded, p.name))
-        } else {
-            setStep2("PRESET|" + str(R.string.st_preset_loaded, p.name))
-            _uiState.value = _uiState.value.copy(
-                reportData = _uiState.value.reportData.copy(
-                    spdCoeffR = p.coeffR?.let { String.format(Locale.US, "%.4f", it) } ?: "—",
-                    spdCoeffB = p.coeffB?.let { String.format(Locale.US, "%.4f", it) } ?: "—",
-                    spdResponse = "Loaded from legacy preset",
-                    spdFrames = p.frames ?: 0,
-                    spdExposure = p.exposureSeconds?.let { String.format(Locale.US, "%.4f s", it) } ?: "—",
-                    spdSource = p.spdSource ?: "true_spd.csv (bundled)"
-                )
-            )
+        val payload = p.payloadJson
+        if (payload == null) {
+            // 【v2.2.6】DEF-A03：没有 payload 必须显式失败，不能再伪装成"已加载"
+            failSpdPreset(str(R.string.st_spd_no_payload))
+            return
         }
+        val restored = runCatching { SpectralResponseCalibrator.fromJsonStrict(payload) }
+            .onFailure { e ->
+                failSpdPreset(e.message ?: e.javaClass.simpleName)
+            }.getOrNull() ?: return
+
+        val report = _uiState.value.reportData
+        val slope = report.slope
+        val intercept = report.intercept
+        val warnings = mutableListOf<String>()
+        var finalResult = restored
+        var recomputed = false
+
+        if (slope != null && intercept != null) {
+            val currentN = report.sensorHeight ?: restored.totalCount
+
+            // 【v2.2.6】Mode B 优先：先用当前映射重算，再做覆盖度校验。
+            // 顺序很关键 —— 若先做 L2，几纳米的漂移就会让轴端点越界而被硬拒绝，
+            // 与"漂移永不拒绝"的裁决冲突。重算后 preset 自带当前轴，L2 自然通过。
+            val drift = restored.mappingDriftNm(slope, intercept)
+            val lamp = restored.lampR
+            val lampReady = lamp != null && lamp.size == currentN
+            if (lampReady && (drift == null || drift > SpectralResponseCalibrator.DRIFT_WARN_NM)) {
+                val rebuilt = restored.recomputeWith(slope, intercept)
+                if (rebuilt != null) {
+                    finalResult = rebuilt
+                    recomputed = true
+                    warnings.add(str(R.string.st_spd_recomputed))
+                }
+            } else if (drift != null && drift > SpectralResponseCalibrator.DRIFT_WARN_NM) {
+                warnings.add(str(R.string.st_spd_legacy_no_recompute))
+            }
+
+            // L3 -- drift is a soft hint, it NEVER rejects the preset.
+            when (SpectralResponseCalibrator.driftLevel(drift)) {
+                DriftLevel.WARN -> warnings.add(str(R.string.st_spd_drift_warn, drift!!))
+                DriftLevel.SEVERE -> warnings.add(str(R.string.st_spd_drift_severe, drift!!))
+                else -> Unit
+            }
+
+            // L2 -- coverage is the only remaining hard failure.
+            if (!recomputed) {
+                val coverage = SpectralResponseCalibrator.coverageError(finalResult, slope, intercept, currentN)
+                if (coverage != null) {
+                    failSpdPreset(coverage)
+                    return
+                }
+            }
+        }
+
+        spdRbSwapRetried = finalResult.rbSwapped
+        spdResult = finalResult
+        applySpdResult(finalResult.copy(spdSource = p.spdSource ?: finalResult.spdSource))
+        _uiState.value = _uiState.value.copy(
+            reportData = _uiState.value.reportData.copy(spdWarnings = warnings)
+        )
+        setStep2(
+            "PRESET|" + str(R.string.st_preset_loaded, p.name) +
+                    (if (recomputed) " [recomputed for current mapping]" else "") +
+                    (if (warnings.isNotEmpty()) str(R.string.st_warn_count, warnings.size) else "")
+        )
+    }
+
+    /** 【v2.2.6】SPD preset 不可用时：状态必须是 FAILED，且文案显式说明"未应用"。 */
+    private fun failSpdPreset(reason: String) {
+        spdRbSwapRetried = false
+        spdResult = null
+        resetPage2()
+        setStep2("FAILED|" + str(R.string.st_spd_preset_invalid, reason))
+        _uiState.value = _uiState.value.copy(
+            reportData = _uiState.value.reportData.copy(
+                spdResponse = "⚠ " + str(R.string.st_spd_not_applied) + " — " + reason,
+                spdWarnings = listOf(reason)
+            )
+        )
     }
 
     fun updatePreset(p: PresetEntity) {
@@ -1002,13 +1091,17 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             }
             val spd = SpdLoader.load(ctx)
             if (spd == null) { setStep2("FAILED|" + str(R.string.st_failed_spd_source)); return }
+            // 【v2.2.6】gErrorNm 一并写入，供 SPD preset 溯源
+            val gErrorNm = _uiState.value.reportData.gErrorNm
             var res = SpectralResponseCalibrator.calibrate(
-                lampBatch.frames, posBatch.frames, spd.second, slope, intercept, spd.first
+                lampBatch.frames, posBatch.frames, spd.second, slope, intercept, spd.first,
+                gErrorNm = gErrorNm
             )
             if (res == null) {
                 res = SpectralResponseCalibrator.calibrate(
                     swapRbChannels(lampBatch.frames), swapRbChannels(posBatch.frames),
-                    spd.second, slope, intercept, spd.first
+                    spd.second, slope, intercept, spd.first,
+                    gErrorNm = gErrorNm
                 )
                 spdRbSwapRetried = res != null
             }
@@ -1095,6 +1188,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     note(blankBatch), note(sampleBatch)
                 ) + String.format(Locale.US, " [exp b=%.3fs s=%.3fs]", bExp, sExp) +
                         (if (retried) " [R/B swap retry]" else "") +
+                        // 【v2.2.6】DEF-A03：未应用 SPD 校正时必须说明原因，而不是只显示 N/A
+                        (res.spdSkipReason?.let { str(R.string.st_spd_skip_reason, it) } ?: "") +
                         (if (noExp > 0) " ⚠ $noExp frame(s) missing exposure, not normalized" else "")
             )
         }.onFailure { e ->
@@ -1111,6 +1206,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         _uiState.value = _uiState.value.copy(
             reportData = _uiState.value.reportData.copy(
                 spdStatus = "Pending", spdCoeffR = "—", spdCoeffB = "—", spdResponse = "—",
+                spdWarnings = emptyList(),
                 spdFrames = 0, spdExposure = "—", spdEffectiveBand = "—", spdMasked = "—",
                 spdHandoffs = "—", spdAgreement = "—", spdFusedPeak = "—", spdPeaks = "—",
                 spdRawPeaks = "—", spdCorrPeaks = "—",

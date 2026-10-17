@@ -169,6 +169,19 @@
     <string name="st4_computed">Computed — R²=%1$s, n=%2$d</string>
     <string name="st_warn_count">; ⚠ %1$d warning(s)</string>
     <string name="st_preset_loaded">Preset loaded — %1$s</string>
+    <!-- v2.2.6 preset parity: WAVELENGTH preset restore feedback (DEF-A01 / DEF-A02) -->
+    <string name="st_preset_rb_restored">R/B auto-correction restored from preset</string>
+    <string name="st_preset_roi_restored">X-ROI restored from preset ([%1$d, %2$d])</string>
+    <!-- v2.2.6 preset parity: SPD payload strict parsing + explicit failure (DEF-A03) -->
+    <string name="st_spd_preset_invalid">SPD preset rejected — %1$s</string>
+    <string name="st_spd_no_payload">this preset carries no SPD payload</string>
+    <string name="st_spd_not_applied">SPD correction NOT applied</string>
+    <!-- v2.2.6 preset parity: L3 drift is a soft hint, never a rejection (DEF-A04) -->
+    <string name="st_spd_drift_warn">Wavelength mapping drifted %1$.1f nm — SPD correction may be off; consider re-running Step 2</string>
+    <string name="st_spd_drift_severe">Wavelength mapping drifted %1$.1f nm (different device or positioning shot?) — quantitative results are unreliable</string>
+    <string name="st_spd_recomputed">SPD response recomputed for the current wavelength mapping</string>
+    <string name="st_spd_legacy_no_recompute">Legacy preset without raw lamp profiles — cannot recompute; response used as saved</string>
+    <string name="st_spd_skip_reason"> [SPD skipped: %1$s]</string>
     <string name="lbl_group_counts">Blank: %1$d | Sample: %2$d</string>
     <string name="lbl_preset_name">Preset name</string>
     <string name="note_step2_keep">Keep phone, grating, slit, ISO, and focus unchanged. Use the standard source matching the SPD configured in Settings.</string>

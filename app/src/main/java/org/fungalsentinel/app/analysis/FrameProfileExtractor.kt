@@ -101,6 +101,19 @@ object FrameProfileExtractor {
         (width * 0.35).toInt().coerceIn(0, width - 1) to
                 (width * 0.65).toInt().coerceIn(0, width - 1)
 
+    /**
+     * 【v2.2.6】内容相关的 ROI 自动探测（DEF-A02 的关键背景）。
+     *
+     * 本函数依据**列能量剖面**的峰值结构定位光谱条带，因此**强依赖画面内容**：
+     * 定位图是明亮的 LED 谱线（高信噪、峰值锐利），样品图是微弱荧光（低信噪、
+     * 峰值平缓甚至被噪声掩盖）。同一台设备、同一光路下，两者会算出**不同的 ROI**。
+     *
+     * 一旦 ROI 不同，行剖面就是在不同的像素列集合上平均出来的，与 preset 里
+     * 保存的响应曲线不再匹配 —— 这就是"ROI 只显示不生效"的定量后果。
+     *
+     * 因此：只要 preset（或调用方）提供了 ROI，就**必须**走 [resolveXRoi] 的
+     * `fixedXRegion != null` 分支，绝不应退回到这里重新探测。
+     */
     private fun autoDetectXRoi(colProfile: FloatArray, width: Int): Pair<Int, Int> {
         if (width <= 0) return 0 to 0
         if (colProfile.isEmpty()) return centerRoi(width)
