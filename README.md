@@ -3,7 +3,7 @@
 
 [English](#english) ｜ [中文](#中文)
 
-> **MycoSpec — v2.2.8** (Android frontend of the Fungal Sentinel software stack)
+> **MycoSpec — v2.3.0** (Android frontend of the Fungal Sentinel software stack)
 >
 > **Naming / 命名说明**
 > | 名称 | 版本 | 含义 |
@@ -11,7 +11,7 @@
 > | **Fungal Sentinel** | — | iGEM team project (wet lab + hardware + software) / iGEM 大项目名 |
 > | **OptiX** | — | Hardware project / 硬件项目 |
 > | **FSSA** | v1.4.5 | Python desktop spectral analyzer (reference implementation) / Python 桌面版参考实现 |
-> | **MycoSpec** | v2.2.8 | This Android app / 本 Android 应用 |
+> | **MycoSpec** | v2.3.0 | This Android app / 本 Android 应用 |
 >
 > The Android app was originally shipped under the same name **FSSA** during its
 > 1.x releases. It was renamed **MycoSpec** from v2.0.0 onwards so that the
@@ -111,10 +111,28 @@ app/src/main/java/org/fungalsentinel/app/
 - Cross-check formal results against Python FSSA v1.4.5 on the same DNG set.
 
 ### Versioning
-Current version **v2.2.8** — the single authoritative version number across this
-repository, the app module (`versionName 2.2.8 / versionCode 228`), in-app text
+Current version **v2.3.0** — the single authoritative version number across this
+repository, the app module (`versionName 2.3.0 / versionCode 229`), in-app text
 and every cross-reference to this build. Earlier public milestones (v2.0.0,
-v2.0.1) are retained only as Git history / tags.
+v2.0.1, v2.2.8) are retained only as Git history / tags.
+
+#### What's new in v2.3.0 (`versionCode 229`)
+
+- **Unified the duplicated `Fluorophore` enum.** Two copies existed — one in the
+  data layer (`data/model/Entities.kt`) and one in the UI layer
+  (`Step3SampleScreen.kt`). Only the data-layer declaration remains; the UI copy
+  has been deleted and the UI now imports the single canonical enum. This removes
+  the class of bug where the two enums drifted apart and a fluorophore valid in
+  one layer was unknown in the other.
+- **Added `FLUORESCEIN` to the data-layer enum**, with the matching
+  `fluorophoreBand()` mapping to its **500–540 nm** emission band. Fluorescein
+  can now be selected and quantified end-to-end instead of being silently
+  rejected or mapped to an undefined band.
+- **Added `canonicalFluorophore()`**, a normalising resolver that maps
+  external/imported fluorophore names (including aliases and case/whitespace
+  variants) onto the canonical enum. Names arriving from Python FSSA exports or
+  hand-edited presets now resolve to the same canonical IDs used by the Python
+  side, so the same sample is identified identically on phone and desktop.
 
 Analysis semantics are aligned with Python **FSSA v1.4.5**; in particular the
 Step 2 channel fusion uses response-proportional normalisation on both sides
@@ -238,9 +256,22 @@ KaFirKotlinPropertyKtParameterBasedSymbol.<init> ... Unexpected owner function: 
 - 正式结果应与 Python FSSA v1.4.5 在同一批 DNG 上对照。
 
 ### 版本
-当前版本 **v2.2.8** —— 本仓库、应用模块（`versionName 2.2.8 / versionCode 228`）、
-应用内文案与所有交叉引用统一使用这一个版本号。更早的公开里程碑（v2.0.0、v2.0.1）
-仅作为 Git 历史/标签保留。
+当前版本 **v2.3.0** —— 本仓库、应用模块（`versionName 2.3.0 / versionCode 229`）、
+应用内文案与所有交叉引用统一使用这一个版本号。更早的公开里程碑（v2.0.0、v2.0.1、
+v2.2.8）仅作为 Git 历史/标签保留。
+
+#### v2.3.0（`versionCode 229`）本版内容
+
+- **合并重复的 `Fluorophore` enum。** 此前存在两份声明：数据层
+  （`data/model/Entities.kt`）与 UI 层（`Step3SampleScreen.kt`）各一份。现仅保留
+  数据层那一份，UI 层副本已删除并改为引用同一份枚举，消除了两份枚举各自漂移、
+  同一荧光素在两层中行为不一致的隐患。
+- **数据层 enum 新增 `FLUORESCEIN`**，并补齐 `fluorophoreBand()` 的
+  **500–540 nm** 波段映射。荧光素现在可被正常选择并完成定量，不再被静默拒绝或
+  映射到未定义波段。
+- **新增 `canonicalFluorophore()` 归一化解析**，把外部导入的荧光素名（含别名、
+  大小写与空白差异）归一到规范枚举。来自 Python FSSA 导出或手工预设的名称，现在
+  会解析到与 Python 端一致的 canonical ID，保证同一批样品在手机端与桌面端识别一致。
 
 分析语义与 Python **FSSA v1.4.5** 对齐；尤其步骤 2 的通道融合两端均采用响应比例
 归一（`w_c = resp_c / Σ resp_c`，`Σ w_c = 1`），同一批 DNG 在手机与桌面端得到一致结果。

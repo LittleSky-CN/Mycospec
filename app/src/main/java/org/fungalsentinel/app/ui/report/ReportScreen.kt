@@ -165,7 +165,7 @@ fun ReportScreen(
             }
 
             // ══════ PAGE 2 — SPD response & response-proportional fusion ═══════
-            PageCard(page = 2, title = "Step 2: Spectral Response & Fusion — MycoSpec v2.2.8") {
+            PageCard(page = 2, title = "Step 2: Spectral Response & Fusion — MycoSpec v2.3.0") {
                 StatusLine(r.step2Status)
                 if (r.spdLambda.isNotEmpty()) {
                     if (r.spdPosR.isNotEmpty()) {
