@@ -1,0 +1,185 @@
+name: Build debug APK
+
+# Builds the debug APK from the current source and, on a tag, publishes it as a
+# pre-release. Also runnable by hand from the Actions tab for a one-off build.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-debug-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: assembleDebug
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # gradle/gradle-daemon-jvm.properties pins a JetBrains JDK 21 toolchain.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: jetbrains
+          java-version: '21'
+
+      # The runner image ships an Android SDK; android-actions/setup-android is
+      # broken on current runners (its bundled sdkmanager exits 1), so we drive
+      # sdkmanager directly. compileSdk 37 / build-tools 37.0.0 have to be
+      # installed explicitly because the image only ships older revisions.
+      - name: Set up Android SDK
+        run: |
+          set -e
+          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          export ANDROID_SDK_ROOT="$SDK" ANDROID_HOME="$SDK"
+          CMDLINE="$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | tail -1)"
+          echo "sdkmanager: $CMDLINE"
+          mkdir -p "$SDK/licenses"
+          printf '24333f8a63b6825ea9c5514f83c2829b004d1fee\n' > "$SDK/licenses/android-sdk-license"
+          printf '84831b9409646a918e30573bab4c9c91346d8abd\n' > "$SDK/licenses/android-sdk-preview-license"
+          # compileSdk is 37. That platform is absent from the stable channel
+          # (which tops out at 36), and on the canary channel it is published as
+          # "platforms;android-37.0", so `sdkmanager --install platforms;android-37`
+          # reports "Failed to find package" even with --channel=3. Fetch the
+          # archives straight from dl.google.com and unpack them under the names
+          # the Android Gradle Plugin looks for.
+          yes | "$CMDLINE" --licenses > /dev/null 2>&1 || true
+          install_pkg() {
+            curl -fsSL -o /tmp/pkg.zip "$1"
+            rm -rf /tmp/pkgx && mkdir -p /tmp/pkgx
+            unzip -q /tmp/pkg.zip -d /tmp/pkgx
+            src="$(find /tmp/pkgx -mindepth 1 -maxdepth 1 -type d | head -1)"
+            rm -rf "$2"
+            mkdir -p "$(dirname "$2")"
+            mv "$src" "$2"
+            echo "installed $2"
+          }
+          install_pkg "https://dl.google.com/android/repository/platform-37.0_r01.zip" \
+                      "$SDK/platforms/android-37"
+          install_pkg "https://dl.google.com/android/repository/build-tools_r37_linux.zip" \
+                      "$SDK/build-tools/37.0.0"
+          ls "$SDK/platforms" "$SDK/build-tools"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # settings.gradle.kts puts the Aliyun mirrors first so that builds in China
+      # are fast. Those mirrors do not resolve com.google.devtools.ksp from the
+      # GitHub network, and Gradle reports the plugin as simply "not found".
+      # Drop them for CI runs and use the upstream repositories instead.
+      - name: Use upstream repositories for CI
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cat > "$HOME/.gradle/init.d/ci-repos.gradle" <<'EOF'
+          settingsEvaluated { settings ->
+              settings.pluginManagement.repositories.clear()
+              settings.pluginManagement.repositories.gradlePluginPortal()
+              settings.pluginManagement.repositories.mavenCentral()
+              settings.pluginManagement.repositories.google()
+
+              settings.dependencyResolutionManagement.repositories.clear()
+              settings.dependencyResolutionManagement.repositories.google()
+              settings.dependencyResolutionManagement.repositories.mavenCentral()
+          }
+          EOF
+          cat "$HOME/.gradle/init.d/ci-repos.gradle"
+
+      # The wrapper points at a Tencent mirror (fast in China) that may not be
+      # reachable from GitHub's runners. Fall back to services.gradle.org if so.
+      # The committed file is left alone; only the checkout is patched.
+      - name: Ensure Gradle distribution is reachable
+        run: |
+          set -e
+          PROPS=gradle/wrapper/gradle-wrapper.properties
+          URL=$(sed -n 's/^distributionUrl=//p' "$PROPS" | tr -d '\r')
+          echo "wrapper points at: $URL"
+          if ! curl -sSfI --max-time 25 "$URL" > /dev/null 2>&1; then
+            VER=$(echo "$URL" | grep -oE 'gradle-[0-9.]+-bin\.zip')
+            echo "mirror unreachable; falling back to services.gradle.org for $VER"
+            sed -i "s|^distributionUrl=.*|distributionUrl=https\\\\://services.gradle.org/distributions/$VER|" "$PROPS"
+          fi
+          sed -n 's/^distributionUrl=//p' "$PROPS"
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/MycoSpec-${GITHUB_REF_NAME}-debug.apk"
+          ls -lh dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mycospec-debug-apk
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Write release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          cat > dist/notes.md <<'EOF'
+          ## MycoSpec — debug pre-release
+
+          MycoSpec is the Android front end of the Fungal Sentinel software stack.
+          Paired with the OptiX grating hardware, it turns a RAW-capable phone into a
+          calibrated fluorescence spectrometer and runs the whole analysis on-device,
+          fully offline.
+
+          **This is a `debug` build** — unsigned with the public debug key, not
+          optimised, and intended for testing and for iGEM review. Do not use it to
+          produce measurements you intend to publish.
+
+          ### What is included
+
+          - Wavelength calibration from three known LED peaks, validated on a held-out third peak.
+          - Spectral-response calibration against a characterised lamp SPD.
+          - Sample analysis with spectral unmixing (emission separated from scatter and offset before integration).
+          - Concentration quantification with a fitted standard curve.
+          - Exportable calibration and standard-curve presets (reference spectra stored on a wavelength axis, not in sensor pixels).
+
+          ### Notes on this build
+
+          - Channel fusion uses response-proportional weighting, `w_c(λ) = resp_c / Σ resp_c` with `Σ w_c = 1`, identical to the Python reference implementation FSSA v1.4.5. The retired logistic handoff relay is gone from both the code and the UI.
+          - Version reporting is unified: `versionName 2.2.6`, `versionCode 226`.
+
+          ### Requirements
+
+          Android 7.0 (API 24) or later, and a camera that exposes RAW frames through Camera2.
+
+          ### Known limitations
+
+          - Quantification currently fits by ordinary least squares; weighted regression and IUPAC LoD/LoQ reporting are not yet ported to Android (they exist in FSSA).
+          - No network permission is requested and no telemetry is collected.
+          EOF
+
+      - name: Publish pre-release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "release already exists; replacing its APK"
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" dist/*.apk --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --prerelease \
+              --title "MycoSpec ${GITHUB_REF_NAME} (debug pre-release)" \
+              --notes-file dist/notes.md \
+              dist/*.apk
+          fi
