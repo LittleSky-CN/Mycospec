@@ -3,7 +3,7 @@
 
 [English](#english) ｜ [中文](#中文)
 
-> **MycoSpec — v2.2.7** (Android frontend of the Fungal Sentinel software stack)
+> **MycoSpec — v2.2.8** (Android frontend of the Fungal Sentinel software stack)
 >
 > **Naming / 命名说明**
 > | 名称 | 版本 | 含义 |
@@ -11,7 +11,7 @@
 > | **Fungal Sentinel** | — | iGEM team project (wet lab + hardware + software) / iGEM 大项目名 |
 > | **OptiX** | — | Hardware project / 硬件项目 |
 > | **FSSA** | v1.4.5 | Python desktop spectral analyzer (reference implementation) / Python 桌面版参考实现 |
-> | **MycoSpec** | v2.2.7 | This Android app / 本 Android 应用 |
+> | **MycoSpec** | v2.2.8 | This Android app / 本 Android 应用 |
 >
 > The Android app was originally shipped under the same name **FSSA** during its
 > 1.x releases. It was renamed **MycoSpec** from v2.0.0 onwards so that the
@@ -111,8 +111,8 @@ app/src/main/java/org/fungalsentinel/app/
 - Cross-check formal results against Python FSSA v1.4.5 on the same DNG set.
 
 ### Versioning
-Current version **v2.2.7** — the single authoritative version number across this
-repository, the app module (`versionName 2.2.7 / versionCode 227`), in-app text
+Current version **v2.2.8** — the single authoritative version number across this
+repository, the app module (`versionName 2.2.8 / versionCode 228`), in-app text
 and every cross-reference to this build. Earlier public milestones (v2.0.0,
 v2.0.1) are retained only as Git history / tags.
 
@@ -187,6 +187,50 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 缺少私有 `keystore.properties`（由 `keystore.properties.example` 创建）时 Release
 打包会故意失败；**切勿提交 keystore 与密码**。
 
+#### 构建技术债：`lintVitalAnalyzeRelease` 曾报分析器崩溃（当前未复现）
+
+**现象**：某一版打包时 `:app:lintVitalAnalyzeRelease` 失败，异常本体是
+
+```
+KotlinIllegalArgumentExceptionWithAttachments:
+KaFirKotlinPropertyKtParameterBasedSymbol.<init> ... Unexpected owner function: null
+```
+
+报错文案自称 "this is a bug in lint"。同一份源码的 `compileReleaseKotlin` 与
+`dexBuilderRelease` 均通过 —— 这是 lint 的 Kotlin FIR/UAST 分析器自身的缺陷，
+不是本项目的代码问题。
+
+**为什么不建议把跳过固化下来**：撞上时确实可以用 `-x lintVitalAnalyzeRelease`
+绕开 —— `lintVital*` 只做静态分析、**不参与打包**，跳过不会改变一个字节的产物内容，
+它是"无害"的。但一旦写进 README 或 `app/build.gradle.kts`，它就变成常规命令，
+后人照抄后永久失去这道检查，而且届时没人分得清那是配置项还是 bug。
+
+**当前状态（v2.2.8 实测，2026-10-17）**：**不再复现，因此没有跳过任何一个 lint 任务。**
+
+```
+./gradlew clean assembleRelease      → BUILD SUCCESSFUL（lintVital 三个任务全执行）
+./gradlew bundleRelease              → BUILD SUCCESSFUL
+./gradlew lintVitalAnalyzeRelease --rerun-tasks → BUILD SUCCESSFUL（第二次强制重跑）
+```
+
+环境：AGP 9.4.1 / Kotlin 2.4.20 / compileSdk 37 / build-tools 37.0.0 / JDK 25。
+也就是说：崩溃是一次**观测记录**，不是当前的构建结论 —— 本次 Release 全链路
+没有跳过任何 lint 任务，产物是在 lintVital 正常参与下打出来的。
+
+**若将来再次撞上这个崩溃，按下面三步走，别直接把 `-x` 抄进这里：**
+
+1. **先确认不是真的问题**：跑 `./gradlew lintVitalRelease --stacktrace`，看异常是
+   `KaFirKotlinPropertyKtParameterBasedSymbol` / "this is a bug in lint" 一类
+   来自分析器内部的栈帧，还是某个 `.kt` 文件的位置信息。**只有前者才可以跳过。**
+2. **临时用命令行 `-x lintVitalAnalyzeRelease` 出包，但不要把 `-x` 写成默认命令**
+   （不要写进 `app/build.gradle.kts` 的 `tasks.named { }`，更不要用
+   `android { lint { … } }` 关掉整类检查）—— 一次性命令行跳过是可审计的，
+   固化到配置里没人会记得它为什么在那。
+3. **验证能否去掉这个跳过**：升级 AGP / Kotlin（这类分析器崩溃通常随版本修复），
+   然后 `./gradlew clean lintVitalAnalyzeRelease --rerun-tasks`，连续两到三次干净
+   跑通过，才允许把这个小节整段删掉 —— 那才是"债还清了"的证据。删之前请把当时的
+   AGP / Kotlin 版本写进 commit message。
+
 ### 科学有效性与限制
 - 正式定量需固定光路、已知 R/G/B 波长、匹配 SPD 的标准光源与规范的空白/标准品；
 - 模拟器只能验证界面与流程，不能验证光谱准确性；
@@ -194,7 +238,7 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 - 正式结果应与 Python FSSA v1.4.5 在同一批 DNG 上对照。
 
 ### 版本
-当前版本 **v2.2.7** —— 本仓库、应用模块（`versionName 2.2.7 / versionCode 227`）、
+当前版本 **v2.2.8** —— 本仓库、应用模块（`versionName 2.2.8 / versionCode 228`）、
 应用内文案与所有交叉引用统一使用这一个版本号。更早的公开里程碑（v2.0.0、v2.0.1）
 仅作为 Git 历史/标签保留。
 

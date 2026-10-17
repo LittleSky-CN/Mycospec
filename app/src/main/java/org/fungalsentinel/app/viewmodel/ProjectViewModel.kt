@@ -37,6 +37,8 @@ import org.fungalsentinel.app.data.AppPreferences
 import org.fungalsentinel.app.data.model.CaptureEntity
 import org.fungalsentinel.app.data.model.ProjectEntity
 import org.fungalsentinel.app.data.model.StandardGroupEntity
+import org.fungalsentinel.app.data.model.reportDataFromJson
+import org.fungalsentinel.app.data.model.toJsonString
 import org.fungalsentinel.app.data.preset.CurvePresetPayload
 import org.fungalsentinel.app.data.preset.CurveStandardPoint
 import org.fungalsentinel.app.data.preset.PresetEntity
@@ -275,6 +277,204 @@ internal fun ReportData.restoreSpdPresetProvenance(before: ReportData): ReportDa
         spdParams = before.spdParams
     ) else this
 
+/**
+ * 【v2.2.8】重开项目时，是否该用落库快照里的溯源覆盖掉重算结果。
+ *
+ * `openProject()` 混了两种用途，正确答案相反：
+ *
+ * | 项目状态      | 用途               | 该不该覆盖                     |
+ * |---------------|--------------------|--------------------------------|
+ * | `IN_PROGRESS` | 继续做没做完的项目 | **应该** —— 数据来自现场重算   |
+ * | `FINISHED`    | 查看历史报告       | **不应该** —— 用户是来看报告的 |
+ *
+ * 抽成纯函数是为了能在 JVM 上直接对「闸门」本身下断言：`ProjectViewModel` 依赖
+ * `Application` + 两个 Room 库，单测里无法实例化，但闸门写反是这个修复最容易犯的错。
+ */
+internal fun shouldRestoreProvenance(status: String?, restored: ReportData?): Boolean =
+    status == "FINISHED" && restored != null
+
+/**
+ * 【v2.2.8-D1】项目行（projects 表）的受保护写入口 —— 「快照 / 流程状态」的每一次
+ * 「读 → 改 → 写」都必须在同一个临界区里跑完，否则会丢更新（lost-update）。
+ *
+ * ## 为什么必须互斥
+ *
+ * `projects` 行同时承载两件事：**报告快照**（Step 4 每出一次结果就存一次，保证用户
+ * 跑完直接退 App 也不丢）与**流程状态**（Finish 时写 `FINISHED` / `finishedAt`）。
+ * 两条写入路径各跑在 fire-and-forget 协程里，谁都可能读到一个已经被对方改过的行。
+ * 各自凭手里的副本 `copy()` 回写时，**后写的那次会把先写的结果整体冲掉**：
+ *
+ * ```
+ * persistReportSnapshot ：读出 ProjectEntity(status=IN_PROGRESS, …)   ← 陈旧
+ * finishProject         ：写入 ProjectEntity(status=FINISHED,  …)
+ * persistReportSnapshot ：回写 ProjectEntity(status=IN_PROGRESS, …)   ← 把 FINISHED 冲掉
+ * ```
+ *
+ * 后果是**静默**的：不崩不报错，但 `shouldRestoreProvenance()` 要求
+ * `status == "FINISHED"`，一旦被打回 `IN_PROGRESS`，从 History 重开时 Step 1/2/4
+ * 的溯源就不会还原 —— 正是本次要治的那个症状，只是换了一条触发路径。
+ *
+ * ## 死锁分析（这里不能在外面再套一层同名的锁）
+ *
+ * 两个 `…Locked()` 函数是**自己拿锁**，而不是要求调用方持锁再进来：`Mutex` 不可
+ * 重入，上层持锁后再调这里会立刻自锁。同理 `finishProjectLocked` 内部**不会**去
+ * `join` 那个 fire-and-forget 的 `persistReportSnapshot()` 协程（它也可能正在等这把
+ * 锁）。两条路径靠**共享同一把 `mutex`** 互斥，而不是靠「外层排队 + 内层等待」。
+ *
+ * 持锁期间会 `withContext(Dispatchers.IO)` 序列化快照（几十 KB）：锁随协程迁移，不
+ * 会自锁；代价只是别的元数据写在序列化期间排队。这是有意接受的取舍 —— 比起临界区
+ * 内读到陈旧行的正确性收益，几十毫秒排队可以忽略。
+ *
+ * ## 适用范围（别把话说满）
+ *
+ * 这里管的是「快照 / 流程状态」那两条会互相覆盖的路径 —— `finishProject()` 与
+ * `persistReportSnapshot()`。第三个写入点 `setSampleFluorophore()`（改 fluorophore /
+ * band 后回写）**没有**套进来：它自己持同一把 `projectMetadataMutex`，同样在锁内重读
+ * 最新 uiState 之后再写（见该处注释），语义与本函数一致；只是它既不动快照也不动状态，
+ * 硬套一个 `transform` 反而更绕。它若哪天也开始写快照，必须改走这里。
+ *
+ * @return 是否真的写了。`readProject()` 返回 null（项目已被清空 / 不存在）时为
+ *         false，这时一次 `writeProject` 都不会发生。
+ */
+private suspend fun updateProjectLocked(
+    mutex: Mutex,
+    readProject: () -> ProjectEntity?,
+    transform: suspend (ProjectEntity) -> ProjectEntity,
+    writeProject: suspend (ProjectEntity) -> Unit
+): Boolean = mutex.withLock {
+    val current = readProject() ?: return@withLock false
+    writeProject(transform(current))
+    true
+}
+
+/**
+ * 【v2.2.8-D1】把当前报告快照写回项目行（供 [ProjectViewModel.persistReportSnapshot]
+ * 使用）。
+ *
+ * 除 `finishProject()` 之外还要在 Step 4 结果产出时再存一次：用户跑完标准曲线后很
+ * 可能直接退出 App，根本不会走到 `finishProject()`。
+ */
+internal suspend fun persistReportSnapshotLocked(
+    mutex: Mutex,
+    readProject: () -> ProjectEntity?,
+    serialize: suspend () -> String,
+    writeProject: suspend (ProjectEntity) -> Unit
+): Boolean = updateProjectLocked(
+    mutex = mutex,
+    readProject = readProject,
+    transform = { project -> project.copy(reportDataJson = serialize()) },
+    writeProject = writeProject
+)
+
+/**
+ * 【v2.2.8-D1】原子完成「写快照 + 标记 FINISHED」（供 [ProjectViewModel.finishProject]
+ * 使用）。
+ *
+ * 关键点是**在同一个临界区内**读出项目行并写回 `status` / `finishedAt`：只要这三者
+ * 分离，飞行中的 [persistReportSnapshotLocked] 就有机会用陈旧副本把状态冲回去。
+ *
+ * 调用方负责顺序 —— 本函数返回（快照与状态都已落库）之后才可以清空 uiState。
+ */
+internal suspend fun finishProjectLocked(
+    mutex: Mutex,
+    readProject: () -> ProjectEntity?,
+    serialize: suspend () -> String,
+    writeProject: suspend (ProjectEntity) -> Unit
+): Boolean = updateProjectLocked(
+    mutex = mutex,
+    readProject = readProject,
+    transform = { project ->
+        project.copy(
+            status = "FINISHED",
+            finishedAt = System.currentTimeMillis(),
+            reportDataJson = serialize()
+        )
+    },
+    writeProject = writeProject
+)
+
+/**
+ * 【v2.2.8】把 Step 1/2/4 的**溯源**（共 12 个字段）从 [from] 搬过来。
+ *
+ * ## 刻意只搬这 12 个，不搬任何数值
+ *
+ * `slope` / `intercept` / `mappingFormula` / `redProfile` / `spdFused` /
+ * `curveSlope` / `regressionFormula` / `predictedConcentration` 等一律保持调用方
+ * （即 `analyzePositioning()` / `analyzeSpd()` / `analyzeSample()`）重算出来的
+ * 结果。数值必须反映当前真实状态；溯源是「这个项目当初是怎么来的」的历史事实。
+ * 两者职责不同，绑在一起还原就会让报告出现「数值是重算的、标签却说来自预设」的
+ * 错位 —— 那正是 v2.2.7 刚修掉的溯源谎报。
+ *
+ * ## 为什么 `*Params` 也**不**在清单里（只有 12 个而不是 15 个，不是漏写）
+ *
+ * 三个 `Map<String, String>` 看着像溯源，其实**带数值**：`withLiveWavelength`
+ * 会用重算出来的 slope / intercept 重写 `step1Params`（见 `step1Params()`，
+ * `:202`），`withLiveSpd` / `withLiveCurve` 同理。若一并还原，报告里就会出现
+ *
+ * ```
+ * step1Source          = "Preset · Lab WL 2026"   ← 还原的
+ * step1Params[slope_k] = "-2.738911"              ← 还原的（预设值）
+ * slope                = -2.710000                ← 重算值
+ * ```
+ *
+ * 同一个报告里 params 的 slope 和正文的 slope 对不上。
+ *
+ * 剔除之后两种场景都自洽（无论是否拍过定位图）：
+ *
+ * | 场景                        | `step1Source`     | `step1Params[slope_k]`    | `slope`   |
+ * |-----------------------------|-------------------|---------------------------|-----------|
+ * | 拍过图 + 导过预设（会重算） | Preset · X（还原）| 重算值（未还原）          | 重算值    |
+ * | 只导预设、没拍图（不重算）  | Preset · X（基线）| 预设值（基线未被覆盖）    | 预设值    |
+ *
+ * 注意第二行：没拍图时 `analyzePositioning()` 会在 `:1228` 直接 return，基线里的
+ * 预设 params 没人覆盖，最终仍是预设值。**所以剔除 params 不会让"只导预设"的项目
+ * 看不到预设参数** —— 看不到预设值的唯一情形是数值本来就被重算了，那时看不到才
+ * 是对的。
+ *
+ * ## 与 `restoreSpdPresetProvenance` 的区别（因此**没有**合并）
+ *
+ * - 那一个是**有守卫**的（只在 `before.spdPresetName != null` 时还原），用于
+ *   `loadWavelengthPreset` 的级联重跑 —— 那里本来就是现场操作，只在确实存在
+ *   preset 溯源时才需要保护。
+ * - 这一个**无条件**搬运这 12 个字段，因为 `shouldRestoreProvenance()` 已在上游
+ *   把住闸门。若合并，D1 那条路径会连带把 Step 1 / Step 4 的溯源一起还原，越界。
+ */
+internal fun ReportData.restoreProvenance(from: ReportData): ReportData = copy(
+    step1Source = from.step1Source,
+    step1PresetName = from.step1PresetName,
+    step1PresetFile = from.step1PresetFile,
+    step1ImportedAt = from.step1ImportedAt,
+
+    spdSource = from.spdSource,
+    spdPresetName = from.spdPresetName,
+    spdPresetFile = from.spdPresetFile,
+    spdImportedAt = from.spdImportedAt,
+
+    step4Source = from.step4Source,
+    step4PresetName = from.step4PresetName,
+    step4PresetFile = from.step4PresetFile,
+    step4ImportedAt = from.step4ImportedAt
+)
+
+/**
+ * 【v2.2.8】重开项目时的报告基线：以快照为底，再把 fluorophore / band 换成项目
+ * 实体里的值（项目实体是这两项的权威来源，不信任快照）。
+ *
+ * 快照为 null 时退回空白报告 —— v4 之前落库的旧项目就是这条路径。
+ *
+ * 抽成纯函数是为了让「只导预设、没拍图」这条路径（Case B）能在 JVM 上断言：
+ * 那条路径上 `analyzePositioning()` 会在 `:1228` 直接 return，最终报告**就是**
+ * 这个基线的原值，基线若丢了 params 就没人补得回来。
+ */
+internal fun reopenBaseline(
+    restored: ReportData?,
+    fluorophore: String,
+    band: Pair<Int, Int>
+): ReportData = (restored ?: ReportData()).copy(
+    sampleFluorophore = fluorophore,
+    sampleBand = "${band.first}–${band.second} nm"
+)
+
 internal fun ReportData.withCurvePreset(
     p: PresetEntity, payload: CurvePresetPayload, at: String = nowStamp()
 ): ReportData = copy(
@@ -422,8 +622,23 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun finishProject() {
         viewModelScope.launch {
-            val current = _uiState.value.currentProject ?: return@launch
-            dao.updateProject(current.copy(status = "FINISHED", finishedAt = System.currentTimeMillis()))
+            // 【v2.2.8】报告快照必须在清空 uiState **之前**落库 —— 那之后数据就没了。
+            // 【v2.2.8-D1】这一步还必须与 Step 4 的快照写入共用同一把
+            // projectMetadataMutex：否则飞在半路的 persistReportSnapshot() 会拿它读到的
+            // 陈旧行把 status / finishedAt 冲回 IN_PROGRESS / null，
+            // shouldRestoreProvenance() 的闸门随之关上，溯源再次丢失。
+            // 详见 finishProjectLocked() 的 KDoc（含死锁分析）。
+            val written = finishProjectLocked(
+                mutex = projectMetadataMutex,
+                readProject = { _uiState.value.currentProject },
+                serialize = {
+                    // 序列化是 60KB 量级（三条通道 profile + 六条 SPD 曲线），切到 IO。
+                    withContext(Dispatchers.IO) { _uiState.value.reportData.toJsonString() }
+                },
+                writeProject = { updated -> dao.updateProject(updated) }
+            )
+            // 没有进行中的项目时维持原语义：一字不落库、一行状态也不动。
+            if (!written) return@launch
             _uiState.value = ProjectUiState()
             _hasBlueFilter.value = false
             FrameProfileExtractor.forceRbSwap = false
@@ -453,6 +668,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 analysisXRoi = null
                 spdRbSwapRetried = false
                 val band = fluorophoreBand(project.fluorophore)
+                // 【v2.2.8】从落库快照恢复整份报告 —— 这是 Step 1/2/4 预设溯源的
+                // 唯一载体（三个 load*Preset 都不写 captures 表）。
+                // 恢复失败（v4 之前的旧项目 / 畸形 JSON / schema 不认识）→ restored 为
+                // null，退回空白报告，行为与改动前一致，绝不因为旧数据崩 App。
+                val restored = reportDataFromJson(project.reportDataJson)
                 _uiState.value = ProjectUiState(
                     currentProject = project,
                     positioningCaptures = pos,
@@ -460,10 +680,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     blankCaptures = blank,
                     sampleCaptures = sample,
                     standardGroups = groups,
-                    reportData = ReportData(
-                        sampleFluorophore = project.fluorophore,
-                        sampleBand = "${band.first}–${band.second} nm"
-                    )
+                    reportData = reopenBaseline(restored, project.fluorophore, band)
                 )
                 if (pos.isNotEmpty()) setStep1("PROCESSING|" + str(R.string.st_processing_frames, pos.size))
                 if (spd.isNotEmpty()) setStep2("PROCESSING|" + str(R.string.st_processing_frames, spd.size))
@@ -471,6 +688,15 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 analyzePositioning()
                 if (spd.isNotEmpty()) analyzeSpd()
                 analyzeSample()
+                // 【v2.2.8】上面三句会用现场重算把溯源覆盖成 "Live calibration"。
+                // FINISHED 项目是**查看历史报告**，不是重做，所以把当初的溯源搬回来。
+                // 只搬 12 个溯源字段，数值一律保持上面重算出来的结果。
+                val snapshot = restored.takeIf { shouldRestoreProvenance(project.status, it) }
+                if (snapshot != null) {
+                    _uiState.value = _uiState.value.copy(
+                        reportData = _uiState.value.reportData.restoreProvenance(snapshot)
+                    )
+                }
                 val step = when {
                     pos.isEmpty() -> 1
                     spd.isEmpty() -> 2
@@ -802,6 +1028,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                         isLogFit = useLogFit
                     ).withLiveCurve(reg, points.size)
                 )
+                persistReportSnapshot()
                 setStep4(
                     "COMPUTED|" + str(R.string.st4_computed, String.format(Locale.US, "%.4f", reg.r2), points.size) +
                             (if (useLogFit) " (Log-Fit)" else "") +
@@ -973,6 +1200,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     isLogFit = false
                 ).withCurvePreset(presetEntity, payload)
             )
+            persistReportSnapshot()
             setStep4("PRESET|" + str(R.string.st_curve_preset_loaded, presetEntity.name))
         }.onFailure { error ->
             setStep4("FAILED|" + (error.message ?: error.javaClass.simpleName))
@@ -1492,6 +1720,29 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     g.sampleUris.forEach { dao.insertCapture(CaptureEntity(projectId = p.id, step = "STANDARD_SAMPLE", standardGroupId = gid, uri = it.toString())) }
                 }
             }
+        }
+    }
+
+    /**
+     * 【v2.2.8】把当前报告快照写回项目行。
+     *
+     * 为什么除 `finishProject()` 之外还要在 Step 4 结果产出时再存：用户跑完标准曲线
+     * 后很可能直接退出 App，根本不会走到 `finishProject()`。
+     *
+     * 固定切到 IO —— 快照里含三条通道 profile 与十余条 SPD 曲线，序列化是几十 KB
+     * 量级。落库失败静默吞掉：一次现算出来的成功结果，不该因为存储层的偶发问题
+     * 变成 UI 上的报错。
+     */
+    private fun persistReportSnapshot() {
+        viewModelScope.launch(Dispatchers.IO) {
+            persistReportSnapshotLocked(
+                mutex = projectMetadataMutex,
+                readProject = { _uiState.value.currentProject },
+                serialize = { _uiState.value.reportData.toJsonString() },
+                // 落库失败静默吞掉：一次现算出来的成功结果，不该因为存储层的偶发问题
+                // 变成 UI 上的报错。
+                writeProject = { project -> runCatching { dao.updateProject(project) } }
+            )
         }
     }
 

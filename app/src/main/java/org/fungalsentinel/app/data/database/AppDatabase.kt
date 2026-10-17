@@ -21,7 +21,7 @@ import org.fungalsentinel.app.data.model.StandardGroupEntity
         StandardGroupEntity::class,
         ResultEntity::class
     ],
-    version = 3, // Bumped from 2
+    version = 4, // Bumped from 3 (reportDataJson)
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -126,6 +126,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 【v2.2.8】报告快照落库。
+         *
+         * 刻意**不带** `NOT NULL DEFAULT`：v3 之前落库的旧项目行根本没有这份快照，
+         * 写了 NOT NULL 就得编一个默认值出来，那等于凭空造内容。留 NULL 让
+         * [reportDataFromJson] 返回 null，读取端退回 `ReportData()` 即可。
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE projects ADD COLUMN reportDataJson TEXT")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -133,7 +146,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "fssa_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3) // Added MIGRATION_2_3
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

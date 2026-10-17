@@ -21,7 +21,20 @@ data class ProjectEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val finishedAt: Long? = null,
     val status: String = "IN_PROGRESS",
-    val hasBlueFilter: Boolean = false // NEW: Filter mode flag
+    val hasBlueFilter: Boolean = false, // NEW: Filter mode flag
+    /**
+     * 【v2.2.8】已落库的报告快照。
+     *
+     * 为什么必须存这一列：`loadWavelengthPreset()` / `loadSpdPreset()` /
+     * `loadCurvePreset()` 只更新 uiState 里的 [ReportData]，**不会**往 `captures`
+     * 表写任何记录。也就是说「这个项目 Step 1 用了某某预设」这个事实除了
+     * 内存里的 reportData 之外没有任何载体 —— 一旦不落库，从 History 重开项目
+     * 时溯源信息就永久消失。
+     *
+     * 为 null 表示旧项目（MIGRATION_3_4 之前落库）或尚未产出报告，读取端按
+     * 「恢复失败 → 退回 ReportData()」安全降级。
+     */
+    val reportDataJson: String? = null
 )
 
 @Entity(
