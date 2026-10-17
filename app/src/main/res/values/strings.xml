@@ -61,6 +61,8 @@
     <string name="result_predicted">Predicted concentration</string>
     <string name="result_finish">Finish project &amp; save to History</string>
     <string name="result_back_home">Back to home</string>
+    <string name="result_view_report">View Full Report</string>
+    <string name="result_view_report_hint">Review the complete project report including all steps and imported presets</string>
     <string name="dng_title">DNG Camera</string>
     <string name="dng_capture">Capture RAW</string>
     <string name="dng_saved">DNG saved to gallery</string>

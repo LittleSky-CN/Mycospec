@@ -3,7 +3,7 @@
 
 [English](#english) ｜ [中文](#中文)
 
-> **MycoSpec — v2.2.6** (Android frontend of the Fungal Sentinel software stack)
+> **MycoSpec — v2.2.7** (Android frontend of the Fungal Sentinel software stack)
 >
 > **Naming / 命名说明**
 > | 名称 | 版本 | 含义 |
@@ -11,7 +11,7 @@
 > | **Fungal Sentinel** | — | iGEM team project (wet lab + hardware + software) / iGEM 大项目名 |
 > | **OptiX** | — | Hardware project / 硬件项目 |
 > | **FSSA** | v1.4.5 | Python desktop spectral analyzer (reference implementation) / Python 桌面版参考实现 |
-> | **MycoSpec** | v2.2.6 | This Android app / 本 Android 应用 |
+> | **MycoSpec** | v2.2.7 | This Android app / 本 Android 应用 |
 >
 > The Android app was originally shipped under the same name **FSSA** during its
 > 1.x releases. It was renamed **MycoSpec** from v2.0.0 onwards so that the
@@ -111,8 +111,8 @@ app/src/main/java/org/fungalsentinel/app/
 - Cross-check formal results against Python FSSA v1.4.5 on the same DNG set.
 
 ### Versioning
-Current version **v2.2.6** — the single authoritative version number across this
-repository, the app module (`versionName 2.2.6 / versionCode 226`), in-app text
+Current version **v2.2.7** — the single authoritative version number across this
+repository, the app module (`versionName 2.2.7 / versionCode 227`), in-app text
 and every cross-reference to this build. Earlier public milestones (v2.0.0,
 v2.0.1) are retained only as Git history / tags.
 
@@ -194,7 +194,7 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 - 正式结果应与 Python FSSA v1.4.5 在同一批 DNG 上对照。
 
 ### 版本
-当前版本 **v2.2.6** —— 本仓库、应用模块（`versionName 2.2.6 / versionCode 226`）、
+当前版本 **v2.2.7** —— 本仓库、应用模块（`versionName 2.2.7 / versionCode 227`）、
 应用内文案与所有交叉引用统一使用这一个版本号。更早的公开里程碑（v2.0.0、v2.0.1）
 仅作为 Git 历史/标签保留。
 

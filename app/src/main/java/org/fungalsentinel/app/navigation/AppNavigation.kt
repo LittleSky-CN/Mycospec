@@ -113,7 +113,17 @@ fun AppNavigation(navController: NavHostController) {
 
         composable(Routes.STEP4) {
             Step4StandardCurveScreen(
-                onNext = { navController.navigate(Routes.RESULT) },
+                onNext = {
+                    // Step4 is the last data step: continue straight into the
+                    // generated project report instead of dead-ending on Result.
+                    // RESULT is pushed underneath so Report's back lands on the
+                    // summary and Finish still closes the flow. navigate() applies
+                    // synchronously (it is not deferred to the next frame), so both
+                    // entries land in one action and the user only sees REPORT.
+                    // launchSingleTop keeps a double-tap from duplicating a screen.
+                    navController.navigate(Routes.RESULT) { launchSingleTop = true }
+                    navController.navigate(Routes.REPORT) { launchSingleTop = true }
+                },
                 onBack = { navController.popBackStack() },
                 onOpenReport = { navController.navigate(Routes.REPORT) },
                 projectViewModel = projectViewModel,
@@ -133,6 +143,7 @@ fun AppNavigation(navController: NavHostController) {
                 predictedConcentration = projectState.reportData.predictedConcentration.toDoubleOrNull(),
                 isHalfScreen = settings.halfScreenEnabled,
                 coverRatio = settings.coverRatio,
+                onViewReport = { navController.navigate(Routes.REPORT) },
                 onFinish = {
                     projectViewModel.finishProject()
                     navController.navigate(Routes.HOME) {

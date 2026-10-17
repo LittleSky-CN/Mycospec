@@ -144,6 +144,11 @@ fun ReportScreen(
                     Spacer(Modifier.height(8.dp))
                 }
                 SectionTitle("Wavelength Calibration Parameters")
+                ReportLine("Source", r.step1Source)
+                r.step1PresetName?.let { ReportLine("Preset name", it) }
+                r.step1PresetFile?.let { ReportLine("Preset file ID", it) }
+                r.step1ImportedAt?.let { ReportLine("Imported at", it) }
+                r.step1Params.forEach { (k, v) -> ReportLine(k, v) }
                 ReportLine("[Wavelength Mapping Equation]", r.mappingFormula)
                 ReportLine("[Calibration Metadata]", "Exposure: ${r.exposureTime}   X ROI: ${r.xRoi}")
                 ReportLine("[Validation Results]", "Train: ${r.trainingPoints}   Validate: ${r.validationPoint}")
@@ -160,7 +165,7 @@ fun ReportScreen(
             }
 
             // ══════ PAGE 2 — SPD response & response-proportional fusion ═══════
-            PageCard(page = 2, title = "Step 2: Spectral Response & Fusion — MycoSpec v2.2.6") {
+            PageCard(page = 2, title = "Step 2: Spectral Response & Fusion — MycoSpec v2.2.7") {
                 StatusLine(r.step2Status)
                 if (r.spdLambda.isNotEmpty()) {
                     if (r.spdPosR.isNotEmpty()) {
@@ -195,6 +200,10 @@ fun ReportScreen(
                 }
                 SectionTitle("SPD Response & Fusion Parameters")
                 ReportLine("Status / source", "${r.spdStatus} · ${r.spdSource}")
+                r.spdPresetName?.let { ReportLine("Preset name", it) }
+                r.spdPresetFile?.let { ReportLine("Preset file ID", it) }
+                r.spdImportedAt?.let { ReportLine("Imported at", it) }
+                r.spdParams.forEach { (k, v) -> ReportLine(k, v) }
                 ReportLine("Frames / Exposure", "${r.spdFrames} / ${r.spdExposure}")
                 ReportLine("[Effective Band]", "${r.spdEffectiveBand} | masked px ${r.spdMasked} | ratio 0.1")
                 ReportLine("[Responsivity Crossings (diagnostic only)]", r.spdHandoffs)
@@ -243,6 +252,11 @@ fun ReportScreen(
                     Spacer(Modifier.height(8.dp))
                 }
                 SectionTitle("Concentration Parameters")
+                ReportLine("Source", r.step4Source)
+                r.step4PresetName?.let { ReportLine("Preset name", it) }
+                r.step4PresetFile?.let { ReportLine("Preset file ID", it) }
+                r.step4ImportedAt?.let { ReportLine("Imported at", it) }
+                r.step4Params.forEach { (k, v) -> ReportLine(k, v) }
                 r.standardRows.forEach { ReportLine("Standard", it) }
                 ReportLine("[Regression Formula]", r.regressionFormula)
                 ReportLine("R²", r.regressionR2)

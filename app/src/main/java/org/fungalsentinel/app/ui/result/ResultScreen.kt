@@ -33,6 +33,7 @@ fun ResultScreen(
     predictedConcentration: Double? = null,
     isHalfScreen: Boolean = false,
     coverRatio: Float = 0.5f,
+    onViewReport: () -> Unit,
     onFinish: () -> Unit,
     onHome: () -> Unit
 ) {
@@ -100,6 +101,16 @@ fun ResultScreen(
                 WarningPanel(stringResource(R.string.warn_negative_pred))
             }
 
+            Text(
+                text = stringResource(R.string.result_view_report_hint),
+                color = AppColors.TextSecondary,
+                style = MaterialTheme.typography.bodySmall
+            )
+            NeonYellowButton(
+                text = stringResource(R.string.result_view_report),
+                onClick = onViewReport,
+                modifier = Modifier.fillMaxWidth()
+            )
             NeonYellowButton(
                 text = stringResource(R.string.result_finish),
                 onClick = onFinish,

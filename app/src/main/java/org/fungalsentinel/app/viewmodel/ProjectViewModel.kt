@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -80,7 +81,7 @@ data class ReportData(
     val wlG: Double = 522.5,
     val wlB: Double = 462.5,
     val spdStatus: String = "Pending",
-    val spdSource: String = "true_spd.csv (bundled)",
+    val spdSource: String = STEP_SOURCE_NOT_RUN,
     val spdCoeffR: String = "—",
     val spdCoeffB: String = "—",
     val spdResponse: String = "—",
@@ -140,7 +141,27 @@ data class ReportData(
     val step1Status: String = "IDLE",
     val step2Status: String = "IDLE",
     val step3Status: String = "IDLE",
-    val step4Status: String = "IDLE"
+    val step4Status: String = "IDLE",
+
+    // ─── Step 1 provenance ───
+    val step1Source: String = STEP_SOURCE_NOT_RUN,
+    val step1PresetName: String? = null,
+    val step1PresetFile: String? = null,
+    val step1ImportedAt: String? = null,
+    val step1Params: Map<String, String> = emptyMap(),
+
+    // ─── Step 2 provenance (spdSource 已存在，配齐其余) ───
+    val spdPresetName: String? = null,
+    val spdPresetFile: String? = null,
+    val spdImportedAt: String? = null,
+    val spdParams: Map<String, String> = emptyMap(),
+
+    // ─── Step 4 provenance ───
+    val step4Source: String = STEP_SOURCE_NOT_RUN,
+    val step4PresetName: String? = null,
+    val step4PresetFile: String? = null,
+    val step4ImportedAt: String? = null,
+    val step4Params: Map<String, String> = emptyMap()
 )
 
 data class ProjectUiState(
@@ -153,6 +174,159 @@ data class ProjectUiState(
     val curveReferencePreset: CurvePresetPayload? = null,
     val activeCurvePreset: PresetEntity? = null,
     val reportData: ReportData = ReportData()
+)
+
+/**
+ * 【溯源 v2.2.7】Step 1 / 2 / 4 的「这部分数据是从哪儿来的」写入器。
+ *
+ * 之所以抽成顶层纯函数而不是内联在 ViewModel 里：`ProjectViewModel` 依赖
+ * `Application` + Room，JVM 单测无法实例化它；而这些写入器只吃 data class，
+ * 因此可以在 `ReportProvenanceTest` 里对**生产代码本身**做断言。
+ */
+private fun nowStamp(): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+        .format(java.util.Date())
+
+/** Room 里的 preset 没有真实文件路径，用稳定的行标识代替。 */
+private fun presetFileRef(id: Long): String = "preset://$id"
+
+/**
+ * 步骤从未执行时报告里显示的来源。
+ *
+ * 不能再用 "Live calibration" / "Live standard curve" / "true_spd.csv (bundled)"
+ * 之类的默认值：`ReportScreen` 无条件渲染 Source 行，未跑过的步骤会凭空声称自己是
+ * 现场标定，比留空更具误导性。
+ */
+internal const val STEP_SOURCE_NOT_RUN = "Not run"
+
+private fun step1Params(
+    slope: Double?, intercept: Double?, roiStart: Int?, roiEnd: Int?, rbSwapped: Boolean?
+): Map<String, String> = linkedMapOf(
+    "slope_k" to (slope?.let { String.format(Locale.US, "%.6f", it) } ?: "—"),
+    "intercept_b" to (intercept?.let { String.format(Locale.US, "%.4f", it) } ?: "—"),
+    "roi" to (if (roiStart != null && roiEnd != null) "$roiStart-$roiEnd" else "—"),
+    "rb_swapped" to (rbSwapped?.toString() ?: "unknown"),
+    "cfa" to if (rbSwapped == true) "BGGR (R/B swapped)" else "RGGB"
+)
+
+internal fun ReportData.withWavelengthPreset(
+    p: PresetEntity, at: String = nowStamp()
+): ReportData = copy(
+    step1Source = "Preset · ${p.name}",
+    step1PresetName = p.name,
+    step1PresetFile = presetFileRef(p.id),
+    step1ImportedAt = at,
+    step1Params = step1Params(p.slope, p.intercept, p.roiStart, p.roiEnd, p.rbSwapped)
+)
+
+/** 实时标定必须清掉 preset 痕迹，否则旧 preset 名字会残留在报告里。 */
+internal fun ReportData.withLiveWavelength(
+    slope: Double, intercept: Double, roiStart: Int?, roiEnd: Int?, rbSwapped: Boolean,
+    at: String = nowStamp()
+): ReportData = copy(
+    step1Source = "Live calibration",
+    step1PresetName = null,
+    step1PresetFile = null,
+    step1ImportedAt = at,
+    step1Params = step1Params(slope, intercept, roiStart, roiEnd, rbSwapped)
+)
+
+internal fun ReportData.withSpdPreset(
+    p: PresetEntity, driftNm: Float?, at: String = nowStamp()
+): ReportData = copy(
+    spdSource = "Preset · ${p.name}",
+    spdPresetName = p.name,
+    spdPresetFile = presetFileRef(p.id),
+    spdImportedAt = at,
+    spdParams = linkedMapOf(
+        "drift_nm" to (driftNm?.let { String.format(Locale.US, "%.3f", it) } ?: "unknown"),
+        "drift_level" to SpectralResponseCalibrator.driftLevel(driftNm).name
+    )
+)
+
+/**
+ * 实时 SPD 标定：来源标记成 "Live calibration"，但保留参考光谱文件名
+ * （`true_spd.csv (bundled)`），否则报告会丢掉唯一能说明参考光谱的字段。
+ */
+internal fun ReportData.withLiveSpd(csvSource: String, at: String = nowStamp()): ReportData = copy(
+    spdSource = "Live calibration · $csvSource",
+    spdPresetName = null,
+    spdPresetFile = null,
+    spdImportedAt = at,
+    spdParams = linkedMapOf("spd_csv" to csvSource)
+)
+
+/**
+ * 【D1】还原 Step 2 的 preset 溯源。
+ *
+ * 场景：Step 1 加载波长 preset 后，`loadWavelengthPreset` 会用新映射级联重跑
+ * `analyzeSpd()`，而 `analyzeSpd` 末尾的 `withLiveSpd` 会把 `spdPresetName/File`
+ * 置 null、把 `spdSource` 改写成 "Live calibration · …"。这次重跑是**用新波长映射
+ * 重算**，不是用户重新拍了灯，所以报告会静默丢掉 "Preset · X" 的来源。
+ *
+ * 只在重跑前确实存在 preset 溯源时才还原 —— 现场重跑（本来就是 live）不受影响。
+ */
+internal fun ReportData.restoreSpdPresetProvenance(before: ReportData): ReportData =
+    if (before.spdPresetName != null) copy(
+        spdSource = before.spdSource,
+        spdPresetName = before.spdPresetName,
+        spdPresetFile = before.spdPresetFile,
+        spdImportedAt = before.spdImportedAt,
+        spdParams = before.spdParams
+    ) else this
+
+internal fun ReportData.withCurvePreset(
+    p: PresetEntity, payload: CurvePresetPayload, at: String = nowStamp()
+): ReportData = copy(
+    step4Source = "Preset · ${p.name}",
+    step4PresetName = p.name,
+    step4PresetFile = presetFileRef(p.id),
+    step4ImportedAt = at,
+    step4Params = linkedMapOf(
+        "slope" to String.format(Locale.US, "%.6f", payload.slope),
+        "intercept" to String.format(Locale.US, "%.4f", payload.intercept),
+        "r2" to String.format(Locale.US, "%.4f", payload.rSquared),
+        "regression_method" to "linear",
+        "n_standards" to payload.standardPoints.size.toString()
+    )
+)
+
+internal fun ReportData.withLiveCurve(
+    reg: ConcentrationRegressor.RegressionResult, nStandards: Int, at: String = nowStamp()
+): ReportData = copy(
+    step4Source = "Live standard curve",
+    step4PresetName = null,
+    step4PresetFile = null,
+    step4ImportedAt = at,
+    step4Params = linkedMapOf(
+        "slope" to String.format(Locale.US, "%.6f", reg.slope),
+        "intercept" to String.format(Locale.US, "%.4f", reg.intercept),
+        "r2" to String.format(Locale.US, "%.4f", reg.r2),
+        "regression_method" to if (reg.isLogarithmic) "log10" else "linear",
+        "n_standards" to nStandards.toString()
+    )
+)
+
+/** 用户主动清掉 curve preset 后，报告里不能再留着 "Preset · X"。 */
+internal fun ReportData.withoutCurvePreset(): ReportData = copy(
+    // 【D2】清掉 preset 后 Step 4 已无任何曲线数据，不能再声称 "Live standard curve"
+    step4Source = STEP_SOURCE_NOT_RUN,
+    step4PresetName = null,
+    step4PresetFile = null,
+    step4ImportedAt = null,
+    step4Params = emptyMap()
+)
+
+/**
+ * 【D4】SPD preset 实际没落地（没有任何可用采样点）时，报告不能留着 "Preset · X"。
+ * 没有 preset 溯源可退回，因此回到中性未执行标记。
+ */
+internal fun ReportData.withoutSpdPreset(): ReportData = copy(
+    spdSource = STEP_SOURCE_NOT_RUN,
+    spdPresetName = null,
+    spdPresetFile = null,
+    spdImportedAt = null,
+    spdParams = emptyMap()
 )
 
 class ProjectViewModel(application: Application) : AndroidViewModel(application) {
@@ -626,7 +800,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                         curvePoints = points.sortedBy { it.first },
                         curveWarnings = warnings,
                         isLogFit = useLogFit
-                    )
+                    ).withLiveCurve(reg, points.size)
                 )
                 setStep4(
                     "COMPUTED|" + str(R.string.st4_computed, String.format(Locale.US, "%.4f", reg.r2), points.size) +
@@ -797,7 +971,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     curvePoints = emptyList(),
                     curveWarnings = emptyList(),
                     isLogFit = false
-                )
+                ).withCurvePreset(presetEntity, payload)
             )
             setStep4("PRESET|" + str(R.string.st_curve_preset_loaded, presetEntity.name))
         }.onFailure { error ->
@@ -820,7 +994,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 curvePoints = emptyList(),
                 curveWarnings = emptyList(),
                 isLogFit = false
-            )
+            ).withoutCurvePreset()
         )
         setStep4("IDLE|" + str(R.string.st_idle4))
     }
@@ -898,7 +1072,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 wlR = p.wlR ?: 622.5, wlG = p.wlG ?: 522.5, wlB = p.wlB ?: 462.5,
                 previewUri = null,
                 redProfile = emptyList(), greenProfile = emptyList(), blueProfile = emptyList()
-            )
+            ).withWavelengthPreset(p)
         )
         markLoadedCurveForReapply()
         setStep1(
@@ -908,8 +1082,18 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                         R.string.st_preset_roi_restored, restoredRoi.first, restoredRoi.second
                     ) else "")
         )
+        // 【D1】快照 Step 2 溯源：下面的级联重跑会用新映射重算 SPD，但那不是用户
+        // 重新拍灯，不能把 "Preset · X" 抹成 "Live calibration"。
+        val spdProvenanceBeforeRerun = _uiState.value.reportData
         viewModelScope.launch(Dispatchers.IO) {
-            if (_uiState.value.spdCaptures.isNotEmpty()) analyzeSpd()
+            if (_uiState.value.spdCaptures.isNotEmpty()) {
+                analyzeSpd()
+                _uiState.update { st ->
+                    st.copy(
+                        reportData = st.reportData.restoreSpdPresetProvenance(spdProvenanceBeforeRerun)
+                    )
+                }
+            }
             analyzeSample()
         }
     }
@@ -932,6 +1116,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         val warnings = mutableListOf<String>()
         var finalResult = restored
         var recomputed = false
+        var driftNm: Float? = null
 
         if (slope != null && intercept != null) {
             val currentN = report.sensorHeight ?: restored.totalCount
@@ -940,6 +1125,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             // 顺序很关键 —— 若先做 L2，几纳米的漂移就会让轴端点越界而被硬拒绝，
             // 与"漂移永不拒绝"的裁决冲突。重算后 preset 自带当前轴，L2 自然通过。
             val drift = restored.mappingDriftNm(slope, intercept)
+            driftNm = drift
             val lamp = restored.lampR
             val lampReady = lamp != null && lamp.size == currentN
             if (lampReady && (drift == null || drift > SpectralResponseCalibrator.DRIFT_WARN_NM)) {
@@ -972,9 +1158,22 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
         spdRbSwapRetried = finalResult.rbSwapped
         spdResult = finalResult
-        applySpdResult(finalResult.copy(spdSource = p.spdSource ?: finalResult.spdSource))
+        val applied = applySpdResult(finalResult.copy(spdSource = p.spdSource ?: finalResult.spdSource))
+        if (!applied) {
+            // 【D4】一个采样点都没落地 ⇒ preset 实际未生效。此时若继续写
+            // withSpdPreset，报告会显示 "Preset · X" 而 SPD 数据其实全空。
+            spdRbSwapRetried = false
+            spdResult = null
+            _uiState.value = _uiState.value.copy(
+                reportData = _uiState.value.reportData.withoutSpdPreset()
+            )
+            setStep2("FAILED|" + str(R.string.st_spd_preset_invalid, str(R.string.st_spd_not_applied)))
+            return
+        }
         _uiState.value = _uiState.value.copy(
-            reportData = _uiState.value.reportData.copy(spdWarnings = warnings)
+            reportData = _uiState.value.reportData
+                .withSpdPreset(p, driftNm)
+                .copy(spdWarnings = warnings)
         )
         setStep2(
             "PRESET|" + str(R.string.st_preset_loaded, p.name) +
@@ -1050,7 +1249,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     redProfile = res.red, greenProfile = res.green, blueProfile = res.blue,
                     previewUri = uris.first().toString(),
                     wlR = wlR, wlG = wlG, wlB = wlB
-                )
+                ).withLiveWavelength(res.slope, res.intercept, res.roiStart, res.roiEnd, res.rbSwapped)
             )
             setStep1(
                 "COMPUTED|" + str(R.string.st_computed_quality, res.quality, note(batch)) +
@@ -1111,6 +1310,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             res = res.copy(rbSwapped = spdRbSwapRetried)
             spdResult = res
             applySpdResult(res)
+            _uiState.update { st -> st.copy(reportData = st.reportData.withLiveSpd(res.spdSource)) }
             setStep2("COMPUTED|" + str(
                 R.string.st_computed_spd, res.frames,
                 "${res.maskedCount}/${res.totalCount}", note(lampBatch)
@@ -1221,9 +1421,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    private fun applySpdResult(res: SpdCalibrationResult) {
+    /** @return true 表示 SPD 数据真正写进了报告；false 表示没有任何可用采样点。 */
+    private fun applySpdResult(res: SpdCalibrationResult): Boolean {
         val maskedIdx = res.wavelengths.indices.filter { res.mask.getOrElse(it) { false } }
-        if (maskedIdx.isEmpty()) { resetPage2(); return }
+        if (maskedIdx.isEmpty()) { resetPage2(); return false }
         val k = maxOf(1, maskedIdx.size / 180)
         val idx = maskedIdx.filterIndexed { i, _ -> i % k == 0 }
         fun pick(a: FloatArray): List<Float> = idx.map { a.getOrElse(it) { 0f } }
@@ -1271,6 +1472,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 spdFused = pick(res.fused)
             )
         )
+        return true
     }
 
     private suspend fun persistAll() {

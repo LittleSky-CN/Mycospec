@@ -61,6 +61,8 @@
     <string name="result_predicted">预测浓度</string>
     <string name="result_finish">完成项目并存入历史</string>
     <string name="result_back_home">返回主页</string>
+    <string name="result_view_report">查看完整报告</string>
+    <string name="result_view_report_hint">查看包含所有步骤与导入预设的完整项目报告</string>
     <string name="dng_title">DNG 相机</string>
     <string name="dng_capture">拍摄 RAW</string>
     <string name="dng_saved">DNG 已存入相册</string>
