@@ -1,0 +1,37 @@
+# MycoSpec (Android) — CI
+#
+# Purpose: this file EXISTS so that GitLab Auto DevOps does not run.
+# The iGEM GitLab runner has no Docker daemon, so Auto DevOps' Auto Build
+# (Cloud Native Buildpacks) and Auto Code Quality can never succeed there —
+# they failed on the very first push. Auto Test also failed because the
+# Herokuish Gradle path installs an OpenJDK that the Gradle wrapper cannot
+# execute on that runner. Providing our own pipeline keeps the repository
+# free of a permanently-red pipeline badge.
+#
+# What this pipeline actually verifies (nothing more, nothing faked):
+#   the iGEM software-deliverable invariants — required files present,
+#   dependency lockfiles committed, and no compiled binaries tracked.
+#
+# A full Android build (AGP + Android SDK + unit tests) is deliberately NOT
+# attempted here: it needs several hundred MB of SDK downloads per run.
+# See README.md for the local build/test commands.
+
+stages:
+  - verify
+
+repository-hygiene:
+  stage: verify
+  image: alpine:3.20
+  script:
+    - test -f README.md || (echo "missing README.md" && exit 1)
+    - test -f LICENSE || (echo "missing LICENSE" && exit 1)
+    - test -f app/gradle.lockfile || (echo "missing app/gradle.lockfile" && exit 1)
+    - test -f settings-gradle.lockfile || (echo "missing settings-gradle.lockfile" && exit 1)
+    - |
+      found=$(find . -type f \( -name '*.apk' -o -name '*.aab' -o -name '*.dex' \) -print | head -5)
+      if [ -n "$found" ]; then
+        echo "iGEM forbids committing build artifacts; found:"
+        echo "$found"
+        exit 1
+      fi
+    - echo "repository hygiene OK"
