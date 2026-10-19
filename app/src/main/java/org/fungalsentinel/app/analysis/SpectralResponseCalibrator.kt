@@ -143,7 +143,7 @@ object SpectralResponseCalibrator {
             wB[i] = respB[i] / sumResp
         }
 
-        // 相对地板保护：下游除法采用 "该通道响应峰值 5%" 作为地板，防止掩码边缘除零爆炸
+        // relative floor guard: the downstream division uses "5% of that channel's response peak" as the floor, preventing divide-by-zero blow-ups at mask edges
         val maxR = (0 until n).filter { mask[it] }.maxOfOrNull { respR[it] } ?: 1f
         val maxG = (0 until n).filter { mask[it] }.maxOfOrNull { respG[it] } ?: 1f
         val maxB = (0 until n).filter { mask[it] }.maxOfOrNull { respB[it] } ?: 1f
@@ -258,7 +258,7 @@ object SpectralResponseCalibrator {
         val maskedCount = mask.count { it }
         if (maskedCount < 10) return null
 
-        // 计算原始响应
+        // compute the raw response
         val respR = FloatArray(n); val respG = FloatArray(n); val respB = FloatArray(n)
         for (i in 0 until n) {
             if (!mask[i]) continue
@@ -290,7 +290,7 @@ object SpectralResponseCalibrator {
         )
     }
 
-    /** 6 significant digits -- matches the Python serialisation口径 (§7.2). */
+    /** 6 significant digits -- matches the Python serialisation convention (§7.2). */
     private fun sig6(v: Float): Double {
         val d = v.toDouble()
         if (!d.isFinite() || d == 0.0) return d

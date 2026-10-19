@@ -7,11 +7,11 @@ import androidx.room.PrimaryKey
 import java.util.Locale
 
 /**
- * 荧光素的唯一真源（**项目里只有这一份 enum**）。
+ * The single source of truth for fluorophores (**the only enum of its kind in this project**).
  *
  * canonical ID == [Fluorophore.name]（`YPET` / `EGFP` / `MCHERRY` / `CFP` /
- * `MTURQUOISE2` / `FLUORESCEIN`），原因：`projects.fluorophore` 存量数据里存的
- * 就是这些值，改 Python 端比迁移存量库便宜。
+ * `MTURQUOISE2` / `FLUORESCEIN`), because those are exactly the values stored in the existing
+ * `projects.fluorophore` data, and changing the Python side is cheaper than migrating the existing database.
  */
 enum class Fluorophore(val displayName: String, val integrationRangeNm: String) {
     YPET("Ypet", "500–530 nm"),
@@ -23,10 +23,10 @@ enum class Fluorophore(val displayName: String, val integrationRangeNm: String) 
 }
 
 /**
- * 归一化成查表键：大小写无关，去掉所有空白、连字符（`-` / en-dash / em-dash）、
- * 下划线、点、斜杠与圆括号。
+ * Normalised into a lookup key: case-insensitive, and strips all whitespace, hyphens (`-` / en-dash / em-dash),
+ * underscores, dots, slashes and parentheses.
  *
- * 例：`"m-Turquoise2"` / `"mturquoise2"` / `"MTURQUOISE2"` → `"mturquoise2"`，
+ * Example: `"m-Turquoise2"` / `"mturquoise2"` / `"MTURQUOISE2"` -> `"mturquoise2"`,
  * `"Ypet (Venus variant)"` → `"ypetvenusvariant"`。
  */
 private val FLUOROPHORE_NOISE = Regex("[\\s_./()–—-]+")
@@ -35,16 +35,16 @@ private fun normalizeFluorophoreKey(name: String): String =
     FLUOROPHORE_NOISE.replace(name.trim().lowercase(Locale.US), "")
 
 /**
- * 显式别名表（键已过 [normalizeFluorophoreKey]），每类列全。
+ * Explicit alias table (keys already passed through [normalizeFluorophoreKey]), each class listed exhaustively.
  *
- * 为什么用显式表而不是模糊/子串匹配：荧光素只有这 6 类，逐条列死就不会出现
- * 某条宽松规则把 `CFP` 误判成别的东西的情况。
+ * Why an explicit table instead of fuzzy / substring matching: there are only these 6 fluorophore classes, so listing them one by one
+ * guarantees that no loose rule ever misclassifies `CFP` as something else.
  *
- * Python FSSA 侧改造成 canonical 之前，跨端曲线 preset 里带的就是它的显示名，
- * 那些写法在这里必须有一条实打实的别名。
+ * Before the Python FSSA side moved to canonical IDs, cross-platform curve presets carried its display names,
+ * so those spellings must have a real alias entry here.
  */
 private val FLUOROPHORE_ALIASES: Map<String, Fluorophore> = mapOf(
-    // YPET —— Python 显示名 "Ypet (Venus variant)"
+    // YPET -- Python display name "Ypet (Venus variant)"
     "ypet" to Fluorophore.YPET,
     "ypetvenusvariant" to Fluorophore.YPET,
     // EGFP
@@ -53,22 +53,22 @@ private val FLUOROPHORE_ALIASES: Map<String, Fluorophore> = mapOf(
     "mcherry" to Fluorophore.MCHERRY,
     // CFP
     "cfp" to Fluorophore.CFP,
-    // MTURQUOISE2 —— Python key "mTurquoise2"，常见变体 "m-turquoise2" 归一化后同键
+    // MTURQUOISE2 -- Python key "mTurquoise2"; the common variant "m-turquoise2" normalises to the same key
     "mturquoise2" to Fluorophore.MTURQUOISE2,
-    // FLUORESCEIN —— Python 显示名 "Fluorescein (sodium salt)"
+    // FLUORESCEIN -- Python display name "Fluorescein (sodium salt)"
     "fluorescein" to Fluorophore.FLUORESCEIN,
     "fluoresceinsodiumsalt" to Fluorophore.FLUORESCEIN
 )
 
 /**
- * 把荧光素的任意写法解析成 canonical [Fluorophore]。
+ * Resolves any spelling of a fluorophore into the canonical [Fluorophore].
  *
- * 这是**唯一**的「字符串 → 荧光素」入口：Step 3 的下拉、ViewModel 的波段查表、
- * 曲线预设的 `fluorophore` 字段都必须走这里，Python FSSA 导出的 preset
- * （`mCherry` / `Ypet (Venus variant)` / `Fluorescein (sodium salt)` …）才能落地。
+ * This is the **only** "string -> fluorophore" entry point: the Step 3 dropdown, the ViewModel's band lookup and
+ * the `fluorophore` field of curve presets must all go through here, so that presets exported by Python FSSA
+ * (`mCherry` / `Ypet (Venus variant)` / `Fluorescein (sodium salt)` ...) can be read back.
  *
- * 认不出来就返回 `null` —— **由调用方**决定报错还是降级，本函数不静默兜底，
- * 这样外部 preset 里出现脏值时用户会看到明确提示而不是悄悄读到错的通道。
+ * Returns `null` when it cannot recognise the input -- **the caller** decides whether to fail or degrade; this function never silently falls back,
+ * so a dirty value in an external preset produces a clear message for the user instead of quietly reading the wrong channel.
  */
 fun canonicalFluorophore(name: String?): Fluorophore? {
     val key = normalizeFluorophoreKey(name ?: return null)
@@ -87,16 +87,16 @@ data class ProjectEntity(
     val status: String = "IN_PROGRESS",
     val hasBlueFilter: Boolean = false, // NEW: Filter mode flag
     /**
-     * 【v2.2.8】已落库的报告快照。
+     * [v2.2.8] the report snapshot that was persisted.
      *
-     * 为什么必须存这一列：`loadWavelengthPreset()` / `loadSpdPreset()` /
-     * `loadCurvePreset()` 只更新 uiState 里的 [ReportData]，**不会**往 `captures`
-     * 表写任何记录。也就是说「这个项目 Step 1 用了某某预设」这个事实除了
-     * 内存里的 reportData 之外没有任何载体 —— 一旦不落库，从 History 重开项目
-     * 时溯源信息就永久消失。
+     * Why this column is required: `loadWavelengthPreset()` / `loadSpdPreset()` /
+     * `loadCurvePreset()` only update [ReportData] in uiState and **do not** write any row to the `captures`
+     * table. In other words the fact that "this project used such-and-such preset for Step 1" has no carrier other than
+     * the in-memory reportData -- if it is not persisted, the provenance information is lost forever when the project
+     * is reopened from History.
      *
-     * 为 null 表示旧项目（MIGRATION_3_4 之前落库）或尚未产出报告，读取端按
-     * 「恢复失败 → 退回 ReportData()」安全降级。
+     * null means an old project (persisted before MIGRATION_3_4) or one that has not produced a report yet; readers
+     * degrade safely with "restoration failed -> fall back to ReportData()".
      */
     val reportDataJson: String? = null
 )

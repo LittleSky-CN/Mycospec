@@ -43,7 +43,7 @@ fun InlineCameraOverlay(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // 本地状态：打开时继承全局设置，拍摄中独立调整（不写回全局）
+    // local state: inherits the global settings when opened, adjusted independently during capture (never written back globally)
     var localAutoExposure by remember { mutableStateOf(settings.autoExposure) }
     var localExposureMs by remember { mutableStateOf(settings.exposureMs) }
     var localAutoFocus by remember { mutableStateOf(settings.autoFocus) }
@@ -57,7 +57,7 @@ fun InlineCameraOverlay(
         }
     }
 
-    // 全局设置变化时同步本地状态
+    // sync the local state when the global settings change
     LaunchedEffect(settings) {
         localAutoExposure = settings.autoExposure
         localExposureMs = settings.exposureMs
@@ -65,7 +65,7 @@ fun InlineCameraOverlay(
         localFocusDiopter = settings.focusDiopter
     }
 
-    // 本地状态变化时下发相机参数
+    // push camera parameters down when the local state changes
     LaunchedEffect(localAutoExposure, localExposureMs, localAutoFocus, localFocusDiopter) {
         cameraManager.updateParams(
             CameraParams(
@@ -82,7 +82,7 @@ fun InlineCameraOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .border(2.dp, Color.Black, RoundedCornerShape(0.dp)) // 统一黑色边框
+            .border(2.dp, Color.Black, RoundedCornerShape(0.dp)) // uniform black border
     ) {
         CameraPreviewView(
             cameraManager = cameraManager,
@@ -91,7 +91,7 @@ fun InlineCameraOverlay(
         )
 
         if (hasCameraPermission) {
-        // 顶部：退出键 + 提示胶囊（避开状态栏）
+        // top: exit key + hint pill (keeps clear of the status bar)
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -141,7 +141,7 @@ fun InlineCameraOverlay(
             }
         }
 
-        // 快门：横屏在左，竖屏在下（与 DngCameraScreen 一致）
+        // shutter: left in landscape, bottom in portrait (same as DngCameraScreen)
         val shutterModifier = if (isLandscape) {
             Modifier.align(Alignment.CenterStart).padding(start = 24.dp)
         } else {
@@ -162,7 +162,7 @@ fun InlineCameraOverlay(
             ) { }
         }
 
-        // 底部控制面板（避开导航栏）
+        // bottom control panel (keeps clear of the navigation bar)
         Box(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
             CameraControlPanel(
                 settings = AppSettings(

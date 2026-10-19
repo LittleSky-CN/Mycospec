@@ -210,7 +210,7 @@ fun AppNavigation(navController: NavHostController) {
             )
         }
 
-        // 【修复】补全了所有 SettingsScreen 的参数，去掉了注释
+        // [fix] filled in every SettingsScreen parameter and removed the comment
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 wavelengthR = settings.wavelengthR,

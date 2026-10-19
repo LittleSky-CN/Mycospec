@@ -10,25 +10,25 @@ import org.junit.Test
 import java.lang.reflect.Modifier
 
 /**
- * 【v2.2.8】[ReportData] 落库快照的编解码契约。
+ * [v2.2.8] codec contract of the persisted [ReportData] snapshot.
  *
- * 这个文件的存在意义不是"验证 org.json 好用"，而是守住一条不变量：
- * **从 History 重开一个已完成的项目时，报告与 Step 1/2/4 的预设溯源必须原样回来。**
- * 三个 `load*Preset` 只改内存里的 reportData、不写 `captures` 表，所以这份快照是
- * 溯源信息的唯一载体 —— 序列化器漏掉任何一个字段都是永久性的数据丢失。
+ * The point of this file is not "to verify that org.json works" but to hold one invariant:
+ * **when a finished project is reopened from History, the report and the Step 1/2/4 preset provenance must come back unchanged.**
+ * The three `load*Preset` only touch reportData in memory and never write to the `captures` table, so this snapshot is the
+ * only carrier of the provenance -- a serialiser that drops any single field causes permanent data loss.
  *
- * 覆盖：全字段往返（102 个字段逐个断言）、默认值往返、畸形输入降级、
- * schema 版本不符降级、三种特殊容器，以及**防遗漏护栏**。
+ * Coverage: full-field round trip (102 fields asserted one by one), default round trip, malformed-input degradation,
+ * schema mismatch degradation, three special containers, and the **anti-omission guard**.
  */
 class ReportDataJsonTest {
 
     // ─────────────────────────────────────────────────────────────────────
-    // 1. 全字段往返
+    // 1. full-field round trip
     // ─────────────────────────────────────────────────────────────────────
 
-    /** 每个字段都填成**非默认值**，这样漏序列化任何一个都会被断言抓住。 */
+    /** Every field is set to a **non-default** value, so forgetting to serialise any of them is caught by an assertion. */
     private fun fullyPopulated() = ReportData(
-        // ─── Step 1 波长标定 ───
+        // ─── Step 1 wavelength calibration ───
         wavelengthQuality = "wavelengthQuality#1",
         wavelengthGError = "wavelengthGError#2",
         mappingFormula = "mappingFormula#3",
@@ -91,7 +91,7 @@ class ReportDataJsonTest {
         spdWR = listOf(175.5f, 176.25f, 177.125f),
         spdFused = listOf(178.5f, 179.25f, 180.125f),
 
-        // ─── Step 3 样品 ───
+        // ─── Step 3 sample ───
         sampleFluorophore = "sampleFluorophore#60",
         sampleBand = "sampleBand#61",
         blankMeanArea = "blankMeanArea#62",
@@ -108,7 +108,7 @@ class ReportDataJsonTest {
         sampleFwhm = "sampleFwhm#73",
         sampleCentroid = "sampleCentroid#74",
 
-        // ─── Step 4 标准曲线 ───
+        // ─── Step 4 standard curve ───
         standardRows = listOf("standardRows.a", "standardRows.b"),
         regressionFormula = "regressionFormula#76",
         regressionR2 = "regressionR2#77",
@@ -120,13 +120,13 @@ class ReportDataJsonTest {
         spdWarnings = listOf("spdWarnings.a", "spdWarnings.b"),
         isLogFit = true,
 
-        // ─── 步骤状态 ───
+        // ─── step status ───
         step1Status = "step1Status#85",
         step2Status = "step2Status#86",
         step3Status = "step3Status#87",
         step4Status = "step4Status#88",
 
-        // ─── 溯源 ───
+        // ─── provenance ───
         step1Source = "step1Source#89",
         step1PresetName = "step1PresetName#90",
         step1PresetFile = "step1PresetFile#91",
@@ -148,14 +148,14 @@ class ReportDataJsonTest {
         val src = fullyPopulated()
         val out = reportDataFromJson(src.toJsonString())
 
-        assertNotNull("反序列化不应返回 null", out)
+        assertNotNull("deserialization must not return null", out)
         out!!
 
-        // 整体相等：data class 的 equals 覆盖全部 102 个字段，是最后一道兜底。
-        assertEquals("整份 ReportData 往返后应完全相等", src, out)
+        // whole-object equality: equals on a data class covers all 102 fields and is the last safety net.
+        assertEquals("the whole ReportData must be identical after a round trip", src, out)
 
-        // 逐字段断言：整体断言失败时只报一次"不相等"，逐字段能立刻定位到具体字段。
-        // ─── Step 1 波长标定 ───
+        // per-field assertions: the whole-object assertion only reports "not equal" once, while per-field pins down the exact field.
+        // ─── Step 1 wavelength calibration ───
         assertEquals("wavelengthQuality", src.wavelengthQuality, out.wavelengthQuality)
         assertEquals("wavelengthGError", src.wavelengthGError, out.wavelengthGError)
         assertEquals("mappingFormula", src.mappingFormula, out.mappingFormula)
@@ -218,7 +218,7 @@ class ReportDataJsonTest {
         assertEquals("spdWR", src.spdWR, out.spdWR)
         assertEquals("spdFused", src.spdFused, out.spdFused)
 
-        // ─── Step 3 样品 ───
+        // ─── Step 3 sample ───
         assertEquals("sampleFluorophore", src.sampleFluorophore, out.sampleFluorophore)
         assertEquals("sampleBand", src.sampleBand, out.sampleBand)
         assertEquals("blankMeanArea", src.blankMeanArea, out.blankMeanArea)
@@ -235,7 +235,7 @@ class ReportDataJsonTest {
         assertEquals("sampleFwhm", src.sampleFwhm, out.sampleFwhm)
         assertEquals("sampleCentroid", src.sampleCentroid, out.sampleCentroid)
 
-        // ─── Step 4 标准曲线 ───
+        // ─── Step 4 standard curve ───
         assertEquals("standardRows", src.standardRows, out.standardRows)
         assertEquals("regressionFormula", src.regressionFormula, out.regressionFormula)
         assertEquals("regressionR2", src.regressionR2, out.regressionR2)
@@ -247,13 +247,13 @@ class ReportDataJsonTest {
         assertEquals("spdWarnings", src.spdWarnings, out.spdWarnings)
         assertEquals("isLogFit", src.isLogFit, out.isLogFit)
 
-        // ─── 步骤状态 ───
+        // ─── step status ───
         assertEquals("step1Status", src.step1Status, out.step1Status)
         assertEquals("step2Status", src.step2Status, out.step2Status)
         assertEquals("step3Status", src.step3Status, out.step3Status)
         assertEquals("step4Status", src.step4Status, out.step4Status)
 
-        // ─── 溯源 ───
+        // ─── provenance ───
         assertEquals("step1Source", src.step1Source, out.step1Source)
         assertEquals("step1PresetName", src.step1PresetName, out.step1PresetName)
         assertEquals("step1PresetFile", src.step1PresetFile, out.step1PresetFile)
@@ -274,28 +274,28 @@ class ReportDataJsonTest {
     fun defaultRoundTrip_preservesDefaults() {
         val out = reportDataFromJson(ReportData().toJsonString())
         assertNotNull(out)
-        assertEquals("默认 ReportData 往返后应完全相等", ReportData(), out)
+        assertEquals("a default ReportData must be identical after a round trip", ReportData(), out)
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 2. 降级路径：任何异常都必须变成 null，绝不抛给调用方
+    // 2. degradation path: every exception must become null and never be thrown to the caller
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     fun malformedInput_returnsNull() {
-        assertNull("null 输入", reportDataFromJson(null))
-        assertNull("空串", reportDataFromJson(""))
-        assertNull("纯空白", reportDataFromJson("   \n\t "))
-        assertNull("不是 JSON", reportDataFromJson("this is not json at all"))
-        assertNull("截断的 JSON", reportDataFromJson("{\"schema\":1,\"wavelengthQuality\":"))
-        assertNull("JSON 数组而非对象", reportDataFromJson("[1,2,3]"))
-        assertNull("只有 schema、其余全缺", reportDataFromJson("{\"schema\":1}"))
+        assertNull("null input", reportDataFromJson(null))
+        assertNull("empty string", reportDataFromJson(""))
+        assertNull("whitespace only", reportDataFromJson("   \n\t "))
+        assertNull("not JSON", reportDataFromJson("this is not json at all"))
+        assertNull("truncated JSON", reportDataFromJson("{\"schema\":1,\"wavelengthQuality\":"))
+        assertNull("a JSON array instead of an object", reportDataFromJson("[1,2,3]"))
+        assertNull("only schema, everything else missing", reportDataFromJson("{\"schema\":1}"))
         assertNull(
-            "字段应是数组却给了字符串",
+            "a field that should be an array was given a string",
             reportDataFromJson("{\"schema\":1,\"redProfile\":\"not-an-array\"}")
         )
         assertNull(
-            "字段应是数字却给了字符串",
+            "a field that should be a number was given a string",
             reportDataFromJson("{\"schema\":1,\"spdFrames\":\"not-a-number\"}")
         )
     }
@@ -304,29 +304,29 @@ class ReportDataJsonTest {
     fun unknownSchema_returnsNull() {
         val raw = ReportData().toJsonString()
 
-        // 先确认基线：当前 schema 的正常快照是能恢复的，否则下面几条断言毫无意义。
-        assertNotNull("当前 schema 的正常快照必须能恢复", reportDataFromJson(raw))
+        // establish the baseline first: a normal snapshot of the current schema must restore, otherwise the assertions below are meaningless.
+        assertNotNull("a normal snapshot of the current schema must restore", reportDataFromJson(raw))
 
         assertNull(
-            "未来的 schema 版本必须拒绝",
+            "a future schema version must be rejected",
             reportDataFromJson(JSONObject(raw).put("schema", REPORT_DATA_SCHEMA + 1).toString())
         )
         assertNull(
-            "过旧的 schema 版本必须拒绝",
+            "an older schema version must be rejected",
             reportDataFromJson(JSONObject(raw).put("schema", REPORT_DATA_SCHEMA - 1).toString())
         )
         assertNull(
-            "没有 schema 字段必须拒绝",
+            "a missing schema field must be rejected",
             reportDataFromJson(JSONObject(raw).apply { remove("schema") }.toString())
         )
         assertNull(
-            "schema 不是整数必须拒绝",
+            "a non-integer schema must be rejected",
             reportDataFromJson(JSONObject(raw).put("schema", "one").toString())
         )
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 3. 三种特殊容器
+    // 3. three special containers
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -378,20 +378,20 @@ class ReportDataJsonTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 4. 防遗漏护栏
+    // 4. anti-omission guard
     //
-    // 序列化器最容易的腐烂方式：有人给 ReportData 加了字段、也更新了 ViewModel，
-    // 但忘了改 ReportDataJson.kt —— 于是这个字段的取值在重开项目后永久丢失，
-    // 且不产生任何编译错误或测试失败。下面三个用例专门堵这个洞。
+    // the easiest way for the serialiser to rot: someone adds a field to ReportData and updates the ViewModel
+    // but forgets ReportDataJson.kt -- the value of that field is then lost forever after reopening the project,
+    // with no compile error and no test failure. The three cases below exist to plug exactly that hole.
     // ─────────────────────────────────────────────────────────────────────
 
     /**
-     * [ReportData] 的全部属性名，从**类本身**反射出来，不是手写的清单。
+     * all property names of [ReportData], reflected from **the class itself** rather than from a hand-written list.
      *
-     * 用 `declaredFields` 而不是 `declaredMethods`：data class 的幕后字段名与属性名
-     * 逐字一致，不需要从 `getXxx` / `isXxx` 反推 —— 后者对 `isLogFit` 这种本身以
-     * `is` 开头的 Boolean 属性会推错。这样也就不必引入 `kotlin-reflect`：
-     * 它的版本必须与 kotlin-stdlib 严格对齐，为一个断言多挂一个依赖不划算。
+     * `declaredFields` is used instead of `declaredMethods`: the backing field names of a data class match the property names
+     * verbatim, so there is no need to reverse-engineer them from `getXxx` / `isXxx` -- the latter would mangle a Boolean property
+     * that already starts with `is`, such as `isLogFit`. This also avoids pulling in `kotlin-reflect`:
+     * its version must match kotlin-stdlib exactly, and adding a dependency just for one assertion is not worth it.
      */
     private fun reportDataPropertyNames(): Set<String> =
         ReportData::class.java.declaredFields
@@ -411,28 +411,28 @@ class ReportDataJsonTest {
         val properties = reportDataPropertyNames()
         val keys = jsonKeys(ReportData().toJsonString())
 
-        // 契约：序列化出的键集合必须恰好是「全部属性名 + schema」，一个不多一个不少。
+        // contract: the serialised key set must be exactly "all property names + schema", no more and no less.
         assertEquals(
-            "ReportData 的属性集合与序列化键集合不一致 —— 多半是加了字段却忘了改 " +
-                "ReportDataJson.kt。缺少的键：${properties - keys}；" +
-                "多余的键：${keys - properties - "schema"}",
+            "the ReportData property set and the serialised key set differ -- most likely a field was added but " +
+                "ReportDataJson.kt was not updated. Missing keys: ${properties - keys}; " +
+                "extra keys: ${keys - properties - "schema"}",
             properties + "schema",
             keys
         )
-        // 反射若失效（两边都变空集）上面那条会假通过，这里把规模钉在一个下界上。
+        // if reflection breaks (both sets become empty) the assertion above would pass spuriously, so pin the size to a lower bound.
         assertTrue(
-            "反射只取到 ${properties.size} 个字段，护栏可能已经失效",
+            "reflection only found ${properties.size} fields; the guard may have stopped working",
             properties.size >= 100
         )
     }
 
     @Test
     fun guardrail_detectsADroppedKey() {
-        // 反向验证护栏有牙：人为删掉一个键，护栏必须能精确到**是哪一个字段**。
+        // reverse check that the guard has teeth: delete one key by hand and it must name **exactly which** field.
         val properties = reportDataPropertyNames()
         val pruned = jsonKeys(ReportData().toJsonString()) - "step1PresetName"
         assertEquals(
-            "人为删掉 step1PresetName 后，护栏必须精确报出这个字段",
+            "after deleting step1PresetName by hand, the guard must name that exact field",
             setOf("step1PresetName"),
             properties - pruned
         )
@@ -440,8 +440,8 @@ class ReportDataJsonTest {
 
     @Test
     fun guardrail_reflectionActuallySeesTheFields() {
-        // 再兜一层：钉死几个分布在不同区块的已知字段确实被反射看到了，
-        // 防止过滤器写错导致集合为空、上面两条假通过。
+        // one more layer: pin a few known fields spread across different blocks to prove reflection really saw them,
+        // so that a broken filter cannot leave the set empty and let the two assertions above pass spuriously.
         val properties = reportDataPropertyNames()
         assertTrue(properties.contains("wavelengthQuality"))
         assertTrue(properties.contains("step1PresetName"))

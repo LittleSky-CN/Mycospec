@@ -5,7 +5,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-// 兼容别名：旧代码若仍引用 NeonXxx，自动落入新色板；新代码一律用 AppColors。
+// compatibility alias: legacy code that still references NeonXxx falls into the new palette automatically; new code must use AppColors.
 val NeonBlack = AppColors.Bg
 val NeonMagenta = AppColors.Accent
 val NeonMagentaDark = AppColors.SurfaceRaised
@@ -20,8 +20,8 @@ val NeonSurfaceVariant = AppColors.Surface
 val NeonError = AppColors.Error
 val NeonErrorDark = AppColors.SurfaceRaised
 
-/** 单一 scheme：primary/secondary/tertiary 统一为强调绿，
- *  即使有漏改的 colorScheme 引用也会自动落入极简色板。 */
+/** single scheme: primary / secondary / tertiary are all unified into the accent green,
+ *  so even a missed colorScheme reference lands in the minimal palette. */
 private val MinimalScheme = darkColorScheme(
     primary = AppColors.Accent,
     onPrimary = AppColors.OnAccent,

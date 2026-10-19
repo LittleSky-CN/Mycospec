@@ -13,46 +13,46 @@ import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 /**
- * 【v2.2.8-D1】项目行（projects 表）写入的 lost-update 竞态。
+ * [v2.2.8-D1] lost-update race when writing the project row (projects table).
  *
- * 同一行要同时承载**报告快照**（Step 4 每出结果就写一次）与**流程状态**（Finish 时写
- * `FINISHED` / `finishedAt`），两条路径各在一个 fire-and-forget 协程里跑。若各自凭手里
- * 的副本 `copy()` 回写，后写的那次会把先写的结果整行冲掉：
+ * The same row carries both the **report snapshot** (written every time Step 4 produces a result) and the **flow state** (Finish writes
+ * `FINISHED` / `finishedAt`), and the two paths each run in a fire-and-forget coroutine. If each writes back its own
+ * `copy()`, the later write wipes out the earlier result for the whole row:
  *
  * ```
- * persistReportSnapshot ：读出 (status=IN_PROGRESS, finishedAt=null)   ← 陈旧
- * finishProject         ：写入 (status=FINISHED,    finishedAt=ts)
- * persistReportSnapshot ：回写 (status=IN_PROGRESS, finishedAt=null)   ← 污染
+ * persistReportSnapshot : reads  (status=IN_PROGRESS, finishedAt=null)   <- stale
+ * finishProject         : writes (status=FINISHED,    finishedAt=ts)
+ * persistReportSnapshot : writes (status=IN_PROGRESS, finishedAt=null)   <- pollutes
  * ```
  *
- * 症状是**静默**的：`shouldRestoreProvenance()` 要求 `status == "FINISHED"`，一旦被打回
- * `IN_PROGRESS`，从 History 重开时 Step 1/2/4 的溯源就不再还原 —— 也就是说，本次刚修好
- * 的溯源丢失会换个触发路径原样复现。
+ * The symptom is **silent**: `shouldRestoreProvenance()` requires `status == "FINISHED"`, and once it is pushed back to
+ * `IN_PROGRESS`, reopening from History no longer restores the provenance of Steps 1/2/4 -- meaning the provenance loss
+ * we just fixed would reproduce verbatim through a different trigger path.
  *
- * ## 为什么这样就够，以及为什么不用 mockk / Robolectric
+ * ## Why this is enough, and why no mockk / Robolectric
  *
- * `ProjectViewModel` 依赖 `Application` + 两个 Room 库，JVM 单测里实例化不了（见
- * `ReopenProvenanceTest` 的类 KDoc）。所以修复把两段写入都抽成了 top-level suspend 函数
- * —— [`finishProjectLocked()`] / [`persistReportSnapshotLocked()`] —— **ViewModel 的生产路径
- * 调用的就是这一份代码**，这里直接用 fake 的读写替身驱动它，而不是复制一份等价实现。
- * 谁要是在 ViewModel 里绕过它们直接 `dao.updateProject(...)`，这两个 fake 都拦不住，但那
- * 种改法（`projectMetadataMutex` 从三处写入里消失）在 review 时一眼可见。
+ * `ProjectViewModel` depends on `Application` + two Room databases and cannot be instantiated in a JVM unit test (see
+ * the class KDoc of `ReopenProvenanceTest`). The fix therefore extracted both writes into top-level suspend functions
+ * -- [`finishProjectLocked()`] / [`persistReportSnapshotLocked()`] -- **the production path in the ViewModel
+ * calls exactly this code**, and here we drive it with fake reader / writer doubles instead of copying an equivalent implementation.
+ * If someone bypasses them in the ViewModel and calls `dao.updateProject(...)` directly, neither fake can catch it, but such a change
+ * (`projectMetadataMutex` disappearing from the three write sites) is obvious at review time.
  *
- * ## 为什么这里能出**确定性**用例
+ * ## Why **deterministic** cases are possible here
  *
- * 两个 barrier 用 rendezvous `Channel`，绝不用 `sleep` / `delay`：
+ * Both barriers use rendezvous `Channel`s, never `sleep` / `delay`:
  *
- * - 慢协程在「**读完之后、写之前**」通报考官并等待放行 —— 这个位置正好落在临界区当中，
- *   于是「它手里握着陈旧副本」这件事 100% 发生；
- * - 放行之前 `yield()` 若干次把调度机会全让出去：有锁时对手协程排在锁上（拿不到，
- *   `yield` 多少次都没用），无锁时它就在这一步跑完。同一个脚本于是能同时区分两种实现。
+ * - the slow coroutine notifies the examiner and waits "**after reading, before writing**" -- that point sits exactly in the middle of the critical section,
+ *   so "it holds a stale copy" happens 100% of the time;
+ * - before releasing, `yield()` several times to give up every scheduling slot: with a lock the opponent coroutine queues on the lock (it cannot proceed,
+ *   so no amount of `yield` helps), without a lock it finishes right at this step. The same script can therefore distinguish both implementations.
  *
- * 判定不看中间过程（竞态的中间态本来就随机），只看**最终落库的整行**：这正是
- * `openProject()` 唯一会读到的东西。
+ * The verdict ignores intermediate states (the intermediate states of a race are random anyway) and only looks at **the whole row finally persisted**: that is exactly
+ * the only thing `openProject()` will ever read.
  */
 class FinishProjectRaceTest {
 
-    /** 假装自己就是 projects 表里那一行：整行覆盖写，并留下每次写入的痕迹。 */
+    /** Pretends to be that single row of the projects table: overwrites the whole row and records every write. */
     private class FakeProjectRow(initial: ProjectEntity) {
         var row: ProjectEntity = initial
             private set
@@ -70,7 +70,7 @@ class FinishProjectRaceTest {
     private fun unfinishedRow() = ProjectEntity(id = 1, name = "demo", status = "IN_PROGRESS")
 
     // ─────────────────────────────────────────────────────────────────────
-    // 1. 快照写先起飞：它读到的陈旧行不许冲掉后面那次 Finish
+    // 1. the snapshot write takes off first: the stale row it read must not wipe out the later Finish
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -80,13 +80,13 @@ class FinishProjectRaceTest {
         val readDone = Channel<Unit>(Channel.RENDEZVOUS)
         val allowWrite = Channel<Unit>(Channel.RENDEZVOUS)
 
-        // ① 模拟 Step 4 结果产出触发的 persistReportSnapshot()：持锁 → 读陈旧行 → 卡住
+        // (1) simulate the persistReportSnapshot() triggered by a Step 4 result: take the lock -> read the stale row -> block
         val flying = launch {
             persistReportSnapshotLocked(
                 mutex = mutex,
                 readProject = { row.row },
                 serialize = {
-                    readDone.send(Unit)     // 已握着陈旧副本，等你放行
+                    readDone.send(Unit)     // holding the stale copy now, waiting for you to release
                     allowWrite.receive()
                     step4Snapshot
                 },
@@ -95,7 +95,7 @@ class FinishProjectRaceTest {
         }
         readDone.receive()
 
-        // ② 卡住的这一刻用户点了 Finish
+        // (2) at this blocked moment the user taps Finish
         val finishing = launch {
             finishProjectLocked(
                 mutex = mutex,
@@ -104,35 +104,35 @@ class FinishProjectRaceTest {
                 writeProject = { row.write(it) }
             )
         }
-        // 把手里的调度机会全让出去：无锁时 finish 在这一步就跑完了。
+        // give up every scheduling slot: without a lock, finish completes right at this step.
         repeat(5) { yield() }
 
-        allowWrite.send(Unit)   // ③ 放行那条陈旧的回写
+        allowWrite.send(Unit)   // (3) release that stale write-back
         joinAll(flying, finishing)
 
         assertEquals(
-            "最终落库的必须是 FINISHED：飞行中的快照写若能用它读到的陈旧行回写，就会把 status 打回 IN_PROGRESS，溯源随之丢失",
+            "the row finally persisted must be FINISHED: if an in-flight snapshot write can write back the stale row it read, it will push status to IN_PROGRESS and the provenance is lost",
             "FINISHED", row.row.status
         )
         assertNotNull(
-            "finishedAt 不能被冲回 null",
+            "finishedAt must not be pushed back to null",
             row.row.finishedAt
         )
         assertEquals(
-            "快照必须是 Finish 那一次写的（最后一次写入说了算）",
+            "the snapshot must be the one written by Finish (the last write wins)",
             finishSnapshot, row.row.reportDataJson
         )
-        assertEquals("两次写入都必须发生", 2, row.writes.size)
+        assertEquals("both writes must happen", 2, row.writes.size)
         assertEquals(
-            "有同一把锁时，Finish 必须排在陈旧回写之后完成",
+            "with the same lock, Finish must complete after the stale write-back",
             listOf("IN_PROGRESS", "FINISHED"), row.writes.map { it.status }
         )
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 2. 反过来的顺序：Finish 先持锁，快照写必须等它写完再读，
-    //    于是读到的已经是 FINISHED 行 —— 即使被覆盖也不会丢状态。
-    //    （专门防止「只修了一个方向」的实现蒙混过关）
+    // 2. the opposite order: Finish takes the lock first, so the snapshot write must wait until it finishes before reading,
+    //    and therefore already reads a FINISHED row -- even if it overwrites, no state is lost.
+    //    (this specifically stops an implementation that "only fixed one direction" from sneaking through)
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -142,7 +142,7 @@ class FinishProjectRaceTest {
         val readDone = Channel<Unit>(Channel.RENDEZVOUS)
         val allowWrite = Channel<Unit>(Channel.RENDEZVOUS)
 
-        // ① Finish 先起飞，读完之后卡住
+        // (1) Finish takes off first and blocks after reading
         val finishing = launch {
             finishProjectLocked(
                 mutex = mutex,
@@ -157,7 +157,7 @@ class FinishProjectRaceTest {
         }
         readDone.receive()
 
-        // ② 这期间 Step 4 的快照写被触发
+        // (2) in the meantime the Step 4 snapshot write is triggered
         val flying = launch {
             persistReportSnapshotLocked(
                 mutex = mutex,
@@ -172,19 +172,19 @@ class FinishProjectRaceTest {
         joinAll(finishing, flying)
 
         assertEquals(
-            "快照写不得躺在 Finish 之前陷在有锁协程的背后乱写：最终状态必须是 FINISHED",
+            "the snapshot write must not slip in behind the locked coroutine before Finish and write arbitrarily: the final state must be FINISHED",
             "FINISHED", row.row.status
         )
-        assertNotNull("finishedAt 必须还在", row.row.finishedAt)
+        assertNotNull("finishedAt must still be there", row.row.finishedAt)
         assertEquals(
-            "有锁时快照写排在 Finish 之后，它读到的已是 FINISHED 行，覆盖不得 phases",
+            "with the lock the snapshot write is ordered after Finish, so it already reads a FINISHED row and must not clobber the phases",
             listOf("FINISHED", "FINISHED"), row.writes.map { it.status }
         )
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 3. 契约：没有进行中的项目时，不写一个字、也不改半点状态。
-    //    （这条决定 ViewModel 里 finishProject() 要不要继续往下清 uiState）
+    // 3. contract: when no project is in progress, write not a single byte and change no state at all.
+    //    (this decides whether finishProject() in the ViewModel should keep going on to clear uiState)
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -198,8 +198,8 @@ class FinishProjectRaceTest {
             writeProject = { row.write(it) }
         )
 
-        assertFalse("没有当前项目时必须返回 false", written)
-        assertEquals("一次 updateProject 都不许发生", 0, row.writes.size)
+        assertFalse("must return false when there is no current project", written)
+        assertEquals("not a single updateProject may happen", 0, row.writes.size)
     }
 
     @Test
@@ -213,12 +213,12 @@ class FinishProjectRaceTest {
             writeProject = { row.write(it) }
         )
 
-        assertFalse("没有当前项目时必须返回 false", written)
-        assertEquals("一次 updateProject 都不许发生", 0, row.writes.size)
+        assertFalse("must return false when there is no current project", written)
+        assertEquals("not a single updateProject may happen", 0, row.writes.size)
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 4. 单条路径自身：快照写与 Finish 写各自写的字段是对的
+    // 4. each path on its own: the fields written by the snapshot write and by the Finish write are correct
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -234,8 +234,8 @@ class FinishProjectRaceTest {
 
         assertEquals(true, written)
         assertEquals(step4Snapshot, row.row.reportDataJson)
-        assertEquals("快照写不许顺手改流程状态", "IN_PROGRESS", row.row.status)
-        assertEquals("快照写不许顺手给 finishedAt 赋值", null, row.row.finishedAt)
+        assertEquals("the snapshot write must not quietly change the flow state", "IN_PROGRESS", row.row.status)
+        assertEquals("the snapshot write must not quietly assign finishedAt", null, row.row.finishedAt)
     }
 
     @Test

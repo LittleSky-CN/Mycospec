@@ -127,11 +127,11 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * 【v2.2.8】报告快照落库。
+         * [v2.2.8] persists the report snapshot.
          *
-         * 刻意**不带** `NOT NULL DEFAULT`：v3 之前落库的旧项目行根本没有这份快照，
-         * 写了 NOT NULL 就得编一个默认值出来，那等于凭空造内容。留 NULL 让
-         * [reportDataFromJson] 返回 null，读取端退回 `ReportData()` 即可。
+         * Deliberately **without** `NOT NULL DEFAULT`: project rows written before v3 have no such snapshot at all,
+         * and a NOT NULL column would force us to invent a default value -- that is, to fabricate content out of nothing. Leaving NULL makes
+         * [reportDataFromJson] return null, and the reader can simply fall back to `ReportData()`.
          */
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {

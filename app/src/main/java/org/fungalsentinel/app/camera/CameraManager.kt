@@ -59,7 +59,7 @@ class CameraManager(private val context: Context) {
         private val EXPOSURE_RANGE_MS = 1L..600_000L
         private val ISO_RANGE = 50..1600
         private val FOCUS_RANGE_D = 0f..5f
-        private const val RESULT_WAIT_MS = 3000L     // 【v2.2.6】10s → 3s，缩短阻塞窗口
+        private const val RESULT_WAIT_MS = 3000L     // [v2.2.6] 10s -> 3s, shortens the blocking window
         private const val POLL_INTERVAL_MS = 20L
         private const val CAPTURE_TIMEOUT_MS = 30_000L
     }
@@ -86,7 +86,7 @@ class CameraManager(private val context: Context) {
     @Volatile private var pendingCaptureResult: TotalCaptureResult? = null
     @Volatile private var captureFailed = false
     @Volatile private var lastPreviewResult: TotalCaptureResult? = null
-    @Volatile private var captureInFlight = false   // 【v2.2.6】单帧在途互斥，防连点排队卡死
+    @Volatile private var captureInFlight = false   // [v2.2.6] single-frame in-flight mutex, prevents queueing deadlocks from rapid taps
     @Volatile private var captureTimeout: Runnable? = null
 
     private val _isReady = MutableStateFlow(false)
@@ -287,7 +287,7 @@ class CameraManager(private val context: Context) {
         if (_isReady.value && !captureInFlight) startPreview()
     }
 
-    /** 【v2.2.6】OnePlus/ColorOS 会话阻塞规避：拍摄前 stopRepeating，处理完重启预览；互斥锁防排队 */
+    /** [v2.2.6] OnePlus/ColorOS session-block workaround: stopRepeating before capture and restart the preview afterwards; the mutex prevents queueing */
     fun captureRaw() {
         val session = captureSession ?: run { onError?.invoke("Session not ready"); return }
         val device = cameraDevice ?: run { onError?.invoke("Camera not open"); return }
@@ -415,7 +415,7 @@ class CameraManager(private val context: Context) {
         }
     }
 
-    /** 【v2.2.6】白电平自适应：按传感器实际位深判定饱和，兼容 10/12/14/16-bit */
+    /** [v2.2.6] white-level adaptation: saturation is judged from the sensor's actual bit depth, supporting 10/12/14/16-bit */
     private fun computeSaturationRatio(image: Image): Float {
         val white = cameraCharacteristics?.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL) ?: 16383
         val threshold = (white * 0.98f).toInt()

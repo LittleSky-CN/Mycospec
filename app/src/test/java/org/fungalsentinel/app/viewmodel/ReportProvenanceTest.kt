@@ -244,21 +244,21 @@ class ReportProvenanceTest {
         assertTrue(r.step4Params.isEmpty())
     }
 
-    // ─── D2: 未执行过的步骤不得谎报来源 ─────────────────────────────────────
+    // ─── D2: steps that were never executed must not lie about their source ─────────────────────────────────────
 
     @Test
     fun unrunStepsNeverClaimALiveOrBundledSource() {
         val r = ReportData()
         assertFalse(
-            "Step 1 从未跑过，却声称 Live: ${r.step1Source}",
+            "Step 1 was never run, yet it claims Live: ${r.step1Source}",
             r.step1Source.startsWith("Live")
         )
         assertFalse(
-            "Step 4 从未跑过，却声称 Live: ${r.step4Source}",
+            "Step 4 was never run, yet it claims Live: ${r.step4Source}",
             r.step4Source.startsWith("Live")
         )
         assertFalse(
-            "Step 2 从未跑过，却引用了参考光谱文件: ${r.spdSource}",
+            "Step 2 was never run, yet it references a reference spectrum file: ${r.spdSource}",
             r.spdSource.contains("true_spd.csv")
         )
         assertFalse(r.step1Source.startsWith("Preset"))
@@ -266,14 +266,14 @@ class ReportProvenanceTest {
         assertFalse(r.spdSource.startsWith("Preset"))
     }
 
-    // ─── D1: Step 1 preset 触发的 SPD 重跑不得清掉 Step 2 的 preset 溯源 ────
+    // ─── D1: the SPD re-run triggered by a Step 1 preset must not clear the Step 2 preset provenance ────
 
     @Test
     fun spdPresetProvenanceSurvivesTheStep1PresetRerun() {
         val p = spdPreset()
         val before = ReportData().withSpdPreset(p, driftNm = 1.0f, at = at)
-        // 这正是 loadWavelengthPreset 尾部级联 analyzeSpd() 会做的事：
-        // applySpdResult() 写入数值，withLiveSpd() 把溯源改写成 live。
+        // this is exactly what the cascaded analyzeSpd() at the end of loadWavelengthPreset does:
+        // applySpdResult() writes the numbers, withLiveSpd() rewrites the provenance to live.
         val afterRerun = before
             .withLiveSpd("true_spd.csv (bundled)", at)
             .copy(spdStatus = "Calibrated (3 lamp frame(s))")
@@ -285,13 +285,13 @@ class ReportProvenanceTest {
         assertEquals("preset://3", restored.spdPresetFile)
         assertEquals(at, restored.spdImportedAt)
         assertEquals("1.000", restored.spdParams["drift_nm"])
-        // 重跑出来的数值本身要保留，只有溯源被还原
+        // the recomputed numbers themselves must be kept; only the provenance is restored
         assertEquals("Calibrated (3 lamp frame(s))", restored.spdStatus)
     }
 
     @Test
     fun rerunningSpdWithoutAPresetStaysLive() {
-        // 反向护栏：本来就没有 preset 溯源时（用户现场重跑），必须保持 live。
+        // reverse guard: when there was no preset provenance to begin with (the user re-ran on site), it must stay live.
         val before = ReportData()
         val afterRerun = before.withLiveSpd("true_spd.csv (bundled)", at)
 
@@ -303,7 +303,7 @@ class ReportProvenanceTest {
         assertNull(restored.spdPresetFile)
     }
 
-    // ─── D4: 未真正落地的 SPD preset 不得留下 "Preset · X" ─────────────────
+    // ─── D4: an SPD preset that never really landed must not leave "Preset -- X" behind ─────────────────
 
     @Test
     fun spdPresetThatWasNeverAppliedLeavesNoPresetProvenance() {

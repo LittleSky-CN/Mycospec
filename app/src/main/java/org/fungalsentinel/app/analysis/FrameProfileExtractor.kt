@@ -26,19 +26,19 @@ data class FrameProfile(
 
 /**
  * DNG/RAW parity with Python image_processing.read_dng_linear_rgb.
- * - SubIFD 递归解析 CFA pattern (Tag 33422)，兼容 0-based / 1-based 编码
- * - file:// 与 content:// 双协议读取
- * - forceRbSwap：Step 1 检测到 R/B 标签互换后由 ViewModel 置位，解码源头交换，保证 Step 2/3 标签一致
+ * - recursive SubIFD parsing of the CFA pattern (Tag 33422), supports 0-based / 1-based encoding
+ * - reads both file:// and content:// URIs
+ * - forceRbSwap: set by the ViewModel once Step 1 detects swapped R/B labels; the swap happens at the decode source so Step 2/3 labels stay consistent
  */
 object FrameProfileExtractor {
     private const val MAX_FILE_BYTES = 250_000_000
     private const val MAX_PIXELS = 120_000_000L
     private const val DEFAULT_BLACK_LEVEL = 64.0f
 
-    // 绝大多数手机 (Redmi, Samsung, Huawei, OnePlus) 主摄为 RGGB：0=R, 1=G, 2=B
+    // most phones (Redmi, Samsung, Huawei, OnePlus) use RGGB for the main camera: 0=R, 1=G, 2=B
     private val DEFAULT_CFA = intArrayOf(0, 1, 1, 2)
 
-    /** 【v2.2.6】R/B 标签交换开关（Step 1 反序自检结论） */
+    /** [v2.2.6] R/B label swap switch (conclusion of the Step 1 reverse-order self-check) */
     @Volatile
     var forceRbSwap: Boolean = false
 
@@ -79,7 +79,7 @@ object FrameProfileExtractor {
         val exifExposure = readExposure(bytes)
         val p = profileFromDng(bytes, exifExposure, fixedXRegion)
             ?: profileFromBitmap(bytes, exifExposure, fixedXRegion)
-        // 【v2.2.6】源头交换 R/B，保证全链路通道标签一致
+        // [v2.2.6] swap R/B at the source so channel labels stay consistent along the whole pipeline
         p?.let { if (forceRbSwap) it.copy(redProfile = it.blueProfile, blueProfile = it.redProfile) else it }
     }.getOrNull()
 
@@ -93,7 +93,7 @@ object FrameProfileExtractor {
         return (if (c <= 0.04045) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)).toFloat()
     }
 
-    /** 已停用：方向由波长映射斜率符号自适应处理，避免样品颜色干扰质心判断 */
+    /** Deprecated: the direction is derived from the sign of the wavelength mapping slope, so sample colour cannot bias the centroid decision */
     private fun autoRotateRgb(rgb: FloatArray, w: Int, h: Int): Triple<FloatArray, Int, Int> =
         Triple(rgb, w, h)
 
@@ -102,17 +102,17 @@ object FrameProfileExtractor {
                 (width * 0.65).toInt().coerceIn(0, width - 1)
 
     /**
-     * 【v2.2.6】内容相关的 ROI 自动探测（DEF-A02 的关键背景）。
+     * [v2.2.6] content-dependent automatic ROI detection (the key background of DEF-A02).
      *
-     * 本函数依据**列能量剖面**的峰值结构定位光谱条带，因此**强依赖画面内容**：
-     * 定位图是明亮的 LED 谱线（高信噪、峰值锐利），样品图是微弱荧光（低信噪、
-     * 峰值平缓甚至被噪声掩盖）。同一台设备、同一光路下，两者会算出**不同的 ROI**。
+     * This function locates the spectral band from the peak structure of the **column energy profile**, so it **strongly depends on frame content**:
+     * a positioning frame is a bright LED spectrum (high SNR, sharp peaks) while a sample frame is weak fluorescence (low SNR,
+     * a flat peak that may even be buried in noise). On the same device with the same optical path the two yield **different ROIs**.
      *
-     * 一旦 ROI 不同，行剖面就是在不同的像素列集合上平均出来的，与 preset 里
-     * 保存的响应曲线不再匹配 —— 这就是"ROI 只显示不生效"的定量后果。
+     * Once the ROI differs, the row profile is averaged over a different set of pixel columns and no longer matches the response curve
+     * stored in the preset -- that is the quantitative consequence of "the ROI is displayed but has no effect".
      *
-     * 因此：只要 preset（或调用方）提供了 ROI，就**必须**走 [resolveXRoi] 的
-     * `fixedXRegion != null` 分支，绝不应退回到这里重新探测。
+     * Therefore: whenever a preset (or the caller) supplies an ROI we **must** take the
+     * `fixedXRegion != null` branch of [resolveXRoi] and must never fall back to re-detecting here.
      */
     private fun autoDetectXRoi(colProfile: FloatArray, width: Int): Pair<Int, Int> {
         if (width <= 0) return 0 to 0
@@ -300,7 +300,7 @@ object FrameProfileExtractor {
                         r = bilinearInterpolate(grid, x, y, w, h, black, ef, cfa, 0)
                     }
                 }
-                // 消除传感器物理滤光片双向光谱串扰（消除绿通道在红光波长处的错误串扰峰，以及红通道的绿色漏光）
+                // removes bidirectional spectral crosstalk of the physical sensor filters (the false crosstalk peak of the green channel at red wavelengths, and green light leaking into the red channel)
                 g = max(0f, g - 0.15f * r)
                 r = max(0f, r - 0.12f * g)
 

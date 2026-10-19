@@ -35,12 +35,12 @@ import androidx.lifecycle.LifecycleEventObserver
 import org.fungalsentinel.app.R
 
 /**
- * Camera2 预览视图。
+ * Camera2 preview view.
  *
- * 特性：
- * - 自动处理生命周期（onStart/onStop 重新打开/关闭相机）
- * - 支持 Surface 尺寸变化时重建预览
- * - 提供 Surface 给 CameraManager
+ * Features:
+ * - handles the lifecycle automatically (reopens / closes the camera in onStart / onStop)
+ * - rebuilds the preview when the Surface size changes
+ * - provides the Surface to CameraManager
  */
 @Composable
 fun CameraPreviewView(

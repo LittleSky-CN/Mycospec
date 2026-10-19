@@ -49,7 +49,7 @@ fun Step2SpdScreen(
     val status = report.step2Status
     val token = status.substringBefore('|')
     val message = status.substringAfter('|', status)
-    // 【统一】状态色收敛
+    // [unified] status colours converge
     val statusColor = statusTextColor(token)
 
     val tutorial = TutorialHost(
@@ -83,7 +83,7 @@ fun Step2SpdScreen(
             ) {
                 NeonHeader("STEP2:", stringResource(R.string.step2_short), onBack, tutorial)
 
-                // 说明框：唯一强调色描边
+                // info box: outlined with the single accent colour
                 NeonOutlineBox(AppColors.Accent) {
                     Text(
                         text = stringResource(R.string.step2_description),
@@ -98,7 +98,7 @@ fun Step2SpdScreen(
                     )
                 }
 
-                // 状态框：中性描边
+                // status box: neutral outline
                 NeonOutlineBox(AppColors.Outline) {
                     Text(
                         text = message,

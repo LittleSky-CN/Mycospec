@@ -39,8 +39,8 @@ fun Step3SampleScreen(
     val sampleCaptures = uiState.sampleCaptures
     val report = uiState.reportData
 
-    // 经由 canonicalFluorophore 解析：Python FSSA 导出的 preset 可能带 "mCherry" /
-    // "Fluorescein (sodium salt)" 这类非 canonical 写法，精确匹配会静默丢值
+    // resolved through canonicalFluorophore: presets exported by Python FSSA may carry non-canonical spellings such as "mCherry" /
+    // "Fluorescein (sodium salt)", and an exact match would silently drop the value
     val reportFluor = canonicalFluorophore(report.sampleFluorophore)
     var selectedFluorophore by remember(report.sampleFluorophore) { mutableStateOf(reportFluor) }
     var showBlankCapture by remember { mutableStateOf(false) }

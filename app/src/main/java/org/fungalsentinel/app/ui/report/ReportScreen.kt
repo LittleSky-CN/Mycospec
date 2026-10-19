@@ -106,7 +106,7 @@ fun ReportScreen(
                             val sw = r.sensorWidth.coerceAtLeast(1).toFloat()
                             val x0 = r.roiStart / sw * size.width
                             val x1 = r.roiEnd / sw * size.width
-                            // 【收敛】ROI 覆盖改为强调绿半透明，替代亮绿 0x4400E676
+                            // [convergence] the ROI overlay now uses emphatic translucent green instead of bright green 0x4400E676
                             drawRect(AppColors.Accent.copy(alpha = 0.27f), Offset(x0, 0f), Size(x1 - x0, size.height))
                         }
                     }
@@ -126,7 +126,7 @@ fun ReportScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                 }
-                // 【v2.2.2】适配滤光片模式：pB 可空
+                // [v2.2.2] supports the filter mode: pB is nullable
                 if (r.slope != null && r.peakG != null && r.peakR != null) {
                     val isFilterMode = r.peakB == null
                     val title = if (isFilterMode)
@@ -261,7 +261,7 @@ fun ReportScreen(
                 ReportLine("[Regression Formula]", r.regressionFormula)
                 ReportLine("R²", r.regressionR2)
                 ReportLine("[Predicted Concentration]", r.predictedConcentration)
-                // 【收敛】所有警告统一语义红，删除橙色分支
+                // [convergence] all warnings use the single semantic red; the orange branch was removed
                 r.curveWarnings.forEach { warning ->
                     Text(
                         text = "⚠ $warning",
@@ -281,7 +281,7 @@ fun ReportScreen(
 private fun StatusLine(s: String) {
     val token = s.substringBefore('|')
     val message = s.substringAfter('|', s)
-    // 【统一】状态色收敛：绿=成功 / 半透明绿=处理中 / 红=失败 / 灰=空闲
+    // [unified] status colours converge: green = success / translucent green = processing / red = failure / grey = idle
     Text(message, style = MaterialTheme.typography.bodySmall, color = statusTextColor(token))
     Spacer(Modifier.height(8.dp))
 }
@@ -336,7 +336,7 @@ private fun ReportLine(label: String, value: String) {
 
 @Composable
 private fun QualityBadge(quality: String) {
-    // 【收敛】PASS=绿 / WARNING=半透明绿 / FAILED=红 / 其它=灰
+    // [convergence] PASS = green / WARNING = translucent green / FAILED = red / anything else = grey
     val color = when (quality) {
         "PASS" -> AppColors.Accent
         "WARNING" -> AppColors.AccentSoft
@@ -364,7 +364,7 @@ private fun ProfileChart(
         val all = red + green + blue
         val max = all.maxOrNull()?.coerceAtLeast(1e-6f) ?: 1f
         val n = maxOf(red.size, green.size, blue.size, 1)
-        // 【收敛】通道窗色走 Chart 子对象
+        // [convergence] channel window colours come from the Chart sub-object
         val winColors = listOf(AppColors.Chart.R, AppColors.Chart.G, AppColors.Chart.B)
         windows.forEachIndexed { i, (lo, hi) ->
             val x0 = lo.toFloat() / n * size.width
@@ -432,7 +432,7 @@ private fun MultiLineChartX(
 
 /**
  * Two-point fit chart.
- * 【v2.2.2】pxB 可空；isGreenRedFit 时隐藏 B 点、修改标题文案。
+ * [v2.2.2] pxB is nullable; when isGreenRedFit the B point is hidden and the title wording changes.
  */
 @Composable
 private fun FitChart(
@@ -455,14 +455,14 @@ private fun FitChart(
             val ySpan = (yMax - yMin).coerceAtLeast(1f)
             fun px(wl: Float) = (wl - xMin) / (xMax - xMin) * size.width
             fun py(v: Float) = (v - yMin) / ySpan * size.height
-            // 【收敛】拟合线改为中性灰蓝 Chart.Fit，替代橄榄绿 0xFF558B2F
+            // [convergence] the fit line uses the neutral grey-blue Chart.Fit instead of olive green 0xFF558B2F
             drawLine(
                 AppColors.Chart.Fit,
                 Offset(px(xMin), py((slope * xMin + intercept).toFloat())),
                 Offset(px(xMax), py((slope * xMax + intercept).toFloat())),
                 2f
             )
-            // 【v2.2.2】滤光片模式下不绘制 B 点
+            // [v2.2.2] the B point is not drawn in filter mode
             if (!isGreenRedFit && pxB != null) {
                 drawCircle(AppColors.Chart.B, 6f, Offset(px(wlB.toFloat()), py(pxB)))
             }
@@ -511,14 +511,14 @@ private fun CurveChart(
         val ySpan = (yMax - yMin).coerceAtLeast(1e-6f)
         fun px(v: Float) = (v - xMin) / xSpan * size.width
         fun py(v: Float) = size.height - (v - yMin) / ySpan * size.height
-        // 【收敛】回归线用中性 Chart.Fit
+        // [convergence] the regression line uses the neutral Chart.Fit
         drawLine(
             AppColors.Chart.Fit,
             Offset(px(xMin), py((slope * xMin + intercept).toFloat())),
             Offset(px(xMax), py((slope * xMax + intercept).toFloat())),
             2f
         )
-        // 【收敛】标准点用唯一强调色 Accent
+        // [convergence] standards use the single accent colour Accent
         points.forEach { p ->
             drawCircle(
                 AppColors.Accent, 6f,

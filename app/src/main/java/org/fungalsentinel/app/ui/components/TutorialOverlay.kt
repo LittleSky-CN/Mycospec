@@ -82,7 +82,7 @@ fun TutorialHost(
 
     if (showDialog) {
         Dialog(
-            onDismissRequest = { showDialog = false }, // 仅关闭对话框，不重置状态
+            onDismissRequest = { showDialog = false }, // closes the dialog only, does not reset state
             properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
         ) {
             Card(
@@ -111,11 +111,11 @@ fun TutorialHost(
                     )
                     Spacer(Modifier.height(20.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        // Skip 按钮：只关闭，不重置状态
+                        // Skip button: closes only, does not reset state
                         OutlinedButton(onClick = { showDialog = false }, modifier = Modifier.weight(1f)) {
                             Text(stringResource(R.string.tutorial_skip))
                         }
-                        // Got it 按钮：只关闭，状态已在 LaunchedEffect 中标记
+                        // Got it button: closes only; the state was already marked in LaunchedEffect
                         Button(onClick = { showDialog = false }, modifier = Modifier.weight(1f)) {
                             Text(stringResource(R.string.tutorial_got_it))
                         }

@@ -22,7 +22,7 @@ data class WavelengthCalibrationResult(
     val frames: Int,
     val peakWindows: List<Pair<Int, Int>> = emptyList(),
     val useGreenRedFit: Boolean = false,
-    val rbSwapped: Boolean = false   // 【v2.2.6】true 表示本次校准判定 R/B 标签互换
+    val rbSwapped: Boolean = false   // [v2.2.6] true means this calibration decided that the R/B labels are swapped
 )
 
 object WavelengthCalibrator {
@@ -39,7 +39,7 @@ object WavelengthCalibrator {
         val rs = f0.xRoiStart
         val re = f0.xRoiEnd
 
-        // 【v2.2.6】反序自检：R 与 B 位于 G 的錯誤两侧 → 直接以交换态起手
+        // [v2.2.6] reverse-order self-check: R and B sit on the wrong sides of G, so start directly in the swapped state
         val pR0 = findPeak(r); val pG0 = findPeak(g); val pB0 = findPeak(b)
         val orderBad = !useGreenRedFit && pR0 != null && pG0 != null && pB0 != null &&
                 (pR0.center < pG0.center && pB0.center > pG0.center)
@@ -49,7 +49,7 @@ object WavelengthCalibrator {
         else
             tryCalibrate(r, g, b, wlR, wlG, wlB, useGreenRedFit, f0, frames.size, rs, re, false)
 
-        // 兜底：首尝 FAILED 或为空时尝试另一种交换态，取 G 误差更小者
+        // fallback: when the first attempt FAILED or is empty, try the other swap state and keep whichever gives the smaller G error
         if (!useGreenRedFit && (result == null || result.quality == "FAILED")) {
             val alt = if (swapped)
                 tryCalibrate(r, g, b, wlR, wlG, wlB, useGreenRedFit, f0, frames.size, rs, re, false)

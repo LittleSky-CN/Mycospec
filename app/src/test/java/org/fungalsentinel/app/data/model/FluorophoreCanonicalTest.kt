@@ -6,15 +6,15 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * `canonicalFluorophore()` 的契约测试。
+ * Contract tests for `canonicalFluorophore()`.
  *
- * 背景：Android 与 Python FSSA 互相导出/导入曲线预设，两侧的荧光素写法不一致。
- * canonical ID 定为 Android enum name（`YPET` / `MCHERRY` / …），所以读取端必须
- * 能把 Python 的写法解析过来，否则下拉会静默 fallback 成「请选择荧光物质」。
+ * Background: Android and Python FSSA import / export each other's curve presets, and the two sides spell fluorophores differently.
+ * The canonical ID is defined as the Android enum name (`YPET` / `MCHERRY` / ...), so the reader must be able to
+ * resolve the Python spellings, otherwise the dropdown silently falls back to "please select a fluorophore".
  */
 class FluorophoreCanonicalTest {
 
-    // ── 1. canonical 本身 ────────────────────────────────────────────────
+    // ── 1. canonical itself ────────────────────────────────────────────────
     @Test
     fun resolvesCanonicalEnumNamesInAnyCase() {
         Fluorophore.values().forEach { expected ->
@@ -27,7 +27,7 @@ class FluorophoreCanonicalTest {
 
     @Test
     fun resolvesOwnDisplayNameForEveryCategory() {
-        // 6 类必须全覆盖 —— 少一类就是某一支预设读不进来
+        // all 6 classes must be covered -- missing one means some preset cannot be read
         assertEquals(Fluorophore.YPET, canonicalFluorophore("Ypet"))
         assertEquals(Fluorophore.EGFP, canonicalFluorophore("EGFP"))
         assertEquals(Fluorophore.MCHERRY, canonicalFluorophore("mCherry"))
@@ -36,7 +36,7 @@ class FluorophoreCanonicalTest {
         assertEquals(Fluorophore.FLUORESCEIN, canonicalFluorophore("Fluorescein"))
     }
 
-    // ── 2. 跨端：Python FSSA 的 key / 显示名 ────────────────────────────
+    // ── 2. cross-platform: keys / display names of Python FSSA ────────────────────────────
     @Test
     fun resolvesPythonFssaKeysWhenItStillShipsOldNames() {
         assertEquals(Fluorophore.EGFP, canonicalFluorophore("EGFP"))
@@ -49,7 +49,7 @@ class FluorophoreCanonicalTest {
     fun resolvesPythonFssaDisplayNames() {
         assertEquals(Fluorophore.YPET, canonicalFluorophore("Ypet (Venus variant)"))
         assertEquals(Fluorophore.FLUORESCEIN, canonicalFluorophore("Fluorescein (sodium salt)"))
-        // 大小写 + 括号空格的脏写法同样要认
+        // dirty spellings with odd casing and spaces inside parentheses must resolve too
         assertEquals(Fluorophore.YPET, canonicalFluorophore("YPET (VENUS VARIANT)"))
         assertEquals(Fluorophore.FLUORESCEIN, canonicalFluorophore("fluorescein(sodium salt)"))
     }
@@ -64,7 +64,7 @@ class FluorophoreCanonicalTest {
         assertEquals(Fluorophore.EGFP, canonicalFluorophore("egfp"))
     }
 
-    // ── 3. 认不出来必须返回 null，交给调用方明确报错 ────────────────────
+    // ── 3. unrecognisable input must return null so the caller can fail explicitly ────────────────────
     @Test
     fun unrecognisedInputReturnsNullInsteadOfAFallback() {
         assertNull(canonicalFluorophore(null))
@@ -72,12 +72,12 @@ class FluorophoreCanonicalTest {
         assertNull(canonicalFluorophore("   "))
         assertNull(canonicalFluorophore("---"))
         assertNull(canonicalFluorophore("DsRed"))
-        assertNull(canonicalFluorophore("mCherri"))   // 差一个字母，不许模糊命中
+        assertNull(canonicalFluorophore("mCherri"))   // one letter off; fuzzy matching is not allowed
         assertNull(canonicalFluorophore("mCherry2"))
         assertNull(canonicalFluorophore("sampleFluorophore#60"))
     }
 
-    // ── 4. 曲线预设的 fluorophore 字段走同一条解析路 ────────────────────
+    // ── 4. the fluorophore field of a curve preset goes through the same resolution path ────────────────────
     @Test
     fun pythonExportedPresetFluorophoreFieldIsResolvable() {
         val json = """
@@ -97,13 +97,13 @@ class FluorophoreCanonicalTest {
             }
         """.trimIndent()
         val payload = org.fungalsentinel.app.data.preset.CurvePresetPayload.fromJson(json)
-        assertEquals("mCherry", payload.fluorophore)          // 落盘保持原文
+        assertEquals("mCherry", payload.fluorophore)          // the original text is kept when persisted
         assertEquals(Fluorophore.MCHERRY, canonicalFluorophore(payload.fluorophore))
         assertEquals("MCHERRY", canonicalFluorophore(payload.fluorophore)!!.name)
         assertEquals("590–630 nm", canonicalFluorophore(payload.fluorophore)!!.integrationRangeNm)
     }
 
-    // ── 5. 两份 enum 已合并为一份 ───────────────────────────────────────
+    // ── 5. the two enums have been merged into one ───────────────────────────────────────
     @Test
     fun onlyOneFluorophoreEnumIsDeclaredInTheApp() {
         val declarations = sourceRoot().walkTopDown()
@@ -115,11 +115,11 @@ class FluorophoreCanonicalTest {
             }
             .toList()
         assertEquals(
-            "Fluorophore 必须只有一份声明（唯一真源）；实际有 ${declarations.size} 份：$declarations",
+            "Fluorophore must be declared exactly once (single source of truth); found ${declarations.size}: $declarations",
             1, declarations.size
         )
         assertEquals(
-            "唯一的那份必须在数据层 Entities.kt",
+            "the single declaration must live in the data layer, Entities.kt",
             "org/fungalsentinel/app/data/model/Entities.kt",
             declarations.single().substringAfter("main/java/").substringBefore(":")
         )

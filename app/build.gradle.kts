@@ -51,7 +51,7 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false // 修复了 optimization 块
+            isMinifyEnabled = false // fixes the optimization block
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -78,11 +78,11 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.animation) // 解决 animateDpAsState
-    implementation(libs.androidx.compose.material.icons) // 解决 Icons 报错
-    implementation(libs.androidx.navigation.compose) // 解决 navigation 报错
-    implementation(libs.androidx.datastore.preferences) // 解决 datastore 报错
-    implementation(libs.coil.compose) // 解决 coil/AsyncImage 报错
+    implementation(libs.androidx.compose.animation) // resolves animateDpAsState
+    implementation(libs.androidx.compose.material.icons) // resolves the Icons error
+    implementation(libs.androidx.navigation.compose) // resolves the navigation error
+    implementation(libs.androidx.datastore.preferences) // resolves the datastore error
+    implementation(libs.coil.compose) // resolves the coil / AsyncImage error
     implementation(libs.androidx.lifecycle.viewmodel.compose) // ViewModel
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

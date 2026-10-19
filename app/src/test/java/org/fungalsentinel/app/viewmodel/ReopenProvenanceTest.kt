@@ -8,28 +8,28 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 【v2.2.8】从 History 重开项目时，Step 1/2/4 溯源的还原边界。
+ * [v2.2.8] restoration boundaries of the Step 1/2/4 provenance when reopening a project from History.
  *
- * `openProject()` 混了两种用途，二者的正确答案相反：
+ * `openProject()` mixes two purposes whose correct answers are opposite:
  *
- * | 项目状态        | 用途               | 溯源该不该被 live 覆盖 |
+ * | project status   | purpose                    | should live overwrite the provenance?          |
  * |-----------------|--------------------|------------------------|
- * | `IN_PROGRESS`   | 继续做没做完的项目 | **应该** —— 数据确实来自现场重算 |
- * | `FINISHED`      | 查看历史报告       | **不应该** —— 用户是来看上次那份报告的 |
+ * | `IN_PROGRESS`  | continue an unfinished project | **yes** -- the data really comes from an on-site recomputation |
+ * | `FINISHED`     | view a historical report   | **no** -- the user came to read last time's report |
  *
- * 同时还有一条边界：**只还原溯源（12 个字段），绝不还原数值**。
- * 数值必须跟当前真实状态一致，溯源是"这个项目当初是怎么来的"的历史事实。
+ * There is one more boundary: **restore the provenance only (12 fields), never the numbers**.
+ * Numbers must match the current real state; provenance is the historical fact of "where this project originally came from".
  *
- * 与 `ReportProvenanceTest` 一样：ViewModel 依赖 Application + 两个 Room 库，
- * JVM 单测无法实例化，因此这里直接断言**生产代码里的纯函数** —— 即
- * `shouldRestoreProvenance()`（闸门）与 `ReportData.restoreProvenance()`（搬运），
- * 正是 `openProject()` 调用的那两个。
+ * As in `ReportProvenanceTest`: the ViewModel depends on Application + two Room databases and cannot be
+ * instantiated in a JVM unit test, so here we assert directly against **the pure functions in the production code** -- namely
+ * `shouldRestoreProvenance()` (the gate) and `ReportData.restoreProvenance()` (the move),
+ * which are exactly the two that `openProject()` calls.
  */
 class ReopenProvenanceTest {
 
     private val at = "2026-10-17 09:30:00"
 
-    /** 快照里的溯源：Step 1/2/4 当初都是从预设导入的。 */
+    /** Provenance in the snapshot: Steps 1/2/4 were all imported from presets originally. */
     private fun snapshotProvenance() = ReportData(
         step1Source = "Preset · Lab WL 2026",
         step1PresetName = "Lab WL 2026",
@@ -51,8 +51,8 @@ class ReopenProvenanceTest {
     )
 
     /**
-     * 重开后被 `analyzePositioning()` / `analyzeSpd()` 覆盖过的溯源 ——
-     * 即 `withLiveWavelength` / `withLiveSpd` 写入的现场标定值。
+     * the provenance after it was overwritten by `analyzePositioning()` / `analyzeSpd()` on reopen --
+     * i.e. the on-site calibration values written by `withLiveWavelength` / `withLiveSpd`.
      */
     private fun liveProvenance() = ReportData(
         step1Source = "Live calibration",
@@ -75,7 +75,7 @@ class ReopenProvenanceTest {
     )
 
     // ─────────────────────────────────────────────────────────────────────
-    // 1. FINISHED + 曾导入预设 → 溯源保持 "Preset · …"
+    // 1. FINISHED + a preset was imported -> the provenance keeps "Preset -- ..."
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -83,7 +83,7 @@ class ReopenProvenanceTest {
         val snapshot = snapshotProvenance()
         val recomputed = liveProvenance()
 
-        assertTrue("FINISHED 项目必须还原溯源", shouldRestoreProvenance("FINISHED", snapshot))
+        assertTrue("a FINISHED project must restore the provenance", shouldRestoreProvenance("FINISHED", snapshot))
 
         val out = recomputed.restoreProvenance(snapshot)
 
@@ -105,8 +105,8 @@ class ReopenProvenanceTest {
         assertEquals("preset://11", out.step4PresetFile)
         assertEquals(at, out.step4ImportedAt)
 
-        // 三个 *Params 是"带数值的溯源"，**刻意不在**还原清单里（12 个而非 15 个），
-        // 必须保持重算写入的值。见 ProjectViewModel 里 restoreProvenance 的 KDoc。
+        // the three *Params are "provenance that carries numbers" and are **deliberately not** in the restore list (12, not 15);
+        // they must keep the values written by the recomputation. See the KDoc of restoreProvenance in ProjectViewModel.
         assertEquals(recomputed.step1Params, out.step1Params)
         assertEquals(recomputed.spdParams, out.spdParams)
         assertEquals(recomputed.step4Params, out.step4Params)
@@ -115,7 +115,7 @@ class ReopenProvenanceTest {
         assertNotEquals(snapshot.step4Params, out.step4Params)
     }
 
-    /** 溯源字段必须**真的**来自快照，而不是碰巧与重算值相同。 */
+    /** The provenance fields must **really** come from the snapshot rather than coincidentally equal the recomputed values. */
     @Test
     fun finishedProject_restoreActuallyMovesTheValues() {
         val snapshot = snapshotProvenance()
@@ -129,7 +129,7 @@ class ReopenProvenanceTest {
             "spdPresetName" to (recomputed.spdPresetName to snapshot.spdPresetName),
             "step4PresetName" to (recomputed.step4PresetName to snapshot.step4PresetName)
         )) {
-            assertNotEquals("前置条件：${pair.first} 的重算值与快照值必须先不同", pair.second.first, pair.second.second)
+            assertNotEquals("precondition: the recomputed and snapshot values of ${pair.first} must differ first", pair.second.first, pair.second.second)
         }
 
         val out = recomputed.restoreProvenance(snapshot)
@@ -139,8 +139,8 @@ class ReopenProvenanceTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 2. IN_PROGRESS + 曾导入预设 → 溯源保持 live，不还原
-    // （这条专门防止把闸门条件写反）
+    // 2. IN_PROGRESS + a preset was imported -> the provenance stays live and is not restored
+    //    (this specifically prevents writing the gate condition backwards)
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -148,17 +148,17 @@ class ReopenProvenanceTest {
         val snapshot = snapshotProvenance()
 
         assertFalse(
-            "IN_PROGRESS 是继续做项目，溯源必须被现场重算覆盖",
+            "IN_PROGRESS means continuing the project, so the provenance must be overwritten by the on-site recomputation",
             shouldRestoreProvenance("IN_PROGRESS", snapshot)
         )
-        // 其余非 FINISHED 状态一并不还原，避免只判了 "IN_PROGRESS" 这一个字符串。
+        // no other non-FINISHED status restores either, so that the code does not just compare against the single string "IN_PROGRESS".
         assertFalse(shouldRestoreProvenance(null, snapshot))
         assertFalse(shouldRestoreProvenance("ARCHIVED", snapshot))
-        assertFalse(shouldRestoreProvenance("FINISHED ", snapshot)) // 尾部空格不算
+        assertFalse(shouldRestoreProvenance("FINISHED ", snapshot)) // a trailing space does not count
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 3. restored == null → 不还原，且还原函数本身不崩、不凭空造值
+    // 3. restored == null -> do not restore, and the restore function itself must not crash or invent values
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -169,7 +169,7 @@ class ReopenProvenanceTest {
 
     @Test
     fun restoreFromBlankProvenance_isInertAndNonNull() {
-        // 即使快照里的溯源全为默认值，还原也应当如实照搬，不崩、不编造。
+        // even when the provenance in the snapshot is all defaults, restoration must copy it faithfully, without crashing or fabricating.
         val receiver = snapshotProvenance()
         val out = receiver.restoreProvenance(ReportData())
 
@@ -181,19 +181,19 @@ class ReopenProvenanceTest {
         assertNull(out.spdPresetName)
         assertNull(out.step4PresetName)
 
-        // 三个 *Params 不在还原清单内，应保持接收方原值，而不是被清成 emptyMap。
+        // the three *Params are not in the restore list, so they must keep the receiver's values instead of being cleared to emptyMap.
         assertEquals(receiver.step1Params, out.step1Params)
         assertEquals(receiver.spdParams, out.spdParams)
         assertEquals(receiver.step4Params, out.step4Params)
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 4. 最关键的一条：只还原溯源，绝不还原数值
+    // 4. the most important one: restore the provenance only, never the numbers
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     fun restoreProvenance_leavesNumericFieldsAlone() {
-        // current = 重开后由 analyzePositioning / analyzeSpd / analyzeSample 算出来的
+        // current = what analyzePositioning / analyzeSpd / analyzeSample computed after reopening
         val recomputed = ReportData(
             slope = -2.71,
             intercept = 1800.5,
@@ -211,12 +211,12 @@ class ReopenProvenanceTest {
             regressionFormula = "Unmixed area = 12.5000 * Conc + 3.25",
             predictedConcentration = "1.234",
             replicates = 3,
-            // 三个 *Params 同样参与：重算值 vs 快照值
+            // the three *Params take part as well: recomputed value vs snapshot value
             step1Params = linkedMapOf("slope_k" to "-2.710000", "cfa" to "RGGB"),
             spdParams = linkedMapOf("spd_csv" to "true_spd.csv (bundled)"),
             step4Params = linkedMapOf("r2" to "0.9910")
         )
-        // from = 快照，数值全部与重算结果不同
+        // from = the snapshot, whose numbers all differ from the recomputed results
         val snapshot = ReportData(
             slope = -2.739,
             intercept = 1807.68,
@@ -231,10 +231,10 @@ class ReopenProvenanceTest {
             correctedAreaValue = 42.0,
             curveSlope = 99.0,
             curveIntercept = -5.0,
-            regressionFormula = "来自快照的公式",
+            regressionFormula = "formula from the snapshot",
             predictedConcentration = "999.000",
             replicates = 9,
-            // 溯源部分：来自预设
+            // provenance part: comes from the preset
             step1Source = "Preset · Lab WL 2026",
             step1PresetName = "Lab WL 2026",
             step1PresetFile = "preset://7",
@@ -254,33 +254,33 @@ class ReopenProvenanceTest {
 
         val out = recomputed.restoreProvenance(snapshot)
 
-        // 逐条钉死：数值必须是**重算**的值，不是快照的值。
-        assertEquals("slope 必须是重算值", recomputed.slope, out.slope)
-        assertEquals("intercept 必须是重算值", recomputed.intercept, out.intercept)
-        assertEquals("gErrorNm 必须是重算值", recomputed.gErrorNm, out.gErrorNm)
-        assertEquals("wavelengthQuality 必须是重算值", recomputed.wavelengthQuality, out.wavelengthQuality)
-        assertEquals("mappingFormula 必须是重算值", recomputed.mappingFormula, out.mappingFormula)
-        assertEquals("redProfile 必须是重算值", recomputed.redProfile, out.redProfile)
-        assertEquals("spdLambda 必须是重算值", recomputed.spdLambda, out.spdLambda)
-        assertEquals("spdFused 必须是重算值", recomputed.spdFused, out.spdFused)
-        assertEquals("spdStatus 必须是重算值", recomputed.spdStatus, out.spdStatus)
-        assertEquals("samplePeakNm 必须是重算值", recomputed.samplePeakNm, out.samplePeakNm)
-        assertEquals("correctedAreaValue 必须是重算值", recomputed.correctedAreaValue, out.correctedAreaValue)
-        assertEquals("curveSlope 必须是重算值", recomputed.curveSlope, out.curveSlope)
-        assertEquals("curveIntercept 必须是重算值", recomputed.curveIntercept, out.curveIntercept)
-        assertEquals("regressionFormula 必须是重算值", recomputed.regressionFormula, out.regressionFormula)
-        assertEquals("predictedConcentration 必须是重算值", recomputed.predictedConcentration, out.predictedConcentration)
-        assertEquals("replicates 必须是重算值", recomputed.replicates, out.replicates)
+        // pin every one down: the numbers must be the **recomputed** values, not the snapshot's.
+        assertEquals("slope must be the recomputed value", recomputed.slope, out.slope)
+        assertEquals("intercept must be the recomputed value", recomputed.intercept, out.intercept)
+        assertEquals("gErrorNm must be the recomputed value", recomputed.gErrorNm, out.gErrorNm)
+        assertEquals("wavelengthQuality must be the recomputed value", recomputed.wavelengthQuality, out.wavelengthQuality)
+        assertEquals("mappingFormula must be the recomputed value", recomputed.mappingFormula, out.mappingFormula)
+        assertEquals("redProfile must be the recomputed value", recomputed.redProfile, out.redProfile)
+        assertEquals("spdLambda must be the recomputed value", recomputed.spdLambda, out.spdLambda)
+        assertEquals("spdFused must be the recomputed value", recomputed.spdFused, out.spdFused)
+        assertEquals("spdStatus must be the recomputed value", recomputed.spdStatus, out.spdStatus)
+        assertEquals("samplePeakNm must be the recomputed value", recomputed.samplePeakNm, out.samplePeakNm)
+        assertEquals("correctedAreaValue must be the recomputed value", recomputed.correctedAreaValue, out.correctedAreaValue)
+        assertEquals("curveSlope must be the recomputed value", recomputed.curveSlope, out.curveSlope)
+        assertEquals("curveIntercept must be the recomputed value", recomputed.curveIntercept, out.curveIntercept)
+        assertEquals("regressionFormula must be the recomputed value", recomputed.regressionFormula, out.regressionFormula)
+        assertEquals("predictedConcentration must be the recomputed value", recomputed.predictedConcentration, out.predictedConcentration)
+        assertEquals("replicates must be the recomputed value", recomputed.replicates, out.replicates)
 
-        // 三个 *Params 同样是"带数值的溯源"，必须保持重算值。
-        assertEquals("step1Params 必须是重算值", recomputed.step1Params, out.step1Params)
-        assertEquals("spdParams 必须是重算值", recomputed.spdParams, out.spdParams)
-        assertEquals("step4Params 必须是重算值", recomputed.step4Params, out.step4Params)
+        // the three *Params are likewise "provenance that carries numbers" and must keep the recomputed values.
+        assertEquals("step1Params must be the recomputed value", recomputed.step1Params, out.step1Params)
+        assertEquals("spdParams must be the recomputed value", recomputed.spdParams, out.spdParams)
+        assertEquals("step4Params must be the recomputed value", recomputed.step4Params, out.step4Params)
 
-        // 最强断言：整份 reportData 等于「重算结果」只把那 12 个溯源字段换成快照的。
-        // 这一条覆盖了剩下的几十个字段，任何越界搬运都会让它失败。
+        // strongest assertion: the whole reportData equals "the recomputed result with only those 12 provenance fields replaced by the snapshot's".
+        // this one covers the remaining dozens of fields; any out-of-bounds move makes it fail.
         assertEquals(
-            "还原后必须恰好等于「重算结果 + 12 个快照溯源字段」，不多不少",
+            "after restoration it must equal exactly: recomputed result + the 12 snapshot provenance fields, no more and no less",
             recomputed.copy(
                 step1Source = snapshot.step1Source,
                 step1PresetName = snapshot.step1PresetName,
@@ -300,46 +300,46 @@ class ReopenProvenanceTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 5. Case B：只导预设、没拍定位图
+    // 5. Case B: preset imported only, no positioning frame captured
     //
-    // 这条钉死上面那张表右下一格 —— 剔除 *Params 之后，这类项目的报告里
-    // **仍然看得到预设参数**。因为 `analyzePositioning()` 会在 :1228 直接
-    // return，基线里的预设 params 根本没人覆盖。
+    // this pins down the bottom-right cell of the table above -- after dropping *Params, this kind of project
+    // **still shows the preset parameters** in its report, because `analyzePositioning()` returns early at :1228 and
+    // nobody ever overwrites the preset params in the baseline.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     fun caseB_presetOnlyNoFrames_stillShowsPresetParams() {
         val snapshot = snapshotProvenance()
 
-        // ① 基线：openProject 以快照为底，只把 fluorophore / band 换成项目实体的值
+        // (1) baseline: openProject starts from the snapshot and only replaces fluorophore / band with the project entity's values
         val baseline = reopenBaseline(snapshot, "EGFP", 500 to 540)
 
-        // ② 定位图为空 → analyzePositioning() 在 :1228 直接 return，不碰任何字段
-        //    （这一步无法在 JVM 上直接跑 ViewModel，此处以「未对 baseline 施加任何
-        //     重算写入」来等价表达。）
-        assertTrue("FINISHED 项目走还原路径", shouldRestoreProvenance("FINISHED", snapshot))
+        // (2) the positioning frame is empty -> analyzePositioning() returns early at :1228 and touches no field
+        //     (this step cannot run the ViewModel directly on the JVM, so it is expressed equivalently as
+        //      "no recomputation write was applied to the baseline".)
+        assertTrue("a FINISHED project takes the restore path", shouldRestoreProvenance("FINISHED", snapshot))
 
-        // ③ 还原：只搬 12 个溯源字段，params 不搬 —— 于是基线里的预设值原样留下
+        // (3) restore: move only the 12 provenance fields and not params, so the preset values in the baseline survive unchanged
         val out = baseline.restoreProvenance(snapshot)
 
-        assertEquals("Case B 下 params 仍是预设值", snapshot.step1Params, out.step1Params)
+        assertEquals("in Case B params are still the preset values", snapshot.step1Params, out.step1Params)
         assertEquals("-2.738911", out.step1Params["slope_k"])
         assertEquals("BGGR (R/B swapped)", out.step1Params["cfa"])
         assertEquals(snapshot.spdParams, out.spdParams)
         assertEquals(snapshot.step4Params, out.step4Params)
 
-        // 溯源行同样是预设
+        // the provenance rows are the preset ones too
         assertEquals("Preset · Lab WL 2026", out.step1Source)
         assertEquals("Lab WL 2026", out.step1PresetName)
         assertEquals("preset://7", out.step1PresetFile)
         assertEquals(at, out.step1ImportedAt)
 
-        // fluorophore / band 来自项目实体而非快照
+        // fluorophore / band come from the project entity, not from the snapshot
         assertEquals("EGFP", out.sampleFluorophore)
         assertEquals("500–540 nm", out.sampleBand)
     }
 
-    /** Case B 的另一半：快照为 null 时基线退回空白报告，不崩、不残留。 */
+    /** The other half of Case B: when the snapshot is null the baseline falls back to an empty report, without crashing or leaving residue. */
     @Test
     fun caseB_nullSnapshot_fallsBackToBlankReport() {
         val out = reopenBaseline(null, "MCHERRY", 590 to 630)
@@ -348,19 +348,19 @@ class ReopenProvenanceTest {
         assertEquals(emptyMap<String, String>(), out.step1Params)
     }
 
-    /** 基线必须原样保留快照内容，不能只挑一部分字段。 */
+    /** The baseline must keep the snapshot content verbatim rather than cherry-picking fields. */
     @Test
     fun reopenBaseline_preservesTheWholeSnapshot() {
         val snapshot = snapshotProvenance().copy(
             slope = -2.739,
             redProfile = listOf(7f, 8f, 9f),
-            regressionFormula = "来自快照的公式"
+            regressionFormula = "formula from the snapshot"
         )
         val out = reopenBaseline(snapshot, "YPET", 500 to 530)
 
         assertEquals(snapshot.copy(sampleFluorophore = "YPET", sampleBand = "500–530 nm"), out)
         assertEquals(-2.739, out.slope!!, 0.0)
         assertEquals(listOf(7f, 8f, 9f), out.redProfile)
-        assertEquals("来自快照的公式", out.regressionFormula)
+        assertEquals("formula from the snapshot", out.regressionFormula)
     }
 }

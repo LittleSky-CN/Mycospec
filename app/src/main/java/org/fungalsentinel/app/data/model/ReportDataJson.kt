@@ -5,40 +5,40 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 【v2.2.8】[ReportData] ↔ JSON 的文本编解码。
+ * [v2.2.8] text codec for [ReportData] <-> JSON.
  *
- * ### 为什么需要它
- * `ProjectViewModel` 把整份报告存在内存里的 `ProjectUiState.reportData`。
- * 三个 `load*Preset` 入口只改这一份内存状态，**不往 `captures` 表写任何记录**，
- * 于是「这个项目 Step 1 用了某某预设」除了 reportData 本身没有第二个载体。
- * 只要报告不落库，从 History 重开一个已完成的项目，溯源信息就永久消失。
- * 本文件提供落库/恢复所需的编解码。
+ * ### Why it is needed
+ * `ProjectViewModel` keeps the whole report in memory as `ProjectUiState.reportData`.
+ * The three `load*Preset` entry points only touch that in-memory state and **write no row to the `captures` table**,
+ * so "this project used such-and-such preset for Step 1" has no second carrier beyond reportData itself.
+ * As long as the report is not persisted, reopening a finished project from History loses the provenance forever.
+ * This file provides the codec needed to persist and restore it.
  *
- * ### 为什么用 org.json
- * 平台自带、零新增主依赖；`app/build.gradle.kts` 里已有
- * `testImplementation("org.json:json:20250517")`，JVM 单测也能跑真实现
- * （mockable android.jar 会把 org.json 的每个方法都 stub 掉）。
- * 因此不引入 Gson / kotlinx.serialization / Moshi。
+ * ### Why org.json
+ * It ships with the platform and adds no new main dependency; `app/build.gradle.kts` already declares
+ * `testImplementation("org.json:json:20250517")`, so JVM unit tests can run the real implementation
+ * (mockable android.jar would stub out every org.json method).
+ * Gson / kotlinx.serialization / Moshi are therefore not introduced.
  *
- * ### 契约
- * - **键名 = [ReportData] 的属性名**。`ReportDataJsonTest` 的防遗漏护栏依赖这个
- *   不变量：新增属性但忘了改这里，护栏用例会失败。
- * - 可空标量写 `JSONObject.NULL`（**不是** `null`——`JSONObject.put(key, null)`
- *   在新版 org.json 里是「删除键」，会让护栏用例误判字段被漏掉）。
- * - 反序列化**全程 try/catch**：畸形 JSON、类型不符、schema 不认识一律返回 null，
- *   由调用方安全降级，绝不让旧数据把 App 搞崩。
- * - 数值一律走 `Locale.US`（`JSONObject` 内部用 `Double.toString`，
- *   已是 Locale 无关；此处只约束我们自己不引入 `String.format` 默认 Locale）。
+ * ### Contract
+ * - **key name = property name of [ReportData]**. The anti-omission guard in `ReportDataJsonTest` relies on this
+ *   invariant: add a property but forget to update this file and the guard case fails.
+ * - nullable scalars are written as `JSONObject.NULL` (**not** `null` -- `JSONObject.put(key, null)`
+ *   deletes the key in recent org.json versions, which would make the guard case think a field was dropped).
+ * - deserialization is **wrapped in try/catch throughout**: malformed JSON, wrong types and unknown schemas all return null,
+ *   letting the caller degrade safely and never letting old data crash the app.
+ * - numbers always go through `Locale.US` (JSONObject uses `Double.toString` internally,
+ *   which is already locale-independent; this only stops us from introducing a default-locale `String.format`).
  */
 private const val KEY_SCHEMA = "schema"
 
-/** 当前 schema 版本。改变了 [ReportData] 的语义或形状就 +1。 */
+/** Current schema version. Bump it by 1 whenever the meaning or shape of [ReportData] changes. */
 const val REPORT_DATA_SCHEMA: Int = 1
 
 fun ReportData.toJsonString(): String = JSONObject().apply {
     put(KEY_SCHEMA, REPORT_DATA_SCHEMA)
 
-    // ─── Step 1 波长标定 ───
+    // ─── Step 1 wavelength calibration ───
     put("wavelengthQuality", wavelengthQuality)
     put("wavelengthGError", wavelengthGError)
     put("mappingFormula", mappingFormula)
@@ -101,7 +101,7 @@ fun ReportData.toJsonString(): String = JSONObject().apply {
     put("spdWR", spdWR.toJsonFloats())
     put("spdFused", spdFused.toJsonFloats())
 
-    // ─── Step 3 样品 ───
+    // ─── Step 3 sample ───
     put("sampleFluorophore", sampleFluorophore)
     put("sampleBand", sampleBand)
     put("blankMeanArea", blankMeanArea)
@@ -118,7 +118,7 @@ fun ReportData.toJsonString(): String = JSONObject().apply {
     put("sampleFwhm", sampleFwhm)
     put("sampleCentroid", sampleCentroid)
 
-    // ─── Step 4 标准曲线 ───
+    // ─── Step 4 standard curve ───
     put("standardRows", standardRows.toJsonStrings())
     put("regressionFormula", regressionFormula)
     put("regressionR2", regressionR2)
@@ -130,13 +130,13 @@ fun ReportData.toJsonString(): String = JSONObject().apply {
     put("spdWarnings", spdWarnings.toJsonStrings())
     put("isLogFit", isLogFit)
 
-    // ─── 步骤状态 ───
+    // ─── step status ───
     put("step1Status", step1Status)
     put("step2Status", step2Status)
     put("step3Status", step3Status)
     put("step4Status", step4Status)
 
-    // ─── 溯源 ───
+    // ─── provenance ───
     put("step1Source", step1Source)
     putStringOrNull("step1PresetName", step1PresetName)
     putStringOrNull("step1PresetFile", step1PresetFile)
@@ -156,8 +156,8 @@ fun ReportData.toJsonString(): String = JSONObject().apply {
 }.toString()
 
 /**
- * 反序列化。**任何**失败都返回 null：调用方按「恢复失败 → 退回 `ReportData()`」
- * 安全降级，不要让旧数据或残缺数据把 App 搞崩。
+ * Deserialization. **Any** failure returns null: the caller degrades safely with "restoration failed -> fall back to `ReportData()`"
+ * and old or partial data must never crash the app.
  */
 fun reportDataFromJson(raw: String?): ReportData? {
     if (raw.isNullOrBlank()) return null
@@ -258,13 +258,13 @@ fun reportDataFromJson(raw: String?): ReportData? {
             spdWarnings = o.optStrings("spdWarnings"),
             isLogFit = o.requireBoolean("isLogFit"),
 
-            // 步骤状态
+            // step status
             step1Status = o.requireString("step1Status"),
             step2Status = o.requireString("step2Status"),
             step3Status = o.requireString("step3Status"),
             step4Status = o.requireString("step4Status"),
 
-            // 溯源
+            // provenance
             step1Source = o.requireString("step1Source"),
             step1PresetName = o.optStringOrNull("step1PresetName"),
             step1PresetFile = o.optStringOrNull("step1PresetFile"),
@@ -286,14 +286,14 @@ fun reportDataFromJson(raw: String?): ReportData? {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 写入侧
+// write side
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * NaN / Infinity 在 JSON 里没有合法表示，而 org.json 的 `testValidity` 对它们
- * 是**直接抛** `JSONException`（不是默默写成 null）。生产代码里 `spdCrossing*`、
- * 光谱数组之类的量理论上可能算出非有限值，所以写入侧一律先把它们压回有限值：
- * 不可空标量退回 [fallback]（取 [ReportData] 的默认值），数组元素退回 0。
+ * NaN / Infinity have no legal JSON representation, and org.json's `testValidity` **throws** `JSONException`
+ * for them outright (rather than quietly writing null). In production code quantities such as `spdCrossing*` or
+ * the spectral arrays can in principle evaluate to non-finite values, so the write side always clamps them back to finite ones:
+ * non-null scalars fall back to [fallback] (the default of [ReportData]), array elements fall back to 0.
  */
 private fun Double.finiteOr(fallback: Double): Double = if (isFinite()) this else fallback
 private fun Float.finiteOr(fallback: Float): Double = if (isFinite()) toDouble() else fallback.toDouble()
@@ -331,11 +331,11 @@ private fun Map<String, String>.toJsonStringMap(): JSONObject = JSONObject().als
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 读取侧
+// read side
 //
-// `JSONObject.isNull(key)` 对「键不存在」和「值是 JSONObject.NULL」都返回 true，
-// 因此所有 `optXxxOrNull` 天然把两种情形都折叠成 null —— 这正是我们要的宽松语义。
-// 不可空标量则用 `optXxx(key, default)`，缺失与显式 NULL 都退回默认值。
+// `JSONObject.isNull(key)` returns true both for "key absent" and for "value is JSONObject.NULL",
+// so every `optXxxOrNull` naturally folds both cases into null -- exactly the lenient semantics we want.
+// Non-null scalars use `optXxx(key, default)`, so both a missing key and an explicit NULL fall back to the default value.
 // ─────────────────────────────────────────────────────────────────────────────
 
 private fun JSONObject.optStringOrNull(key: String): String? =
@@ -348,9 +348,9 @@ private fun JSONObject.optDoubleOrNull(key: String): Double? =
     if (isNull(key)) null else optDouble(key).takeIf { it.isFinite() }
 
 /**
- * 不可空但**缺字段就当成数据坏了**：不静默补默认值，让整个反序列化返回 null，
- * 由调用方退回全新的 `ReportData()`。否则一份残缺快照会伪装成「用户真的没跑过
- * Step 1」，比直接恢复失败更难排查。
+ * Non-null but **a missing field means the data is broken**: do not silently fill in a default; let the whole deserialization
+ * return null so the caller falls back to a fresh `ReportData()`. Otherwise a partial snapshot would masquerade as
+ * "the user really never ran Step 1", which is far harder to diagnose than an outright restoration failure.
  */
 private fun JSONObject.requireString(key: String): String =
     getString(key)

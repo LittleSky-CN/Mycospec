@@ -1,11 +1,11 @@
 pluginManagement {
     repositories {
-        // 1. 优先使用阿里云镜像 (解决网络问题)
+        // 1. prefer the Aliyun mirror (works around network problems)
         maven("https://maven.aliyun.com/repository/google")
         maven("https://maven.aliyun.com/repository/public")
         maven("https://maven.aliyun.com/repository/gradle-plugin")
         
-        // 2. 保留原有的官方源作为备用
+        // 2. keep the official repository as a fallback
         google {
             content {
                 includeGroupByRegex("com\\.android.*")
@@ -25,11 +25,11 @@ plugins {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        // 1. 优先使用阿里云镜像
+        // 1. prefer the Aliyun mirror
         maven("https://maven.aliyun.com/repository/google")
         maven("https://maven.aliyun.com/repository/public")
         
-        // 2. 保留官方源
+        // 2. keep the official repository
         google()
         mavenCentral()
     }

@@ -45,7 +45,7 @@ fun Step1WavelengthScreen(
     val status = report.step1Status
     val token = status.substringBefore('|')
     val message = status.substringAfter('|', status)
-    // 【统一】状态色收敛：绿=成功 / 半透明绿=处理中 / 红=失败 / 灰=空闲
+    // [unified] status colours converge: green = success / translucent green = processing / red = failure / grey = idle
     val statusColor = statusTextColor(token)
 
     val tutorial = TutorialHost(
@@ -79,7 +79,7 @@ fun Step1WavelengthScreen(
             ) {
                 NeonHeader("STEP1:", stringResource(R.string.step1_short), onBack, tutorial)
 
-                // 说明框：唯一强调色描边
+                // info box: outlined with the single accent colour
                 NeonOutlineBox(AppColors.Accent) {
                     Text(
                         text = stringResource(R.string.step1_description),
@@ -88,7 +88,7 @@ fun Step1WavelengthScreen(
                     )
                 }
 
-                // 状态框：中性描边，文本色由状态令牌决定
+                // status box: neutral outline; the text colour is decided by the status token
                 NeonOutlineBox(AppColors.Outline) {
                     Text(
                         text = message,

@@ -20,10 +20,10 @@ object ConcentrationRegressor {
     }
 
     /**
-     * 根据回归结果预测浓度
-     * @param result 回归结果
-     * @param area 测得的面积/信号强度
-     * @return 线性 OLS 模型预测的实际浓度值
+     * Predicts the concentration from a regression result
+     * @param result the regression result
+     * @param area the measured area / signal intensity
+     * @return the concentration predicted by the linear OLS model
      */
     fun predict(result: RegressionResult, area: Double): Double {
         return (area - result.intercept) / result.slope
@@ -41,7 +41,7 @@ object ConcentrationRegressor {
         val slope = (n * sumXY - sumX * sumY) / denominator
         val intercept = (sumY - slope * sumX) / n
 
-        // 计算 R²
+        // compute R²
         val yMean = sumY / n
         val ssTot = points.sumOf { (it.second - yMean).pow(2) }
         val ssRes = points.sumOf { (it.second - (slope * it.first + intercept)).pow(2) }

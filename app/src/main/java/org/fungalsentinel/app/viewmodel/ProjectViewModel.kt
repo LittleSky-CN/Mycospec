@@ -139,7 +139,7 @@ data class ReportData(
     val curveIntercept: Double? = null,
     val curvePoints: List<Pair<Double, Double>> = emptyList(),
     val curveWarnings: List<String> = emptyList(),
-    /** 【v2.2.6】SPD preset 加载期的软提示（L2/L3），永不阻断。 */
+    /** [v2.2.6] soft notices raised while loading an SPD preset (L2/L3), never blocking. */
     val spdWarnings: List<String> = emptyList(),
     val isLogFit: Boolean = false,
     val step1Status: String = "IDLE",
@@ -154,7 +154,7 @@ data class ReportData(
     val step1ImportedAt: String? = null,
     val step1Params: Map<String, String> = emptyMap(),
 
-    // ─── Step 2 provenance (spdSource 已存在，配齐其余) ───
+    // ─── Step 2 provenance (spdSource already exists; complete the rest) ───
     val spdPresetName: String? = null,
     val spdPresetFile: String? = null,
     val spdImportedAt: String? = null,
@@ -181,25 +181,25 @@ data class ProjectUiState(
 )
 
 /**
- * 【溯源 v2.2.7】Step 1 / 2 / 4 的「这部分数据是从哪儿来的」写入器。
+ * [provenance v2.2.7] writers for "where did this part of the data come from" of Steps 1 / 2 / 4.
  *
- * 之所以抽成顶层纯函数而不是内联在 ViewModel 里：`ProjectViewModel` 依赖
- * `Application` + Room，JVM 单测无法实例化它；而这些写入器只吃 data class，
- * 因此可以在 `ReportProvenanceTest` 里对**生产代码本身**做断言。
+ * Why these are top-level pure functions rather than inlined in the ViewModel: `ProjectViewModel` depends on
+ * `Application` + Room and cannot be instantiated in a JVM unit test, while these writers only consume data classes
+ * and can therefore be asserted against **the production code itself** in `ReportProvenanceTest`.
  */
 private fun nowStamp(): String =
     java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
         .format(java.util.Date())
 
-/** Room 里的 preset 没有真实文件路径，用稳定的行标识代替。 */
+/** Presets in Room have no real file path, so a stable row identifier is used instead. */
 private fun presetFileRef(id: Long): String = "preset://$id"
 
 /**
- * 步骤从未执行时报告里显示的来源。
+ * The source shown in the report when a step has never been executed.
  *
- * 不能再用 "Live calibration" / "Live standard curve" / "true_spd.csv (bundled)"
- * 之类的默认值：`ReportScreen` 无条件渲染 Source 行，未跑过的步骤会凭空声称自己是
- * 现场标定，比留空更具误导性。
+ * It must no longer be a default such as "Live calibration" / "Live standard curve" / "true_spd.csv (bundled)":
+ * `ReportScreen` renders the Source row unconditionally, so a step that was never run would claim out of nowhere that it was
+ * calibrated on site, which is more misleading than leaving it blank.
  */
 internal const val STEP_SOURCE_NOT_RUN = "Not run"
 
@@ -223,7 +223,7 @@ internal fun ReportData.withWavelengthPreset(
     step1Params = step1Params(p.slope, p.intercept, p.roiStart, p.roiEnd, p.rbSwapped)
 )
 
-/** 实时标定必须清掉 preset 痕迹，否则旧 preset 名字会残留在报告里。 */
+/** A live calibration must clear the preset traces, otherwise the old preset name lingers in the report. */
 internal fun ReportData.withLiveWavelength(
     slope: Double, intercept: Double, roiStart: Int?, roiEnd: Int?, rbSwapped: Boolean,
     at: String = nowStamp()
@@ -249,8 +249,8 @@ internal fun ReportData.withSpdPreset(
 )
 
 /**
- * 实时 SPD 标定：来源标记成 "Live calibration"，但保留参考光谱文件名
- * （`true_spd.csv (bundled)`），否则报告会丢掉唯一能说明参考光谱的字段。
+ * Live SPD calibration: the source is marked "Live calibration", but the reference spectrum filename is kept
+ * (`true_spd.csv (bundled)`), otherwise the report loses the only field that identifies the reference spectrum.
  */
 internal fun ReportData.withLiveSpd(csvSource: String, at: String = nowStamp()): ReportData = copy(
     spdSource = "Live calibration · $csvSource",
@@ -261,14 +261,14 @@ internal fun ReportData.withLiveSpd(csvSource: String, at: String = nowStamp()):
 )
 
 /**
- * 【D1】还原 Step 2 的 preset 溯源。
+ * [D1] restores the Step 2 preset provenance.
  *
- * 场景：Step 1 加载波长 preset 后，`loadWavelengthPreset` 会用新映射级联重跑
- * `analyzeSpd()`，而 `analyzeSpd` 末尾的 `withLiveSpd` 会把 `spdPresetName/File`
- * 置 null、把 `spdSource` 改写成 "Live calibration · …"。这次重跑是**用新波长映射
- * 重算**，不是用户重新拍了灯，所以报告会静默丢掉 "Preset · X" 的来源。
+ * Scenario: after Step 1 loads a wavelength preset, `loadWavelengthPreset` cascades a re-run of
+ * `analyzeSpd()` with the new mapping, and the `withLiveSpd` at the end of `analyzeSpd` sets
+ * `spdPresetName/File` to null and rewrites `spdSource` to "Live calibration -- ...". That re-run is **a recomputation
+ * with the new wavelength mapping**, not the user re-photographing the lamp, so the report silently loses the "Preset -- X" source.
  *
- * 只在重跑前确实存在 preset 溯源时才还原 —— 现场重跑（本来就是 live）不受影响。
+ * Restores only when a preset provenance actually existed before the re-run -- a genuine on-site re-run (already live) is unaffected.
  */
 internal fun ReportData.restoreSpdPresetProvenance(before: ReportData): ReportData =
     if (before.spdPresetName != null) copy(
@@ -280,63 +280,63 @@ internal fun ReportData.restoreSpdPresetProvenance(before: ReportData): ReportDa
     ) else this
 
 /**
- * 【v2.2.8】重开项目时，是否该用落库快照里的溯源覆盖掉重算结果。
+ * [v2.2.8] whether reopening a project should overwrite the recomputed result with the provenance from the persisted snapshot.
  *
- * `openProject()` 混了两种用途，正确答案相反：
+ * `openProject()` mixes two purposes whose correct answers are opposite:
  *
- * | 项目状态      | 用途               | 该不该覆盖                     |
+ * | project status   | purpose                    | should it overwrite?                  |
  * |---------------|--------------------|--------------------------------|
- * | `IN_PROGRESS` | 继续做没做完的项目 | **应该** —— 数据来自现场重算   |
- * | `FINISHED`    | 查看历史报告       | **不应该** —— 用户是来看报告的 |
+ * | `IN_PROGRESS`  | continue an unfinished project | **yes** -- the data comes from an on-site recomputation |
+ * | `FINISHED`     | view a historical report   | **no** -- the user came to read the report |
  *
- * 抽成纯函数是为了能在 JVM 上直接对「闸门」本身下断言：`ProjectViewModel` 依赖
- * `Application` + 两个 Room 库，单测里无法实例化，但闸门写反是这个修复最容易犯的错。
+ * Extracting it as a pure function lets us assert directly against **the gate itself** on the JVM: `ProjectViewModel` depends on
+ * `Application` + two Room databases and cannot be instantiated in a unit test, yet writing the gate backwards is the easiest mistake in this fix.
  */
 internal fun shouldRestoreProvenance(status: String?, restored: ReportData?): Boolean =
     status == "FINISHED" && restored != null
 
 /**
- * 【v2.2.8-D1】项目行（projects 表）的受保护写入口 —— 「快照 / 流程状态」的每一次
- * 「读 → 改 → 写」都必须在同一个临界区里跑完，否则会丢更新（lost-update）。
+ * [v2.2.8-D1] protected write entry point for the project row (projects table) -- every "read -> modify -> write" of
+ * "snapshot / flow state" must complete inside the same critical section, otherwise updates are lost (lost-update).
  *
- * ## 为什么必须互斥
+ * ## Why mutual exclusion is required
  *
- * `projects` 行同时承载两件事：**报告快照**（Step 4 每出一次结果就存一次，保证用户
- * 跑完直接退 App 也不丢）与**流程状态**（Finish 时写 `FINISHED` / `finishedAt`）。
- * 两条写入路径各跑在 fire-and-forget 协程里，谁都可能读到一个已经被对方改过的行。
- * 各自凭手里的副本 `copy()` 回写时，**后写的那次会把先写的结果整体冲掉**：
+ * The `projects` row carries two things at once: the **report snapshot** (written every time Step 4 produces a result, so that
+ * the user can quit the app right after finishing without losing it) and the **flow state** (Finish writes `FINISHED` / `finishedAt`).
+ * The two write paths each run in a fire-and-forget coroutine, and either may read a row the other has already modified.
+ * When each writes back its own `copy()`, **the later write wipes out the earlier result entirely**:
  *
  * ```
- * persistReportSnapshot ：读出 ProjectEntity(status=IN_PROGRESS, …)   ← 陈旧
- * finishProject         ：写入 ProjectEntity(status=FINISHED,  …)
- * persistReportSnapshot ：回写 ProjectEntity(status=IN_PROGRESS, …)   ← 把 FINISHED 冲掉
+ * persistReportSnapshot : reads  ProjectEntity(status=IN_PROGRESS, ...)   <- stale
+ * finishProject         : writes ProjectEntity(status=FINISHED,   ...)
+ * persistReportSnapshot : writes ProjectEntity(status=IN_PROGRESS, ...)   <- wipes FINISHED
  * ```
  *
- * 后果是**静默**的：不崩不报错，但 `shouldRestoreProvenance()` 要求
- * `status == "FINISHED"`，一旦被打回 `IN_PROGRESS`，从 History 重开时 Step 1/2/4
- * 的溯源就不会还原 —— 正是本次要治的那个症状，只是换了一条触发路径。
+ * The consequence is **silent**: nothing crashes and nothing is reported, but `shouldRestoreProvenance()` requires
+ * `status == "FINISHED"`; once it is pushed back to `IN_PROGRESS`, reopening from History will not restore the
+ * provenance of Steps 1/2/4 -- exactly the symptom this fix targets, only reached by a different trigger path.
  *
- * ## 死锁分析（这里不能在外面再套一层同名的锁）
+ * ## Deadlock analysis (do not wrap another lock of the same name around this)
  *
- * 两个 `…Locked()` 函数是**自己拿锁**，而不是要求调用方持锁再进来：`Mutex` 不可
- * 重入，上层持锁后再调这里会立刻自锁。同理 `finishProjectLocked` 内部**不会**去
- * `join` 那个 fire-and-forget 的 `persistReportSnapshot()` 协程（它也可能正在等这把
- * 锁）。两条路径靠**共享同一把 `mutex`** 互斥，而不是靠「外层排队 + 内层等待」。
+ * The two `...Locked()` functions **take the lock themselves** rather than requiring the caller to hold it: a `Mutex` is not
+ * reentrant, so calling in while the caller already holds the lock would self-deadlock immediately. Likewise `finishProjectLocked` does **not**
+ * `join` the fire-and-forget `persistReportSnapshot()` coroutine (which may also be waiting for this very
+ * lock). The two paths are mutually excluded by **sharing the same `mutex`**, not by "queueing outside + waiting inside".
  *
- * 持锁期间会 `withContext(Dispatchers.IO)` 序列化快照（几十 KB）：锁随协程迁移，不
- * 会自锁；代价只是别的元数据写在序列化期间排队。这是有意接受的取舍 —— 比起临界区
- * 内读到陈旧行的正确性收益，几十毫秒排队可以忽略。
+ * While holding the lock it serialises the snapshot with `withContext(Dispatchers.IO)` (tens of KB): the lock migrates with the
+ * coroutine, so there is no self-deadlock; the only cost is that other metadata writes queue up during serialisation. This trade-off is
+ * deliberate -- next to the correctness gain of never reading a stale row inside the critical section, a few tens of milliseconds of queueing is negligible.
  *
- * ## 适用范围（别把话说满）
+ * ## Scope (do not overstate it)
  *
- * 这里管的是「快照 / 流程状态」那两条会互相覆盖的路径 —— `finishProject()` 与
- * `persistReportSnapshot()`。第三个写入点 `setSampleFluorophore()`（改 fluorophore /
- * band 后回写）**没有**套进来：它自己持同一把 `projectMetadataMutex`，同样在锁内重读
- * 最新 uiState 之后再写（见该处注释），语义与本函数一致；只是它既不动快照也不动状态，
- * 硬套一个 `transform` 反而更绕。它若哪天也开始写快照，必须改走这里。
+ * What is covered here are the two paths that can overwrite each other -- `finishProject()` and
+ * `persistReportSnapshot()`. A third write site, `setSampleFluorophore()` (writes back after changing fluorophore /
+ * band), is **not** wrapped: it takes the same `projectMetadataMutex` and likewise re-reads the latest uiState
+ * inside the lock before writing (see the comment there), so its semantics match this function; it simply touches neither
+ * the snapshot nor the state, and forcing a `transform` on it would only make things more convoluted. If it ever starts writing the snapshot, it must be routed through here.
  *
- * @return 是否真的写了。`readProject()` 返回 null（项目已被清空 / 不存在）时为
- *         false，这时一次 `writeProject` 都不会发生。
+ * @return whether anything was actually written. False when `readProject()` returns null (the project was cleared / does not
+ *         exist), in which case not a single `writeProject` happens.
  */
 private suspend fun updateProjectLocked(
     mutex: Mutex,
@@ -350,11 +350,10 @@ private suspend fun updateProjectLocked(
 }
 
 /**
- * 【v2.2.8-D1】把当前报告快照写回项目行（供 [ProjectViewModel.persistReportSnapshot]
- * 使用）。
+ * [v2.2.8-D1] writes the current report snapshot back into the project row (used by [ProjectViewModel.persistReportSnapshot]).
  *
- * 除 `finishProject()` 之外还要在 Step 4 结果产出时再存一次：用户跑完标准曲线后很
- * 可能直接退出 App，根本不会走到 `finishProject()`。
+ * Besides `finishProject()` it also has to be stored when the Step 4 result is produced: after running the standard curve the user
+ * is quite likely to quit the app outright and never reach `finishProject()`.
  */
 internal suspend fun persistReportSnapshotLocked(
     mutex: Mutex,
@@ -369,13 +368,12 @@ internal suspend fun persistReportSnapshotLocked(
 )
 
 /**
- * 【v2.2.8-D1】原子完成「写快照 + 标记 FINISHED」（供 [ProjectViewModel.finishProject]
- * 使用）。
+ * [v2.2.8-D1] atomically completes "write the snapshot + mark FINISHED" (used by [ProjectViewModel.finishProject]).
  *
- * 关键点是**在同一个临界区内**读出项目行并写回 `status` / `finishedAt`：只要这三者
- * 分离，飞行中的 [persistReportSnapshotLocked] 就有机会用陈旧副本把状态冲回去。
+ * The key point is reading the project row and writing back `status` / `finishedAt` **inside the same critical section**: as soon as those three
+ * are separated, an in-flight [persistReportSnapshotLocked] gets the chance to push the state back with its stale copy.
  *
- * 调用方负责顺序 —— 本函数返回（快照与状态都已落库）之后才可以清空 uiState。
+ * The caller owns the ordering -- this function must return (snapshot and state both persisted) before uiState may be cleared.
  */
 internal suspend fun finishProjectLocked(
     mutex: Mutex,
@@ -396,50 +394,50 @@ internal suspend fun finishProjectLocked(
 )
 
 /**
- * 【v2.2.8】把 Step 1/2/4 的**溯源**（共 12 个字段）从 [from] 搬过来。
+ * [v2.2.8] moves the **provenance** of Steps 1/2/4 (12 fields in total) over from [from].
  *
- * ## 刻意只搬这 12 个，不搬任何数值
+ * ## Deliberately only these 12, and no numeric values
  *
  * `slope` / `intercept` / `mappingFormula` / `redProfile` / `spdFused` /
- * `curveSlope` / `regressionFormula` / `predictedConcentration` 等一律保持调用方
- * （即 `analyzePositioning()` / `analyzeSpd()` / `analyzeSample()`）重算出来的
- * 结果。数值必须反映当前真实状态；溯源是「这个项目当初是怎么来的」的历史事实。
- * 两者职责不同，绑在一起还原就会让报告出现「数值是重算的、标签却说来自预设」的
- * 错位 —— 那正是 v2.2.7 刚修掉的溯源谎报。
+ * `curveSlope` / `regressionFormula` / `predictedConcentration` and friends all keep whatever the caller
+ * (`analyzePositioning()` / `analyzeSpd()` / `analyzeSample()`) recomputed.
+ * Numbers must reflect the current real state; provenance is the historical fact of "where this project originally came from".
+ * The two have different responsibilities, and restoring them together would produce a report saying
+ * "the numbers were recomputed but the label claims they came from a preset" -- precisely the provenance lie v2.2.7 just fixed.
  *
- * ## 为什么 `*Params` 也**不**在清单里（只有 12 个而不是 15 个，不是漏写）
+ * ## Why the `*Params` maps are **not** in the list either (12, not 15 -- not an oversight)
  *
- * 三个 `Map<String, String>` 看着像溯源，其实**带数值**：`withLiveWavelength`
- * 会用重算出来的 slope / intercept 重写 `step1Params`（见 `step1Params()`，
- * `:202`），`withLiveSpd` / `withLiveCurve` 同理。若一并还原，报告里就会出现
+ * The three `Map<String, String>` look like provenance but actually **carry numbers**: `withLiveWavelength`
+ * rewrites `step1Params` with the recomputed slope / intercept (see `step1Params()`,
+ * `:202`), and `withLiveSpd` / `withLiveCurve` do the same. Restoring them as well would produce a report where
  *
  * ```
- * step1Source          = "Preset · Lab WL 2026"   ← 还原的
- * step1Params[slope_k] = "-2.738911"              ← 还原的（预设值）
- * slope                = -2.710000                ← 重算值
+ * step1Source          = "Preset -- Lab WL 2026"   <- restored
+ * step1Params[slope_k] = "-2.738911"              <- restored (preset value)
+ * slope                = -2.710000                <- recomputed value
  * ```
  *
- * 同一个报告里 params 的 slope 和正文的 slope 对不上。
+ * i.e. the slope inside params and the slope in the body disagree within the same report.
  *
- * 剔除之后两种场景都自洽（无论是否拍过定位图）：
+ * Leaving them out makes both scenarios self-consistent (whether or not a positioning frame was captured):
  *
- * | 场景                        | `step1Source`     | `step1Params[slope_k]`    | `slope`   |
+ * | scenario                                      | `step1Source`            | `step1Params[slope_k]`       | `slope`       |
  * |-----------------------------|-------------------|---------------------------|-----------|
- * | 拍过图 + 导过预设（会重算） | Preset · X（还原）| 重算值（未还原）          | 重算值    |
- * | 只导预设、没拍图（不重算）  | Preset · X（基线）| 预设值（基线未被覆盖）    | 预设值    |
+ * | frame captured + preset imported (recomputed) | Preset -- X (restored)   | recomputed (not restored)    | recomputed    |
+ * | preset only, no frame (not recomputed)        | Preset -- X (baseline)   | preset value (baseline kept) | preset value  |
  *
- * 注意第二行：没拍图时 `analyzePositioning()` 会在 `:1228` 直接 return，基线里的
- * 预设 params 没人覆盖，最终仍是预设值。**所以剔除 params 不会让"只导预设"的项目
- * 看不到预设参数** —— 看不到预设值的唯一情形是数值本来就被重算了，那时看不到才
- * 是对的。
+ * Note the second row: with no frame `analyzePositioning()` returns early at `:1228`, so nobody overwrites the
+ * preset params in the baseline and they stay at the preset value. **So dropping params does not hide the preset parameters
+ * for "preset only" projects** -- the only case where the preset value is not shown is when the number was recomputed anyway,
+ * and in that case not showing it is correct.
  *
- * ## 与 `restoreSpdPresetProvenance` 的区别（因此**没有**合并）
+ * ## Difference from `restoreSpdPresetProvenance` (hence **no** merge)
  *
- * - 那一个是**有守卫**的（只在 `before.spdPresetName != null` 时还原），用于
- *   `loadWavelengthPreset` 的级联重跑 —— 那里本来就是现场操作，只在确实存在
- *   preset 溯源时才需要保护。
- * - 这一个**无条件**搬运这 12 个字段，因为 `shouldRestoreProvenance()` 已在上游
- *   把住闸门。若合并，D1 那条路径会连带把 Step 1 / Step 4 的溯源一起还原，越界。
+ * - that one is **guarded** (it restores only when `before.spdPresetName != null`) and is used for
+ *   the cascaded re-run in `loadWavelengthPreset` -- that path is an on-site operation to begin with, so protection
+ *   is only needed when a preset provenance really exists.
+ * - this one moves those 12 fields **unconditionally**, because `shouldRestoreProvenance()` has already
+ *   closed the gate upstream. Merging them would make the D1 path restore Steps 1 and 4 as well, which is overreach.
  */
 internal fun ReportData.restoreProvenance(from: ReportData): ReportData = copy(
     step1Source = from.step1Source,
@@ -459,14 +457,14 @@ internal fun ReportData.restoreProvenance(from: ReportData): ReportData = copy(
 )
 
 /**
- * 【v2.2.8】重开项目时的报告基线：以快照为底，再把 fluorophore / band 换成项目
- * 实体里的值（项目实体是这两项的权威来源，不信任快照）。
+ * [v2.2.8] report baseline when reopening a project: start from the snapshot, then replace fluorophore / band with the
+ * values from the project entity (the project entity is the authoritative source for those two; the snapshot is not trusted).
  *
- * 快照为 null 时退回空白报告 —— v4 之前落库的旧项目就是这条路径。
+ * Falls back to an empty report when the snapshot is null -- that is the path taken by projects persisted before v4.
  *
- * 抽成纯函数是为了让「只导预设、没拍图」这条路径（Case B）能在 JVM 上断言：
- * 那条路径上 `analyzePositioning()` 会在 `:1228` 直接 return，最终报告**就是**
- * 这个基线的原值，基线若丢了 params 就没人补得回来。
+ * Extracting it as a pure function lets the "preset only, no positioning frame" path (Case B) be asserted on the JVM:
+ * on that path `analyzePositioning()` returns early at `:1228`, so the final report **is exactly** this
+ * baseline unchanged; if the baseline lost params, nothing could put them back.
  */
 internal fun reopenBaseline(
     restored: ReportData?,
@@ -509,9 +507,9 @@ internal fun ReportData.withLiveCurve(
     )
 )
 
-/** 用户主动清掉 curve preset 后，报告里不能再留着 "Preset · X"。 */
+/** After the user clears the curve preset deliberately, the report must not keep showing "Preset -- X". */
 internal fun ReportData.withoutCurvePreset(): ReportData = copy(
-    // 【D2】清掉 preset 后 Step 4 已无任何曲线数据，不能再声称 "Live standard curve"
+    // [D2] once the preset is cleared, Step 4 has no curve data at all and must not claim "Live standard curve"
     step4Source = STEP_SOURCE_NOT_RUN,
     step4PresetName = null,
     step4PresetFile = null,
@@ -520,8 +518,8 @@ internal fun ReportData.withoutCurvePreset(): ReportData = copy(
 )
 
 /**
- * 【D4】SPD preset 实际没落地（没有任何可用采样点）时，报告不能留着 "Preset · X"。
- * 没有 preset 溯源可退回，因此回到中性未执行标记。
+ * [D4] when the SPD preset never actually landed (no usable sample point), the report must not keep "Preset -- X".
+ * There is no preset provenance to fall back to, so it returns to the neutral not-executed marker.
  */
 internal fun ReportData.withoutSpdPreset(): ReportData = copy(
     spdSource = STEP_SOURCE_NOT_RUN,
@@ -613,7 +611,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun createProject(name: String, hasBlueFilter: Boolean = false) {
         _hasBlueFilter.value = hasBlueFilter
-        FrameProfileExtractor.forceRbSwap = false   // 【v2.2.6】新项目重置通道交换标志
+        FrameProfileExtractor.forceRbSwap = false   // [v2.2.6] reset the channel swap flag for a new project
         analysisXRoi = null
         spdRbSwapRetried = false
         viewModelScope.launch {
@@ -624,22 +622,22 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun finishProject() {
         viewModelScope.launch {
-            // 【v2.2.8】报告快照必须在清空 uiState **之前**落库 —— 那之后数据就没了。
-            // 【v2.2.8-D1】这一步还必须与 Step 4 的快照写入共用同一把
-            // projectMetadataMutex：否则飞在半路的 persistReportSnapshot() 会拿它读到的
-            // 陈旧行把 status / finishedAt 冲回 IN_PROGRESS / null，
-            // shouldRestoreProvenance() 的闸门随之关上，溯源再次丢失。
-            // 详见 finishProjectLocked() 的 KDoc（含死锁分析）。
+            // [v2.2.8] the report snapshot must be persisted **before** uiState is cleared -- after that the data is gone.
+            // [v2.2.8-D1] this step must also share the same
+            // projectMetadataMutex with the Step 4 snapshot write: otherwise an in-flight persistReportSnapshot()
+            // would push status / finishedAt back to IN_PROGRESS / null with the stale row it read,
+            // the shouldRestoreProvenance() gate would close again, and the provenance would be lost once more.
+            // See the KDoc of finishProjectLocked() for the deadlock analysis.
             val written = finishProjectLocked(
                 mutex = projectMetadataMutex,
                 readProject = { _uiState.value.currentProject },
                 serialize = {
-                    // 序列化是 60KB 量级（三条通道 profile + 六条 SPD 曲线），切到 IO。
+                    // serialisation is on the order of 60 KB (three channel profiles + six SPD curves), so switch to IO.
                     withContext(Dispatchers.IO) { _uiState.value.reportData.toJsonString() }
                 },
                 writeProject = { updated -> dao.updateProject(updated) }
             )
-            // 没有进行中的项目时维持原语义：一字不落库、一行状态也不动。
+            // when no project is in progress, keep the original semantics: not a single byte persisted, not a bit of state touched.
             if (!written) return@launch
             _uiState.value = ProjectUiState()
             _hasBlueFilter.value = false
@@ -666,14 +664,14 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
                 _hasBlueFilter.value = false
-                FrameProfileExtractor.forceRbSwap = false   // 【v2.2.6】先重置，再由 Step 1 重新判定
+                FrameProfileExtractor.forceRbSwap = false   // [v2.2.6] reset first, then let Step 1 decide again
                 analysisXRoi = null
                 spdRbSwapRetried = false
                 val band = fluorophoreBand(project.fluorophore)
-                // 【v2.2.8】从落库快照恢复整份报告 —— 这是 Step 1/2/4 预设溯源的
-                // 唯一载体（三个 load*Preset 都不写 captures 表）。
-                // 恢复失败（v4 之前的旧项目 / 畸形 JSON / schema 不认识）→ restored 为
-                // null，退回空白报告，行为与改动前一致，绝不因为旧数据崩 App。
+                // [v2.2.8] restore the whole report from the persisted snapshot -- this is the
+                // only carrier of the Step 1/2/4 preset provenance (none of the three load*Preset writes to the captures table).
+                // restoration fails (projects older than v4 / malformed JSON / unknown schema) -> restored is
+                // null and we fall back to an empty report; behaviour is unchanged from before, and old data must never crash the app.
                 val restored = reportDataFromJson(project.reportDataJson)
                 _uiState.value = ProjectUiState(
                     currentProject = project,
@@ -690,9 +688,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 analyzePositioning()
                 if (spd.isNotEmpty()) analyzeSpd()
                 analyzeSample()
-                // 【v2.2.8】上面三句会用现场重算把溯源覆盖成 "Live calibration"。
-                // FINISHED 项目是**查看历史报告**，不是重做，所以把当初的溯源搬回来。
-                // 只搬 12 个溯源字段，数值一律保持上面重算出来的结果。
+                // [v2.2.8] the three lines above overwrite the provenance with "Live calibration" via the on-site recomputation.
+                // A FINISHED project is **viewing a historical report**, not redoing it, so move the original provenance back.
+                // Only the 12 provenance fields are moved; numbers always keep the recomputed results above.
                 val snapshot = restored.takeIf { shouldRestoreProvenance(project.status, it) }
                 if (snapshot != null) {
                     _uiState.value = _uiState.value.copy(
@@ -743,8 +741,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setFluorophore(name: String) {
-        // 唯一的写入点在这里卡成 canonical —— 保证 projects.fluorophore 落库的
-        // 永远是 Fluorophore.X.name（存量数据本来就是 canonical，无需迁移）
+        // the single write point pins this to canonical -- so what lands in projects.fluorophore is
+        // always Fluorophore.X.name (the existing data is already canonical, no migration needed)
         val canonical = requireKnownFluorophore(name, "the Step 3 selection").name
         val band = fluorophoreBand(canonical)
         val state = _uiState.value
@@ -967,7 +965,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 val predictedConc = ConcentrationRegressor.predict(reg, sampleArea)
 
                 val warnings = reg.warnings.toMutableList()
-                // 过曝/信号反转检测：浓度升高但信号显著下降
+                // over-exposure / signal inversion detection: the concentration rises but the signal drops significantly
                 val sortedPoints = points.sortedBy { it.first }
                 var saturationDetected = false
                 for (i in 1 until sortedPoints.size) {
@@ -1061,8 +1059,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             require(st.blankCaptures.isNotEmpty() && st.sampleCaptures.isNotEmpty()) {
                 "Capture a current blank and sample in Step 3 before applying the curve"
             }
-            // 跨端 preset 的 fluorophore 可能是 "mCherry" 这类非 canonical 写法，
-            // 一律先解析；解析不出来就报错，不要静默走到错误的通道上
+            // cross-platform presets may carry non-canonical spellings such as "mCherry";
+            // always resolve first; if it cannot be resolved, fail loudly instead of silently walking onto the wrong channel
             val curveFluorophore = requireKnownFluorophore(preset.fluorophore, "this curve preset")
             val selectedFluorophore = canonicalFluorophore(report.sampleFluorophore)
             require(curveFluorophore == selectedFluorophore) {
@@ -1190,9 +1188,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     "Saved SPD calibration in this curve preset is invalid"
                 }
             }
-            // Python FSSA 导出的 preset 带的是它自己的显示名（"mCherry"、
-            // "Fluorescein (sodium salt)"…），先解析成 canonical 再往下走；
-            // 解析不出来就明确报错，绝不停留在"看起来加载成功了"的状态
+            // presets exported by Python FSSA carry its own display names ("mCherry",
+            // "Fluorescein (sodium salt)"...), so resolve them to canonical before continuing;
+            // if it cannot be resolved, report an explicit error and never stay in a "looks like it loaded fine" state
             val payloadFluorophore = requireKnownFluorophore(payload.fluorophore, "this curve preset")
             val selectedFluorophore = canonicalFluorophore(_uiState.value.reportData.sampleFluorophore)
             require(payloadFluorophore == selectedFluorophore) {
@@ -1253,7 +1251,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     peakR = r.peakR?.roundToInt(), peakG = r.peakG?.roundToInt(), peakB = r.peakB?.roundToInt(),
                     wlR = r.wlR, wlG = r.wlG, wlB = r.wlB,
                     exposureSeconds = r.exposureTime.removeSuffix(" s").toDoubleOrNull(),
-                    // 【v2.2.6】DEF-A01：真值来自 analyzePositioning() 已置位的解码器标志
+                    // [v2.2.6] DEF-A01: the ground truth is the decoder flag already set by analyzePositioning()
                     rbSwapped = FrameProfileExtractor.forceRbSwap
                 )
             )
@@ -1271,7 +1269,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     frames = r.spdFrames,
                     exposureSeconds = r.spdExposure.removeSuffix(" s").toDoubleOrNull(),
                     spdSource = r.spdSource,
-                    // 【v2.2.6】DEF-A04：溯源字段冗余写进顶层列（payloadJson 里也有一份）
+                    // [v2.2.6] DEF-A04: provenance fields are redundantly written into top-level columns (a copy also lives in payloadJson)
                     slope = result?.slope?.takeIf { !it.isNaN() } ?: r.slope,
                     intercept = result?.intercept?.takeIf { !it.isNaN() } ?: r.intercept,
                     gErrorNm = result?.gErrorNm ?: r.gErrorNm,
@@ -1285,11 +1283,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun loadWavelengthPreset(p: PresetEntity) {
         val slope = p.slope ?: return
         val intercept = p.intercept ?: return
-        // 【v2.2.6】DEF-A01：恢复通道交换结论，否则 MCHERRY / CFP / mTurquoise2 读错通道
+        // [v2.2.6] DEF-A01: restore the channel swap conclusion, otherwise MCHERRY / CFP / mTurquoise2 read the wrong channel
         FrameProfileExtractor.forceRbSwap = p.rbSwapped ?: false
-        // 【v2.2.6】DEF-A02：ROI 真正下发。analysisXRoi 非 null 后 decode() 会把它作为
-        // fixedXRegion 传给 FrameProfileExtractor.extract，从而跳过内容相关的
-        // autoDetectXRoi —— 定位图（亮 LED）与样品图（弱荧光）不再算出不同 ROI。
+        // [v2.2.6] DEF-A02: the ROI is really applied now. Once analysisXRoi is non-null, decode() passes it as
+        // fixedXRegion into FrameProfileExtractor.extract, thereby skipping the content-dependent
+        // autoDetectXRoi -- the positioning frame (bright LED) and the sample frame (weak fluorescence) no longer produce different ROIs.
         val rs = p.roiStart
         val re = p.roiEnd
         val restoredRoi = if (rs != null && re != null && rs <= re) rs to re else null
@@ -1324,8 +1322,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                         R.string.st_preset_roi_restored, restoredRoi.first, restoredRoi.second
                     ) else "")
         )
-        // 【D1】快照 Step 2 溯源：下面的级联重跑会用新映射重算 SPD，但那不是用户
-        // 重新拍灯，不能把 "Preset · X" 抹成 "Live calibration"。
+        // [D1] snapshot of the Step 2 provenance: the cascaded re-run below recomputes the SPD with the new mapping, but that is not the user
+        // re-photographing the lamp, so "Preset -- X" must not be erased into "Live calibration".
         val spdProvenanceBeforeRerun = _uiState.value.reportData
         viewModelScope.launch(Dispatchers.IO) {
             if (_uiState.value.spdCaptures.isNotEmpty()) {
@@ -1343,7 +1341,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     fun loadSpdPreset(p: PresetEntity) {
         val payload = p.payloadJson
         if (payload == null) {
-            // 【v2.2.6】DEF-A03：没有 payload 必须显式失败，不能再伪装成"已加载"
+            // [v2.2.6] DEF-A03: with no payload it must fail explicitly instead of pretending "already loaded"
             failSpdPreset(str(R.string.st_spd_no_payload))
             return
         }
@@ -1363,9 +1361,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         if (slope != null && intercept != null) {
             val currentN = report.sensorHeight ?: restored.totalCount
 
-            // 【v2.2.6】Mode B 优先：先用当前映射重算，再做覆盖度校验。
-            // 顺序很关键 —— 若先做 L2，几纳米的漂移就会让轴端点越界而被硬拒绝，
-            // 与"漂移永不拒绝"的裁决冲突。重算后 preset 自带当前轴，L2 自然通过。
+            // [v2.2.6] Mode B first: recompute with the current mapping, then run the coverage check.
+            // The order matters -- running L2 first would let a few nanometres of drift push the axis endpoints out of range and be hard-rejected,
+            // contradicting the rule that "drift never rejects". After recomputation the preset carries the current axis, so L2 passes naturally.
             val drift = restored.mappingDriftNm(slope, intercept)
             driftNm = drift
             val lamp = restored.lampR
@@ -1402,8 +1400,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         spdResult = finalResult
         val applied = applySpdResult(finalResult.copy(spdSource = p.spdSource ?: finalResult.spdSource))
         if (!applied) {
-            // 【D4】一个采样点都没落地 ⇒ preset 实际未生效。此时若继续写
-            // withSpdPreset，报告会显示 "Preset · X" 而 SPD 数据其实全空。
+            // [D4] not a single sample point landed => the preset never actually took effect. Continuing to write
+            // withSpdPreset here would show "Preset -- X" while the SPD data is in fact completely empty.
             spdRbSwapRetried = false
             spdResult = null
             _uiState.value = _uiState.value.copy(
@@ -1424,7 +1422,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    /** 【v2.2.6】SPD preset 不可用时：状态必须是 FAILED，且文案显式说明"未应用"。 */
+    /** [v2.2.6] when the SPD preset is unusable: the status must be FAILED and the wording must explicitly say "not applied". */
     private fun failSpdPreset(reason: String) {
         spdRbSwapRetried = false
         spdResult = null
@@ -1466,7 +1464,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 setStep1("FAILED|" + str(R.string.st_failed_peak, note(batch))); return
             }
 
-            // 【v2.2.6 关键】将 R/B 交换结论下发到解码器，Step 2/3 重新解码时标签即一致
+            // [v2.2.6 key] push the R/B swap conclusion down to the decoder, so Step 2/3 relabelling is consistent when they re-decode
             FrameProfileExtractor.forceRbSwap = res.rbSwapped
 
             val trainingPoints = if (useGreenRedFit) "G(${wlG}nm), R(${wlR}nm)" else "B(${wlB}nm), R(${wlR}nm)"
@@ -1532,7 +1530,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
             }
             val spd = SpdLoader.load(ctx)
             if (spd == null) { setStep2("FAILED|" + str(R.string.st_failed_spd_source)); return }
-            // 【v2.2.6】gErrorNm 一并写入，供 SPD preset 溯源
+            // [v2.2.6] gErrorNm is written as well, for the SPD preset provenance
             val gErrorNm = _uiState.value.reportData.gErrorNm
             var res = SpectralResponseCalibrator.calibrate(
                 lampBatch.frames, posBatch.frames, spd.second, slope, intercept, spd.first,
@@ -1619,7 +1617,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     sampleCentroid = String.format(Locale.US, "%.1f nm", res.centroidNm)
                 )
             )
-            // 【v2.2.6】曝光回显 + 缺失曝光告警，便于现场核验归一化是否生效
+            // [v2.2.6] exposure read-back plus a missing-exposure warning, so normalisation can be verified on site
             val bExp = blankBatch.frames.firstOrNull()?.exposureSeconds ?: 0.0
             val sExp = sampleBatch.frames.firstOrNull()?.exposureSeconds ?: 0.0
             val noExp = (blankBatch.frames + sampleBatch.frames).count { it.exposureSeconds <= 0.0 }
@@ -1630,7 +1628,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                     note(blankBatch), note(sampleBatch)
                 ) + String.format(Locale.US, " [exp b=%.3fs s=%.3fs]", bExp, sExp) +
                         (if (retried) " [R/B swap retry]" else "") +
-                        // 【v2.2.6】DEF-A03：未应用 SPD 校正时必须说明原因，而不是只显示 N/A
+                        // [v2.2.6] DEF-A03: when SPD correction was not applied, the reason must be stated rather than just showing N/A
                         (res.spdSkipReason?.let { str(R.string.st_spd_skip_reason, it) } ?: "") +
                         (if (noExp > 0) " ⚠ $noExp frame(s) missing exposure, not normalized" else "")
             )
@@ -1663,7 +1661,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    /** @return true 表示 SPD 数据真正写进了报告；false 表示没有任何可用采样点。 */
+    /** @return true when SPD data was really written into the report; false when there is no usable sample point. */
     private fun applySpdResult(res: SpdCalibrationResult): Boolean {
         val maskedIdx = res.wavelengths.indices.filter { res.mask.getOrElse(it) { false } }
         if (maskedIdx.isEmpty()) { resetPage2(); return false }
@@ -1738,14 +1736,14 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * 【v2.2.8】把当前报告快照写回项目行。
+     * [v2.2.8] write the current report snapshot back into the project row.
      *
-     * 为什么除 `finishProject()` 之外还要在 Step 4 结果产出时再存：用户跑完标准曲线
-     * 后很可能直接退出 App，根本不会走到 `finishProject()`。
+     * Why it must also be stored when the Step 4 result is produced, besides `finishProject()`: after running the standard curve
+     * the user is very likely to quit the app outright and never reach `finishProject()`.
      *
-     * 固定切到 IO —— 快照里含三条通道 profile 与十余条 SPD 曲线，序列化是几十 KB
-     * 量级。落库失败静默吞掉：一次现算出来的成功结果，不该因为存储层的偶发问题
-     * 变成 UI 上的报错。
+     * Always switch to IO -- the snapshot holds three channel profiles and a dozen-odd SPD curves, so serialisation is on the order
+     * of tens of KB. Persistence failures are swallowed silently: a result that was just computed successfully should not turn into
+     * a UI error because of a transient storage problem.
      */
     private fun persistReportSnapshot() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -1753,8 +1751,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
                 mutex = projectMetadataMutex,
                 readProject = { _uiState.value.currentProject },
                 serialize = { _uiState.value.reportData.toJsonString() },
-                // 落库失败静默吞掉：一次现算出来的成功结果，不该因为存储层的偶发问题
-                // 变成 UI 上的报错。
+                // persistence failures are swallowed silently: a result that was just computed successfully should not
+                // turn into a UI error because of a transient storage problem.
                 writeProject = { project -> runCatching { dao.updateProject(project) } }
             )
         }
@@ -1779,17 +1777,17 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         Fluorophore.YPET -> 500 to 530
         Fluorophore.MCHERRY -> 590 to 630
         Fluorophore.CFP, Fluorophore.MTURQUOISE2 -> 460 to 490
-        // 荧光素钠 520 nm 发射，落在 500–540；原先靠 else 兜底刚好正确，
-        // 显式写出来，避免将来改 else 时悄悄改坏它
+        // fluorescein sodium emits at 520 nm, which falls into 500-540; the old else branch happened to be correct,
+        // but it is spelled out now so that a future change to the else branch cannot silently break it
         Fluorophore.FLUORESCEIN -> 500 to 540
         else -> 500 to 540
     }
 
     /**
-     * 解析「外部写进来的」荧光素名字（曲线预设的 `fluorophore` 字段）。
+     * Resolves a fluorophore name that "came in from outside" (the `fluorophore` field of a curve preset).
      *
-     * 解析失败抛 [IllegalArgumentException] —— 调用方在 `runCatching` 里，
-     * 这条消息会原样出现在 Step 4 的状态栏上，而不是静默降级到一个错的通道。
+     * Throws [IllegalArgumentException] on failure -- the caller is inside `runCatching`, so this
+     * message shows up verbatim in the Step 4 status bar instead of degrading silently to a wrong channel.
      */
     private fun requireKnownFluorophore(raw: String, context: String): Fluorophore =
         canonicalFluorophore(raw) ?: error(

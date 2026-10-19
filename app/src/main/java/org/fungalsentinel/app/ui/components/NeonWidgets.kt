@@ -68,7 +68,7 @@ fun NeonHeader(stepLabel: String?, title: String, onBack: () -> Unit, tutorial: 
         NeonBackPill(onBack)
         if (stepLabel != null) NeonStepTab(stepLabel)
         Box(modifier = Modifier.weight(1f)) {
-            // 投影改为中性抬升面，不再使用深品红
+            // the shadow is now a neutral raised surface instead of deep magenta
             Box(modifier = Modifier.offset(x = 4.dp, y = 4.dp).fillMaxWidth().height(50.dp)
                 .background(AppColors.SurfaceRaised, RoundedCornerShape(4.dp)))
             Box(

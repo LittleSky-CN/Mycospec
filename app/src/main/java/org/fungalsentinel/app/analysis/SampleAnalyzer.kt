@@ -67,8 +67,8 @@ object SampleAnalyzer {
         responseThresholdFraction: Float = 0.20f
     ): SampleAnalysisResult? {
         if (blankFrames.isEmpty() || sampleFrames.isEmpty()) return null
-        // 走 canonicalFluorophore：原来这里是大小写敏感的精确匹配，"mCherry"
-        // 会被判成默认的 "G" 通道（真 bug），现在按 enum 分支不会被写法规避过去
+        // go through canonicalFluorophore: this used to be a case-sensitive exact match, so "mCherry"
+        // was classified as the default "G" channel (a real bug). Branching on the enum cannot be circumvented by spelling
         val channel = when (canonicalFluorophore(fluorophore)) {
             Fluorophore.MCHERRY -> "R"
             Fluorophore.CFP, Fluorophore.MTURQUOISE2 -> "B"
@@ -226,7 +226,7 @@ object SampleAnalyzer {
             fwhmNm = if (windowSize > 1) abs(wls[windowSize - 1] - wls[0]) else 0.0
         }
 
-        // 【修复】强制 visIdx 按波长递增排序，防止画图时 X 轴反转导致斜坡
+        // [fix] force visIdx to be sorted by increasing wavelength, otherwise the X axis flips and the plot turns into a ramp
         val visIdx = (0 until n).filter { lam[it] in VIS_LO.toFloat()..VIS_HI.toFloat() }
             .sortedBy { lam[it] }
 

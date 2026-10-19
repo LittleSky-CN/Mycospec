@@ -33,7 +33,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateAutoExposure(enabled: Boolean) = update { it.copy(autoExposure = enabled) }
     fun updateExposureMs(ms: Long) = update { it.copy(exposureMs = ms) }
 
-    // 【新增】对焦更新方法
+    // [new] focus update method
     fun updateAutoFocus(enabled: Boolean) = update { it.copy(autoFocus = enabled) }
     fun updateFocusDiopter(diopter: Float) = update { it.copy(focusDiopter = diopter) }
 }
