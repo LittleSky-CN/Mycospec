@@ -100,3 +100,11 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 }
+// ── Dependency locking (iGEM compliance: commit your lockfile) ──────────────
+// Pins every resolved configuration (including transitive dependencies) into
+// app/gradle.lockfile, so the build resolves to exactly the versions that were
+// tested. Regenerate after an intentional upgrade with:
+//     ./gradlew :app:dependencies --write-locks
+dependencyLocking {
+    lockAllConfigurations()
+}

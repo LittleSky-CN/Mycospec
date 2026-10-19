@@ -36,6 +36,24 @@ fluorescence spectrometer** when combined with a fixed slit–grating–sample-h
 rig. It is fully **offline**: every calibration, correction and regression runs on
 the device. It is **not** a general camera app and **not** an AI image classifier.
 
+### Who it is for
+
+- **iGEM teams and teaching labs** that have built (or are building) the OptiX
+  slit–grating–sample-holder rig and want the analysis to run on a phone they already
+  own — in the field, with no network and no cloud round-trip.
+- **Field users** who need a concentration *now*. A plate reader or a benchtop
+  spectrofluorometer is not portable; this turns a phone into one.
+- **Anyone holding DNG/RAW frames** from a RAW-capable camera. Even when the in-app
+  camera cannot start on a given device, the frames can be imported and the full
+  pipeline runs unchanged (see the troubleshooting section below).
+- **Developers of the Python FSSA.** MycoSpec and FSSA are expected to agree numerically
+  on the same input; canonical fluorophore IDs and preset payloads are shared between
+  them on purpose.
+
+It is **not** a general camera app and **not** an AI image classifier — it never guesses
+from a photograph, it computes from a calibrated spectrum — and it is **not** for
+clinical, diagnostic or regulated measurement.
+
 ### Workflow
 | Step | Purpose | Report output |
 |---|---|---|
@@ -72,6 +90,42 @@ blank-corrected spectrum, and the standard curve.
    [Releases](https://github.com/LittleSky-CN/Mycospec/releases).
 2. Allow "install unknown apps" when prompted.
 3. Open MycoSpec → New Project → follow Steps 1–4 → View Report.
+
+### The app starts but the built-in camera does not work
+
+This is the most common first-run problem, and on many phones it is **not a bug in
+MycoSpec**.
+
+**Why it happens.** The in-app camera is not an ordinary viewfinder. MycoSpec needs **RAW
+frames**, so before opening the camera it walks every camera ID on the device and keeps
+the first one that advertises Camera2's `REQUEST_AVAILABLE_CAPABILITIES_RAW`
+(`CameraManager.kt` → `findRawCapableCamera()`); it then asks that camera for a
+`RAW_SENSOR` output size. If no camera advertises RAW capability — or it does but
+publishes no RAW output size — the camera cannot be opened, the failure is raised to the
+UI as a short toast, and the rest of the app carries on working.
+
+A large number of phones never expose Camera2 RAW. **Huawei devices in particular do not
+open the Camera2 RAW path**, and there is no app-level workaround for that: the capability
+is not offered by the device's camera HAL, so no permission, setting or third-party shim
+can make it appear.
+
+**What to do**
+
+1. **Check the camera permission first.** Settings → Apps → MycoSpec → Permissions →
+   Camera → *Allow*. When the permission has not been granted, the capture screen shows a
+   button that re-requests it.
+2. **Read the toast.** A message such as *"No RAW-capable camera found"* or *"No RAW
+   sizes"* means point 3 applies — this device cannot feed the in-app camera.
+3. **Use Gallery / Files (DNG) instead.** This is the supported path and it runs exactly
+   the same analysis pipeline:
+   - Capture the frames on something that does write DNG — a RAW-capable phone, a system
+     camera in Pro/RAW mode, or a dedicated camera.
+   - In MycoSpec choose **Gallery / Files (DNG)** and pick them. Imported frames are
+     copied into app-private storage, so the same batch stays re-analysable and
+     reproducible.
+   - Then run Steps 1–4 as usual.
+4. **Do not judge spectral accuracy on an emulator.** Emulators exercise the UI and the
+   flow only; they have no real optics.
 
 ### Build from source
 Requires Android Studio (JDK 17+) and Android SDK 37.
@@ -139,6 +193,30 @@ Step 2 channel fusion uses response-proportional normalisation on both sides
 (`w_c = resp_c / Σ resp_c`, `Σ w_c = 1`), so the same DNG gives the same result
 on phone and desktop.
 
+### Reproducing the main results
+
+The unit-test suite is the part of this repository that is reproducible by anyone, with
+no device, no DNG files and no network: every test runs on **synthetic input**.
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest
+```
+
+On v2.3.0 that runs **86 tests across 9 classes, 0 failures**:
+
+| Test class | What it pins |
+|---|---|
+| `AlgorithmParityTest` | Numerical behaviour of the analysis chain — e.g. replicate clipping, corrected area and SD — against hand-computed expected values |
+| `PresetReuseParityTest` | Reusing an SPD / CURVE preset reproduces the numbers of the original calibration |
+| `FluorophoreCanonicalTest` | Canonical fluorophore IDs resolve identically to the Python FSSA side |
+| `ReportDataJsonTest`, `CurvePresetPayloadTest`, `PresetRoundTripTest` | Report and preset serialisation round-trips |
+| `FinishProjectRaceTest`, `ReopenProvenanceTest`, `ReportProvenanceTest` | Provenance survives project completion and history re-open |
+
+To reproduce a **measurement** rather than a test, run Steps 1–4 on a real rig and
+cross-check against Python FSSA on the same DNG set — MycoSpec and FSSA are expected to
+return the same numbers for the same input, and any disagreement is treated as a bug.
+Note that this cross-check is a procedure you perform, not something the unit tests assert.
+
 ### Roadmap
 - Live Camera2 RAW capture with manual exposure / ISO / focus / WB
 - ZIP export (`manifest.json`, `result.json`, `profiles.csv`, `standards.csv`,
@@ -146,10 +224,29 @@ on phone and desktop.
 - Reusable calibration templates
 - Tutorial illustrations & animations; accessibility (TalkBack) pass
 
+### AI use
+
+**The app does not use AI.** MycoSpec ships no model, performs no inference, and calls no
+commercial or open-weight model API. Every number it reports comes from deterministic
+numerical code — two-point wavelength fits, least-squares regression, and the same
+response-proportional channel fusion as the Python side. There is no model to disclose,
+no training data and no evaluation set.
+
+**During development**, the team used AI coding assistants (conversation-based code
+generation) for refactoring, test authoring, translation strings and documentation
+drafts. Their output was reviewed, run and — where it was wrong — rewritten by a human.
+No scientific result reported by this app was produced by an AI model, and no
+AI-generated figure is presented as measured data.
+
 ### License & citation
-License: **MIT** (see `LICENSE`) — the same OSI-approved license used by the
-Python FSSA repository. Developed by the iGEM Fungal Sentinel team as part of
-the project software submission.
+License: **Apache License 2.0** (see `LICENSE`) — an OSI-approved license chosen for its
+explicit patent grant and clean attribution on forks; the same license as the Python FSSA
+repository. Copyright 2026 CAU-China (iGEM Fungal Sentinel team).
+
+Prebuilt APKs are published on
+[Releases](https://github.com/LittleSky-CN/Mycospec/releases) rather than committed to
+the repository: an iGEM software repository is expected to contain source that produces
+the output, not compiled binaries.
 
 ---
 
@@ -160,6 +257,20 @@ the project software submission.
 MycoSpec 将支持 Camera2 RAW 的 Android 手机与固定的狭缝–光栅–样品架硬件结合，
 变为**便携荧光光谱仪**；全部校准、校正与回归均在手机本地**离线**完成。
 它不是普通相机，也不是识别真菌照片的 AI。
+
+### 适用对象
+
+- **iGEM 队伍与教学实验室**：已经（或正在）搭建 OptiX 狭缝–光栅–样品架硬件，希望分析
+  就跑在自己已有的手机上——现场可用、不联网、不上云。
+- **现场使用者**：需要立刻拿到浓度。酶标仪和台式荧光分光光度计不便携，本应用把手机变成
+  便携仪器。
+- **手头已有 DNG/RAW 帧的人**：即便某台设备上的应用内相机无法启动，也可以导入帧文件，
+  分析流程完全不变（见下方故障排查）。
+- **Python FSSA 的开发者**：MycoSpec 与 FSSA 在同一输入上必须给出一致数值，荧光素
+  canonical ID 与预设载荷是两端刻意共享的。
+
+它**不是**普通相机应用，也**不是**识别照片的 AI —— 它不猜，它按定标光谱算；也**不适用于**
+临床诊断或受监管的计量场景。
 
 ### 工作流程
 | 步骤 | 目的 | 报告输出 |
@@ -191,6 +302,33 @@ MycoSpec 将支持 Camera2 RAW 的 Android 手机与固定的狭缝–光栅–�
 1. 从 [Releases](https://github.com/LittleSky-CN/Mycospec/releases) 下载最新 APK；
 2. 按提示允许"安装未知应用"；
 3. 打开 MycoSpec → 新项目 → 按 Step 1–4 操作 → 查看报告。
+
+### 应用能启动，但自带相机用不了
+
+这是首次使用时最常见的问题，而且在很多手机上**并不是 MycoSpec 的 bug**。
+
+**原因。** 应用内相机不是普通取景器，它需要 **RAW 帧**。因此在打开相机之前，MycoSpec
+会遍历设备上所有 cameraId，挑出第一个声明了 Camera2 `REQUEST_AVAILABLE_CAPABILITIES_RAW`
+的相机（`CameraManager.kt` → `findRawCapableCamera()`），再向它索取 `RAW_SENSOR` 输出尺寸。
+如果没有任何相机声明 RAW 能力——或者声明了却没有可用的 RAW 输出尺寸——相机就无法打开，
+错误会以一条短 Toast 提示出来，而应用其余功能照常可用。
+
+大量手机压根不开放 Camera2 RAW。**华为机型尤其不开放 Camera2 RAW 通路**，这一点在应用层面
+**没有绕过的办法**：该能力由设备相机 HAL 决定，不提供就是没有，任何权限、设置或第三方
+兼容层都无法让它凭空出现。
+
+**怎么办**
+
+1. **先查相机权限**：设置 → 应用 → MycoSpec → 权限 → 相机 → 允许。若未授权，拍摄界面会
+   提供重新授权的按钮。
+2. **看 Toast 提示**：出现 "No RAW-capable camera found" 或 "No RAW sizes" 之类，说明
+   适用第 3 条——这台设备喂不了应用内相机。
+3. **改用「相册 / 文件（DNG）」导入**。这是受支持的路径，跑的是完全相同的分析流程：
+   - 用能输出 DNG 的设备拍摄：支持 RAW 的手机、系统相机的 Pro/RAW 模式，或专用相机；
+   - 在 MycoSpec 里选择**相册 / 文件（DNG）**并选取文件。导入的帧会被复制到应用私有
+     目录，因此同一批数据可以稳定重复分析；
+   - 然后照常执行 Step 1–4。
+4. **不要用模拟器判断光谱准确性**：模拟器只能验证界面与流程，没有真实光路。
 
 ### 源码构建
 需要 Android Studio（JDK 17+）与 Android SDK 37：
@@ -275,6 +413,48 @@ v2.2.8）仅作为 Git 历史/标签保留。
 
 分析语义与 Python **FSSA v1.4.5** 对齐；尤其步骤 2 的通道融合两端均采用响应比例
 归一（`w_c = resp_c / Σ resp_c`，`Σ w_c = 1`），同一批 DNG 在手机与桌面端得到一致结果。
+
+### 复现主要结果
+
+单元测试是本仓库中任何人都能复现的部分：不需要真机、不需要 DNG 文件、不需要联网，
+全部用例都跑在**合成数据**上。
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest
+```
+
+v2.3.0 上执行 **9 个测试类共 86 个用例，0 失败**：
+
+| 测试类 | 钉住的内容 |
+|---|---|
+| `AlgorithmParityTest` | 分析链的数值行为——重复帧裁剪、校正面积与 SD——对照手工计算的期望值 |
+| `PresetReuseParityTest` | 复用 SPD / CURVE 预设后，能否复现原标定的数值 |
+| `FluorophoreCanonicalTest` | 荧光素 canonical ID 的解析与 Python FSSA 端一致 |
+| `ReportDataJsonTest`、`CurvePresetPayloadTest`、`PresetRoundTripTest` | 报告与预设的序列化往返一致 |
+| `FinishProjectRaceTest`、`ReopenProvenanceTest`、`ReportProvenanceTest` | 完成项目与历史重新打开后，溯源信息仍然完整 |
+
+若要复现的是**一次真实测量**而非测试，请在真实光路上跑完 Step 1–4，并与 Python FSSA
+在同一批 DNG 上对照：两端对同一输入应给出相同数值，任何不一致都视为 bug。注意这个对照
+是需要你执行的流程，单元测试并不替你断言它。
+
+### AI 使用
+
+**本应用不使用 AI。** MycoSpec 不内置模型、不做推理、不调用任何商业或开放权重模型 API。
+它报出的每个数字都来自确定性数值代码：两点波长拟合、最小二乘回归，以及与 Python 端相同的
+响应比例通道融合。没有模型需要披露，没有训练数据，也没有评测集。
+
+**开发过程中**，团队使用了 AI 编码助手（对话式代码生成）协助重构、编写测试、翻译字符串与
+撰写文档草稿。这些产出都经人工审阅、实跑，错误之处由人工重写。本应用报告的任何科学结果
+都不是 AI 模型产出的，也没有任何 AI 生成的图被当作实测数据呈现。
+
+### 许可证
+
+**Apache License 2.0**（见 `LICENSE`）——OSI 认证许可，选择它是因为它带有明确的专利授权
+且分叉后署名清晰；与 Python FSSA 仓库保持一致。Copyright 2026 CAU-China（iGEM Fungal
+Sentinel 团队）。
+
+预编译 APK 发布在 [Releases](https://github.com/LittleSky-CN/Mycospec/releases) 而非提交进
+仓库：iGEM 要求软件仓库里放的是能产出结果的源码，而不是编译好的二进制。
 
 ### 路线图
 - 实时 Camera2 RAW 拍摄与手动曝光 / ISO / 焦距 / 白平衡

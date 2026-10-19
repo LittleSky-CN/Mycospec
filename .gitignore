@@ -27,3 +27,6 @@ keystore.properties
 # ── 操作系统 ──
 Thumbs.db
 .DS_Store
+# ── 编译产物：iGEM 要求源码仓库不含二进制交付物，APK 请走 GitHub Releases / Zenodo ──
+*.apk
+*.aab
