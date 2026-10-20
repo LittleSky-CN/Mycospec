@@ -150,8 +150,10 @@ app/src/main/java/org/fungalsentinel/app/
 - Reliable quantification requires fixed optics, known R/G/B wavelengths, a
   characterized source with matching SPD, and proper blanks/standards.
 - Emulators validate UI and flow only — never spectral accuracy.
-- Live Camera2 RAW capture is under integration in this milestone; use
-  **Gallery / Files (DNG)** upload to exercise the analysis pipeline.
+- Live Camera2 RAW capture needs a device that exposes the RAW capability through
+  Camera2; on phones that do not (see the troubleshooting section above), use
+  **Gallery / Files (DNG)** upload — it runs the same analysis pipeline. Manual
+  exposure / ISO / focus / WB controls at capture time are still on the roadmap.
 - Cross-check formal results against Python FSSA v1.5.0 on the same DNG set.
 
 ### Versioning
