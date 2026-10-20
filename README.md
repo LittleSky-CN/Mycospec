@@ -178,7 +178,7 @@ v2.0.1, v2.2.8) are retained only as Git history / tags.
   hand-edited presets now resolve to the same canonical IDs used by the Python
   side, so the same sample is identified identically on phone and desktop.
 
-Analysis semantics are aligned with Python **FSSA v1.4.5**; in particular the
+Analysis semantics are aligned with Python **FSSA v1.5.0**; in particular the
 Step 2 channel fusion uses response-proportional normalisation on both sides
 (`w_c = resp_c / Σ resp_c`, `Σ w_c = 1`), so the same DNG gives the same result
 on phone and desktop.
@@ -213,6 +213,23 @@ Note that this cross-check is a procedure you perform, not something the unit te
   `spd.csv`, `raw/`)
 - Reusable calibration templates
 - Tutorial illustrations & animations; accessibility (TalkBack) pass
+
+### Contributing
+
+**Yes — we are open to contributions**, and we most want the ones that help the next
+team get the pipeline running on their own hardware: reporting which phones expose
+Camera2 RAW, porting the analysis chain to another platform, adding a fluorophore to
+the canonical ID set, translating the UI, or simply telling us that a step did not
+reproduce. A reproducible failure reported back is worth more here than another feature.
+
+What we ask: no new permissions beyond camera and gallery import (no `INTERNET`), keep
+the committed Gradle lockfiles regenerated when dependencies change, add every new UI
+string to every locale, and run **both** the Android and the Python test suites when
+you touch a shared algorithm.
+
+Full policy, setup steps, the parity gate and the bug-report template are in
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Using an AI assistant? Read
+[`.claude/RESPONSIBLE_AI_USE.md`](.claude/RESPONSIBLE_AI_USE.md) first.
 
 ### AI use
 
