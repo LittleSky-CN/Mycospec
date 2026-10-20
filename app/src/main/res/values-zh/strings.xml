@@ -171,6 +171,24 @@
     <string name="st4_computed">已计算——R²=%1$s，n=%2$d</string>
     <string name="st_warn_count">；⚠ %1$d 条告警</string>
     <string name="st_preset_loaded">预设已载入——%1$s</string>
+    <!-- v2.2.6 预设一致性：波长预设恢复反馈（DEF-A01 / DEF-A02） -->
+    <string name="st_preset_rb_restored">已从预设恢复 R/B 自动校正</string>
+    <string name="st_preset_roi_restored">已从预设恢复 X-ROI（[%1$d, %2$d]）</string>
+    <!-- v2.2.6 预设一致性：SPD 载荷严格解析 + 显式失败（DEF-A03） -->
+    <string name="st_spd_preset_invalid">SPD 预设被拒绝——%1$s</string>
+    <string name="st_spd_no_payload">该预设不含 SPD 载荷</string>
+    <string name="st_spd_not_applied">未应用 SPD 校正</string>
+    <!-- v2.2.6 预设一致性：L3 漂移只是软提示，绝不作为拒绝理由（DEF-A04） -->
+    <string name="st_spd_drift_warn">波长映射漂移 %1$.1f nm——SPD 校正可能失准，建议重跑步骤 2</string>
+    <string name="st_spd_drift_severe">波长映射漂移 %1$.1f nm（设备或定位帧不一致？）——定量结果不可靠</string>
+    <string name="st_spd_skip_reason"> [已跳过 SPD：%1$s]</string>
+    <!-- schema v3：SPD 预设以波长索引 JSON 文件存储（SAF 导出/导入） -->
+    <string name="act_export_spd_preset">导出 SPD 文件</string>
+    <string name="act_import_spd_preset">导入 SPD 文件</string>
+    <string name="st_spd_export_ok">SPD 预设已导出（MycoSpec SPD schema v3）</string>
+    <string name="st_spd_export_failed">SPD 导出失败——%1$s</string>
+    <string name="st_spd_export_nothing">无可导出内容——请先运行或载入步骤 2 标定</string>
+    <string name="st_spd_import_store_failed">SPD 文件有效，但无法保存为本地预设</string>
     <string name="lbl_group_counts">空白：%1$d | 样品：%2$d</string>
     <string name="lbl_preset_name">预设名称</string>
     <string name="note_step2_keep">保持手机、光栅、狭缝、ISO 与焦距不变；使用与设置中 SPD 匹配的标准光源。</string>
@@ -205,7 +223,7 @@
     <string name="warn_low_r2">R² 偏低（&lt;0.95）——曲线可能不可靠</string>
     <string name="warn_negative_pred">预测值为负——检查空白/校准</string>
     <string name="warn_out_of_range">预测超出校准范围</string>
-    <string name="warn_log_switch">线性 R² 偏低（%.2f），已切换为对数拟合。</string>
+    <string name="warn_log_switch">线性 R² 偏低（%1$.2f），已切换为对数拟合。</string>
     <string name="st_filter_mode"> [滤光片模式]</string>
     <string name="step1_g_error_filter">—（滤光片模式）</string>
     <string name="report_fig3_filter">图 3：两点拟合（G+R）[滤光片模式]</string>
@@ -222,4 +240,172 @@
     <string name="cam_err_permission">未授予相机权限</string>
     <string name="cam_err_access">相机访问错误：%1$s</string>
     <string name="cam_err_dispatch">拍摄请求下发失败：%1$s</string>
+
+    <!-- ══════════ v2.3.1 全量汉化：通用动作 / 无障碍标签 ══════════ -->
+    <string name="action_ok">确定</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_save">保存</string>
+    <string name="action_delete">删除</string>
+    <string name="action_edit">编辑</string>
+    <string name="action_export">导出</string>
+    <string name="action_dismiss">×</string>
+    <string name="action_reset">重置</string>
+    <string name="cd_close">关闭</string>
+    <string name="cd_remove">移除</string>
+    <string name="cd_capture_index">第 %1$d 张图像</string>
+
+    <!-- ══════════ 报告页 ══════════ -->
+    <string name="report_title">MycoSpec 分析报告</string>
+    <string name="report_project">项目：%1$s</string>
+    <string name="report_page">— 第 %1$d 页 —</string>
+    <string name="report_page1_title">步骤 1：波长校准</string>
+    <string name="report_page2_title">步骤 2：光谱响应与融合 — MycoSpec v2.3.0</string>
+    <string name="report_page3_title">步骤 3：样品分析</string>
+    <string name="report_page4_title">步骤 4：浓度回归</string>
+    <string name="report_fig1">图 1：带自动 ROI 的定位预览</string>
+    <string name="report_auto_roi">自动 X ROI  R(%1$snm) G(%2$snm) B(%3$snm)</string>
+    <string name="report_fig2">图 2：自动一维剖面与动态峰窗</string>
+    <string name="report_fig3">图 3：两点拟合（B+R）并以第三点验证（G）</string>
+    <string name="report_fit">拟合：p = %1$.4fλ %2$+.2f   训练 (B, R)   验证 (G)   误差：%3$+.2f nm</string>
+    <string name="report_sec_wl_params">波长校准参数</string>
+    <string name="report_lbl_source">来源</string>
+    <string name="report_lbl_preset_name">预设名称</string>
+    <string name="report_lbl_preset_file_id">预设文件 ID</string>
+    <string name="report_lbl_imported_at">导入时间</string>
+    <string name="report_lbl_mapping_equation">[波长映射方程]</string>
+    <string name="report_lbl_calibration_metadata">[校准元数据]</string>
+    <string name="report_val_calibration_metadata">曝光：%1$s   X ROI：%2$s</string>
+    <string name="report_lbl_validation_results">[验证结果]</string>
+    <string name="report_val_validation_results">训练：%1$s   验证：%2$s</string>
+    <string name="report_val_g_residual">G 残差：%1$s   G 误差：%2$s</string>
+    <string name="report_lbl_peak_estimator">[寻峰估计器]</string>
+    <string name="report_val_peak_estimator">谷值边界高斯核心（v1.4.5）；旧版质心仅供诊断</string>
+    <string name="report_calibration_quality">校准质量：%1$s</string>
+    <string name="report_fig4a">图 4a：定位 LED — RAW 实测（独立数据）</string>
+    <string name="report_fig4b">图 4b：SPD 校正后（细线）+ 唯一逐点融合曲线（粗线）</string>
+    <string name="report_fig4c">图 4c：相机绝对响应 = 灯光_c / SPD_真值（已掩码）</string>
+    <string name="report_fig4d">图 4d：按响应比例分配的通道权重（和为 1）与响应度交叉点</string>
+    <string name="report_sec_spd_params">SPD 响应与融合参数</string>
+    <string name="report_lbl_status_source">状态 / 来源</string>
+    <string name="report_val_status_source">%1$s · %2$s</string>
+    <string name="report_lbl_frames_exposure">帧数 / 曝光</string>
+    <string name="report_val_frames_exposure">%1$s / %2$s</string>
+    <string name="report_lbl_effective_band">[有效波段]</string>
+    <string name="report_val_effective_band">%1$s | 掩码像素 %2$s | 阈值 0.1</string>
+    <string name="report_lbl_responsivity_crossings">[响应度交叉点（仅供诊断）]</string>
+    <string name="report_lbl_cross_channel_agreement">[跨通道一致性]</string>
+    <string name="report_lbl_fused_curve_peak">[融合曲线峰值]</string>
+    <string name="report_lbl_response_peaks">[响应峰值（绝对）]</string>
+    <string name="report_lbl_raw_positioning_peaks">[RAW 定位峰]</string>
+    <string name="report_lbl_corrected_positioning_peaks">[校正后定位峰]</string>
+    <string name="report_lbl_method">[方法]</string>
+    <string name="report_fig7">图 7：扣空白并 SPD 校正后的光谱 vs 空白</string>
+    <string name="report_fig7_note">绿色 = 校正后的样品，红色 = 空白\n低响应波段（响应低于通道峰值的百分之二十）已剔除；孤立尖峰已局部替换。</string>
+    <string name="report_sec_sample_params">样品分析参数</string>
+    <string name="report_val_fluorophore">%1$s（%2$s）</string>
+    <string name="report_lbl_analysis_channel">分析通道</string>
+    <string name="report_lbl_spd_correction">SPD 校正</string>
+    <string name="report_lbl_peak_wavelength">[峰值波长]</string>
+    <string name="report_lbl_peak_intensity">[峰值强度]</string>
+    <string name="report_lbl_fwhm">[半高全宽]</string>
+    <string name="report_lbl_centroid">[质心]</string>
+    <string name="report_lbl_integration_window">积分窗</string>
+    <string name="report_lbl_blank_mean_area">空白平均面积</string>
+    <string name="report_lbl_sample_mean_area">样品平均面积</string>
+    <string name="report_lbl_corrected_area">[校正后积分面积]</string>
+    <string name="report_lbl_sd_replicates">样品标准差 / 重复数</string>
+    <string name="report_val_sd_replicates">%1$s / %2$s</string>
+    <string name="report_fig8">图 8：含未知样品的标准曲线</string>
+    <string name="report_sec_conc_params">浓度参数</string>
+    <string name="report_lbl_standard">标准品</string>
+    <string name="report_lbl_regression_formula">[回归公式]</string>
+    <string name="report_lbl_predicted_conc">[预测浓度]</string>
+    <string name="report_warning">⚠ %1$s</string>
+
+    <!-- ══════════ 报告：溯源 / 状态字段取值 ══════════ -->
+    <string name="report_source_not_run">未运行</string>
+    <string name="report_source_preset">预设 · %1$s</string>
+    <string name="report_source_live">现场标定</string>
+    <string name="report_source_live_detail">现场标定 · %1$s</string>
+    <string name="report_source_live_curve">现场标准曲线</string>
+    <string name="report_spd_status_pending">待标定</string>
+    <string name="report_spd_status_calibrated">已标定（%1$d 个灯光帧）</string>
+    <string name="report_spd_method_note">分子 = 定位（独立 LED）；仅逐点运算；按响应比例分配权重（和为 1）</string>
+    <string name="report_spd_response_fused">已生成连续融合曲线 F(λ)（见报告第 2 页）</string>
+    <string name="report_peaks_from_preset">由预设载入（峰位已取整到像素）</string>
+    <string name="report_analysis_error">分析错误：%1$s</string>
+    <string name="report_val_x_roi">[%1$d, %2$d]（宽度：%3$d 像素）</string>
+    <string name="report_val_training_points">B(%1$snm)、R(%2$snm)</string>
+    <string name="report_val_validation_point">G(%1$snm)</string>
+    <string name="report_val_g_residual_px">%1$+.2f 像素</string>
+    <string name="report_val_integration_window">[%1$d, %2$d] 像素</string>
+    <string name="report_val_integrated_area">%1$.1f（通道=%2$s，响应=%3$s）</string>
+
+    <!-- ══════════ 步骤状态后缀 ══════════ -->
+    <string name="st_rb_swap_retry"> [R/B 交换重试]</string>
+    <string name="st_rb_auto_corrected"> [R/B 自动校正]</string>
+    <string name="st_exp_echo"> [曝光 空白=%1$.3fs 样品=%2$.3fs]</string>
+    <string name="st_log_fit">（对数拟合）</string>
+    <string name="st_missing_exposure"> ⚠ %1$d 帧缺失曝光值，未做归一化</string>
+    <string name="warn_negative_slope">检测到负斜率——请检查是否过曝或空白扣除有误。</string>
+
+    <!-- ══════════ 历史页 ══════════ -->
+    <string name="history_tab_projects">项目</string>
+    <string name="history_tab_wl_presets">λ 预设</string>
+    <string name="history_tab_spd_presets">SPD 预设</string>
+    <string name="history_in_progress">进行中 – 点击继续</string>
+    <string name="history_finished">已完成</string>
+    <string name="history_wl_presets_empty">暂无波长预设。可在步骤 1 保存。</string>
+    <string name="history_spd_presets_empty">暂无 SPD 预设。可在步骤 2 保存。</string>
+    <string name="history_delete_preset_title">删除预设</string>
+    <string name="history_delete_preset_msg">删除“%1$s”？此操作不可撤销。</string>
+    <string name="history_edit_preset_title">编辑预设</string>
+    <string name="history_slope_label">斜率（像素/nm）</string>
+    <string name="history_intercept_label">截距（像素）</string>
+    <string name="history_rg_coefficient">R/G 系数</string>
+    <string name="history_bg_coefficient">B/G 系数</string>
+    <string name="history_preset_summary_wl">斜率=%1$s 截距=%2$s</string>
+    <string name="history_preset_summary_curve">斜率=%1$s 截距=%2$s R²=%3$s</string>
+    <string name="history_preset_summary_spd">R=%1$s B=%2$s</string>
+
+    <!-- ══════════ 设置 / 参数 / 重置 ══════════ -->
+    <string name="settings_channel_nm">%1$s (nm)</string>
+    <string name="settings_current_source">当前来源：%1$s</string>
+    <string name="settings_spd_installed">SPD CSV 已安装</string>
+    <string name="settings_focus_section">对焦控制</string>
+    <string name="settings_infinity">无穷远（∞）</string>
+    <string name="settings_macro">微距</string>
+    <string name="settings_diagnostic_log">诊断日志</string>
+    <string name="settings_log_desc">本地滚动日志（最大 2 MB）。不会自动上传。</string>
+    <string name="settings_save_log">保存诊断日志（%1$d KB）</string>
+    <string name="settings_clear_log">清除诊断日志</string>
+    <string name="log_share_title">保存诊断日志</string>
+    <string name="parameters_title">参数</string>
+    <string name="parameters_exposure">曝光（ms，10–3000）</string>
+    <string name="parameters_iso">ISO（50–1600）</string>
+    <string name="parameters_focus">焦距（D，0 = ∞）</string>
+    <string name="parameters_wb">白平衡（K 或自动）</string>
+    <string name="reset_confirm_title">重置当前实验？</string>
+    <string name="reset_confirm_body">将清除全部拍摄、校准与标准品。\n历史记录与已导出的 DNG 文件会保留。</string>
+
+    <!-- ══════════ 半屏预览 ══════════ -->
+    <string name="half_preview_covered_pct">已遮挡\n%1$d%%</string>
+    <string name="half_preview_light">光照：%1$.0f lux — %2$s</string>
+    <string name="half_preview_light_na">光照：无数据</string>
+
+    <!-- ══════════ 样品 / 荧光物质 ══════════ -->
+    <string name="step3_fluorophore_placeholder">— 请选择荧光物质 —</string>
+
+    <!-- ══════════ 相机：尚无对应资源的错误 ══════════ -->
+    <string name="cam_err_session_create">会话创建失败：%1$s</string>
+    <string name="cam_err_session_not_ready">会话未就绪</string>
+    <string name="cam_err_camera_not_open">相机未打开</string>
+    <string name="cam_err_busy">相机忙碌——上一帧仍在处理</string>
+    <string name="cam_err_prepare">拍摄前相机准备失败：%1$s</string>
+    <string name="cam_err_timeout_schedule">无法设置拍摄超时</string>
+
+    <!-- ══════════ SPD 导入（CSV） ══════════ -->
+    <string name="spd_err_cannot_open">无法打开文件</string>
+    <string name="spd_err_too_short">CSV 内容过短</string>
+    <string name="spd_err_parse_failed">解析失败</string>
 </resources>

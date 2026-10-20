@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.fungalsentinel.app.R
 import org.fungalsentinel.app.ui.components.HelpTopBar
@@ -27,7 +28,7 @@ fun ParametersScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            HelpTopBar(title = "Parameters", tutorial = tutorial, onBack = onBack)
+            HelpTopBar(title = stringResource(R.string.parameters_title), tutorial = tutorial, onBack = onBack)
         }
     ) { padding ->
         Column(
@@ -40,22 +41,22 @@ fun ParametersScreen(onBack: () -> Unit) {
         ) {
             OutlinedTextField(
                 exposureMs, { exposureMs = it },
-                label = { Text("Exposure (ms, 10–3000)") },
+                label = { Text(stringResource(R.string.parameters_exposure)) },
                 singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 iso, { iso = it },
-                label = { Text("ISO (50–1600)") },
+                label = { Text(stringResource(R.string.parameters_iso)) },
                 singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 focusD, { focusD = it },
-                label = { Text("Focus (D, 0 = ∞)") },
+                label = { Text(stringResource(R.string.parameters_focus)) },
                 singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 wbTemp, { wbTemp = it },
-                label = { Text("White balance (K or Auto)") },
+                label = { Text(stringResource(R.string.parameters_wb)) },
                 singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             // TODO: push to CameraManager.updateParams() when a capture session is active

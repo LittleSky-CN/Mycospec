@@ -30,3 +30,6 @@ Thumbs.db
 # ── build artifacts: iGEM requires a source repository free of binary deliverables; publish APKs via GitHub Releases / Zenodo ──
 *.apk
 *.aab
+
+# ── local build scratch (pytest/gradle temp, never committed) ──
+.build/

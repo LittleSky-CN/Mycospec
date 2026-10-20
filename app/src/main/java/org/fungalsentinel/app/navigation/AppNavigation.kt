@@ -210,7 +210,7 @@ fun AppNavigation(navController: NavHostController) {
             )
         }
 
-        // [fix] filled in every SettingsScreen parameter and removed the comment
+        // [Fix] Filled in all SettingsScreen parameters and removed the comment
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 wavelengthR = settings.wavelengthR,

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.fungalsentinel.app.R
 import org.fungalsentinel.app.data.database.AppDatabase
 import org.fungalsentinel.app.data.preset.PresetDatabase
 import java.io.File
@@ -92,7 +93,7 @@ class FssaApplication : Application() {
             val copy = File(cacheDir, src.name); src.copyTo(copy, overwrite = true)
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", copy)
             val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            context.startActivity(Intent.createChooser(intent, "Save diagnostic log"))
+            context.startActivity(Intent.createChooser(intent, context.getString(R.string.log_share_title)))
         } catch (e: Exception) { logError("Failed to share diagnostic log", e) }
     }
 }

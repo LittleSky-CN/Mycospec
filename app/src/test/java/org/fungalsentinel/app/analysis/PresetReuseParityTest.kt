@@ -1,7 +1,6 @@
 package org.fungalsentinel.app.analysis
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -61,14 +60,19 @@ class PresetReuseParityTest {
             fused = FloatArray(n),
             mask = BooleanArray(n) { true },
             effectiveBandNm = wavelengths.first() to wavelengths.last(),
-            maskedCount = n, totalCount = n, thresholdRatio = 0.1f,
+            maskedCount = n, gridPoints = n, thresholdRatio = 0.1f,
             crossingBG = 483f, crossingGR = 577f, agreementPct = 0f,
             peakRespR = 1f to 500f, peakRespG = 1f to 500f, peakRespB = 1f to 500f,
             fusedPeak = 1f to 500f,
             exposureSeconds = 0.2, frames = 1, spdSource = "test",
-            rbSwapped = false
+            rbSwapped = false,
+            slope = -2.738911, intercept = 3028.7065, sensorHeight = n
         )
     }
+
+    private fun write(r: SpdCalibrationResult): String = SpectralResponseCalibrator.toJson(
+        r, deviceModel = "Pixel 8", appVersion = "2.3.0", createdAt = "2026-10-18T12:00:00Z"
+    )
 
     // ----------------------------------------------------------------------
 
@@ -82,18 +86,46 @@ class PresetReuseParityTest {
             wl.toDouble() to kotlin.math.exp(-0.5 * d * d)
         }
 
+    /**
+     * A full-sensor fixture: 3072 rows at -2.7389 px/nm, so the pixel axis runs
+     * from roughly -15 nm to 1106 nm -- i.e. FAR outside the preset's 380..780 nm
+     * grid. That is the normal case on a phone and it is why neither the response
+     * nor the coverage check may be expressed in pixels.
+     */
+    private companion object {
+        const val SENSOR_N = 3072
+        const val SENSOR_SLOPE = -2.738911              // px/nm
+        const val SENSOR_INTERCEPT = 3028.7065          // λ(1536) = 545 nm
+        /** Two to three times the L3 "warn" threshold: a real-world drift. */
+        const val GRID_SHIFT_NM = 4.0f
+    }
+
+    /** Maximum relative difference over a masked sub-range of the grid. */
+    private fun maxRelDiff(a: FloatArray, b: FloatArray, mask: BooleanArray): Double {
+        var worst = 0.0
+        for (i in a.indices) {
+            if (!mask[i]) continue
+            val ref = Math.abs(a[i].toDouble())
+            if (ref <= 0.0) continue
+            val d = Math.abs(a[i].toDouble() - b[i].toDouble()) / ref
+            if (d > worst) worst = d
+        }
+        return worst
+    }
+
     @Test
     fun spdPresetCarriesItsMappingAndReportsDrift() {
-        // DEF-A04 (fixed): SpdCalibrationResult now stores the slope/intercept
-        // the response was baked with, exposes [SpdCalibrationResult.mappingDriftNm]
-        // and -- via Mode B -- can be re-derived for the CURRENT mapping, which
-        // makes "load old preset" equivalent to "re-run Step 2".
-        val n = 640
-        val slope = -2.738911              // px/nm, the measured device value
-        val intercept = 1807.68126         // λ(0) = 660 nm, λ(639) ≈ 426.7 nm
+        // The payload still carries the mapping it was baked with, but ONLY so
+        // that a drift can be *reported*: since v3 the response is indexed by
+        // wavelength, so a different mapping no longer deforms it. That is the
+        // whole point of the pixel decoupling -- the old Mode A/B asymmetry is
+        // gone, there is exactly one way to load a preset and it is always
+        // faithful.
+        val slope = SENSOR_SLOPE
+        val intercept = SENSOR_INTERCEPT
         val spdTrue = gaussianSpd()
-        val lampFrames = listOf(peakyFrame(n))
-        val posFrames = listOf(frame(n, 1f))
+        val lampFrames = listOf(peakyFrame(SENSOR_N))
+        val posFrames = listOf(frame(SENSOR_N, 1f))
 
         val calibrated = SpectralResponseCalibrator.calibrate(
             lampFrames = lampFrames, posFrames = posFrames,
@@ -103,19 +135,23 @@ class PresetReuseParityTest {
         assertNotNull(calibrated)
         val cal = calibrated!!
 
-        // ---- the payload carries the mapping + the raw Mode B inputs ----
+        // ---- the grid replaces the pixel axis -----------------------------
+        val grid = SpectralResponseCalibrator.canonicalGrid()
+        assertEquals(401, cal.gridPoints)
+        assertEquals(grid.size, cal.wavelengths.size)
+        assertEquals(380f, cal.wavelengths.first(), 0f)
+        assertEquals(780f, cal.wavelengths.last(), 0f)
+        assertEquals(1f, cal.wavelengths[1] - cal.wavelengths[0], 0f)
+        assertEquals(SENSOR_N, cal.sensorHeight)
+
+        // ---- the payload carries the mapping (diagnostic only) ------------
         assertEquals(slope, cal.slope, 1e-12)
         assertEquals(intercept, cal.intercept, 1e-9)
         assertEquals(5.512, cal.gErrorNm!!, 1e-9)
-        assertNotNull(cal.lampG)
-        assertNotNull(cal.spdRefWl)
-        assertEquals(n, cal.lampG!!.size)
-        assertEquals(301, cal.spdRefWl!!.size)
 
-        val restored = SpectralResponseCalibrator.fromJsonStrict(
-            SpectralResponseCalibrator.toJson(cal))
+        val restored = SpectralResponseCalibrator.fromJsonStrict(write(cal))
 
-        // ---- L3 drift: 0 drift -> ~0; 1 px of drift -> 0.365 nm ----
+        // ---- L3 drift: 0 drift -> ~0; 1 px of drift -> 0.365 nm -----------
         val zeroDrift = restored.mappingDriftNm(slope, intercept)
         assertNotNull(zeroDrift)
         assertEquals(0f, zeroDrift!!, 1e-5f)
@@ -125,16 +161,55 @@ class PresetReuseParityTest {
         assertNotNull(onePixel)
         assertEquals(0.36511f, onePixel!!, 1e-4f)
 
-        // ---- drift is classified, never rejected ----
+        // ---- drift is classified, never rejected --------------------------
         assertEquals(DriftLevel.OK, SpectralResponseCalibrator.driftLevel(1.9f))
         assertEquals(DriftLevel.WARN, SpectralResponseCalibrator.driftLevel(2.1f))
         assertEquals(DriftLevel.WARN, SpectralResponseCalibrator.driftLevel(9.9f))
         assertEquals(DriftLevel.SEVERE, SpectralResponseCalibrator.driftLevel(10.1f))
         assertEquals(DriftLevel.UNKNOWN, SpectralResponseCalibrator.driftLevel(null))
 
-        // ---- Mode A (no recompute): the area still drifts away, as before ----
-        val blank = listOf(frame(n, 1f))
-        val sample = listOf(peakyFrame(n))
+        // ---- the SAME file loaded against a mapping drifted by ~4 nm ------
+        // What "decoupled from pixels" means: nothing about the LOADED curves
+        // depends on the active mapping, and they reproduce Step 2 exactly.
+        // (A fresh Step 2 run under the drifted mapping really would measure a
+        // slightly different curve -- the drift re-assigns the same pixels to
+        // other wavelengths -- but that is physics, not a payload defect, and it
+        // used to be papered over by Mode B.)
+        val interceptB = intercept - GRID_SHIFT_NM * slope      // λ -> λ + 4 nm
+        val fourNmDrift = restored.mappingDriftNm(slope, interceptB)
+        assertNotNull(fourNmDrift)
+        assertEquals(GRID_SHIFT_NM, fourNmDrift!!, 1e-4f)
+
+        val freshA = SpectralResponseCalibrator.calibrate(
+            lampFrames = lampFrames, posFrames = posFrames,
+            spdTrue = spdTrue, slope = slope, intercept = intercept, spdSource = "test"
+        )!!
+        val freshB = SpectralResponseCalibrator.calibrate(
+            lampFrames = lampFrames, posFrames = posFrames,
+            spdTrue = spdTrue, slope = slope, intercept = interceptB, spdSource = "test"
+        )!!
+        // Compared above 20% of the in-band peak on both sides -- that is the
+        // floor SampleAnalyzer itself applies, so points below it can never reach
+        // a quantitative result (the fringe matters, the extreme tail does not).
+        fun core(a: SpdCalibrationResult, b: SpdCalibrationResult): BooleanArray {
+            val pa = a.respG.filterIndexed { i, _ -> a.mask[i] }.maxOrNull() ?: 0f
+            val pb = b.respG.filterIndexed { i, _ -> b.mask[i] }.maxOrNull() ?: 0f
+            return BooleanArray(grid.size) {
+                a.mask[it] && b.mask[it] && a.respG[it] >= 0.2f * pa && b.respG[it] >= 0.2f * pb
+            }
+        }
+        val gridBefore = maxRelDiff(restored.respG, freshA.respG, core(restored, freshA))
+        println("[METRIC] preset vs fresh Step 2 under the same mapping = $gridBefore")
+        assertTrue(
+            "loading the file must reproduce a fresh Step 2, but it moved by $gridBefore",
+            gridBefore < 1e-6
+        )
+        val physics = maxRelDiff(freshA.respG, freshB.respG, core(freshA, freshB))
+        println("[METRIC] how much Step 2 itself would move after ${GRID_SHIFT_NM} nm of drift = $physics")
+
+        // ---- and Step 3 reproduces a fresh Step 2 under EITHER mapping -----
+        val blank = listOf(frame(SENSOR_N, 1f))
+        val sample = listOf(peakyFrame(SENSOR_N))
         fun area(result: SpdCalibrationResult, b: Double): Double = SampleAnalyzer.analyze(
             blankFrames = blank, sampleFrames = sample,
             bandStartNm = 500.0, bandEndNm = 600.0,
@@ -142,36 +217,18 @@ class PresetReuseParityTest {
             fluorophore = "EGFP",
             wavelengths = result.wavelengths, respG = result.respG
         )!!.correctedArea
-        val modeA = area(restored, driftedIntercept)
-
-        // ---- Mode B: recompute with the current mapping == fresh Step 2 ----
-        val recomputed = restored.recomputeWith(slope, driftedIntercept)
-        assertNotNull("Mode B must be available for a v3 payload", recomputed)
-        val fresh = SpectralResponseCalibrator.calibrate(
-            lampFrames = lampFrames, posFrames = posFrames,
-            spdTrue = spdTrue, slope = slope, intercept = driftedIntercept, spdSource = "test"
-        )!!
-        // Mode B must reproduce a fresh Step 2 point by point (the lamp profiles
-        // travel with 6 significant digits, hence a relative tolerance).
-        for (i in 0 until n) {
-            assertEquals("mask[$i]", fresh.mask[i], recomputed!!.mask[i])
+        for (b in listOf(intercept, interceptB)) {
+            val truth = area(freshA, b)
+            val loaded = area(restored, b)
+            val rel = Math.abs(truth - loaded) / Math.abs(truth)
+            println("[METRIC] Step 3 at intercept=$b: fresh=$truth loaded=$loaded rel=$rel")
             assertEquals(
-                "respG[$i]", fresh.respG[i], recomputed!!.respG[i],
-                Math.abs(fresh.respG[i]) * 1e-4f + 1e-7f
+                "loading the same file must reproduce a fresh Step 2",
+                truth, loaded, Math.abs(truth) * 1e-3 + 1e-9
             )
         }
-        val modeB = area(recomputed!!, driftedIntercept)
-        val truth = area(fresh, driftedIntercept)
-
-        assertEquals("Mode B must reproduce a fresh Step 2", truth, modeB, Math.abs(truth) * 1e-3 + 1e-9)
-        assertNotEquals(
-            "Mode A should NOT reproduce it -- that is the defect being fixed",
-            truth, modeA, Math.abs(truth) * 1e-6 + 1e-12
-        )
-
-        // ---- a legacy payload without lamp* falls back to Mode A, not to null ----
-        assertNull(restored.copy(lampR = null, lampG = null, lampB = null).recomputeWith(slope, intercept))
     }
+
 
     @Test
     fun sampleAnalyzerSilentlySkipsSpdCorrectionWhenThePresetRestoredEmptyArrays() {
@@ -239,9 +296,9 @@ class PresetReuseParityTest {
         val n = 32
         val frames = listOf(peakyFrame(n))
         val axis = SpectralUnmixer.wavelengthAxis(n, 3.5, 100.0)
-        val saved = spdOf(FloatArray(n) { 430f + it * 3.5f }, FloatArray(n) { 2f + it * 0.1f })
-        val restored = SpectralResponseCalibrator.fromJson(
-            SpectralResponseCalibrator.toJson(saved))!!
+        val w = SpectralResponseCalibrator.canonicalGrid()
+        val saved = spdOf(w, FloatArray(w.size) { 2f + it * 0.1f })
+        val restored = SpectralResponseCalibrator.fromJson(write(saved))!!
 
         val before = SpectralUnmixer.extractChannelSpectra(frames, axis, "EGFP", saved)
         val after = SpectralUnmixer.extractChannelSpectra(frames, axis, "EGFP", restored)

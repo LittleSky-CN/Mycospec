@@ -43,7 +43,7 @@ fun InlineCameraOverlay(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // local state: inherits the global settings when opened, adjusted independently during capture (never written back globally)
+    // Local state: inherits the global settings when opened, adjusted independently while shooting (not written back globally)
     var localAutoExposure by remember { mutableStateOf(settings.autoExposure) }
     var localExposureMs by remember { mutableStateOf(settings.exposureMs) }
     var localAutoFocus by remember { mutableStateOf(settings.autoFocus) }
@@ -57,7 +57,7 @@ fun InlineCameraOverlay(
         }
     }
 
-    // sync the local state when the global settings change
+    // Sync local state when the global settings change
     LaunchedEffect(settings) {
         localAutoExposure = settings.autoExposure
         localExposureMs = settings.exposureMs
@@ -65,7 +65,7 @@ fun InlineCameraOverlay(
         localFocusDiopter = settings.focusDiopter
     }
 
-    // push camera parameters down when the local state changes
+    // Push camera parameters when the local state changes
     LaunchedEffect(localAutoExposure, localExposureMs, localAutoFocus, localFocusDiopter) {
         cameraManager.updateParams(
             CameraParams(
@@ -82,7 +82,7 @@ fun InlineCameraOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .border(2.dp, Color.Black, RoundedCornerShape(0.dp)) // uniform black border
+            .border(2.dp, Color.Black, RoundedCornerShape(0.dp)) // Unified black border
     ) {
         CameraPreviewView(
             cameraManager = cameraManager,
@@ -91,7 +91,7 @@ fun InlineCameraOverlay(
         )
 
         if (hasCameraPermission) {
-        // top: exit key + hint pill (keeps clear of the status bar)
+        // Top: exit key + hint capsule (avoids the status bar)
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -111,7 +111,7 @@ fun InlineCameraOverlay(
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.ArrowDownward, contentDescription = "Back", tint = Color.White)
+                    Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.back), tint = Color.White)
                 }
                 Spacer(Modifier.weight(1f))
             }
@@ -141,7 +141,7 @@ fun InlineCameraOverlay(
             }
         }
 
-        // shutter: left in landscape, bottom in portrait (same as DngCameraScreen)
+        // Shutter: left in landscape, bottom in portrait (consistent with DngCameraScreen)
         val shutterModifier = if (isLandscape) {
             Modifier.align(Alignment.CenterStart).padding(start = 24.dp)
         } else {
@@ -162,7 +162,7 @@ fun InlineCameraOverlay(
             ) { }
         }
 
-        // bottom control panel (keeps clear of the navigation bar)
+        // Bottom control panel (avoids the navigation bar)
         Box(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
             CameraControlPanel(
                 settings = AppSettings(
@@ -184,7 +184,7 @@ fun InlineCameraOverlay(
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.ArrowDownward, contentDescription = "Back", tint = Color.White)
+                Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.back), tint = Color.White)
             }
         }
     }

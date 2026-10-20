@@ -6,15 +6,16 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Contract tests for `canonicalFluorophore()`.
+ * Contract test for `canonicalFluorophore()`.
  *
- * Background: Android and Python FSSA import / export each other's curve presets, and the two sides spell fluorophores differently.
- * The canonical ID is defined as the Android enum name (`YPET` / `MCHERRY` / ...), so the reader must be able to
- * resolve the Python spellings, otherwise the dropdown silently falls back to "please select a fluorophore".
+ * Background: Android and Python FSSA export/import curve presets from each other, and the
+ * two sides spell fluorophores differently. The canonical ID is defined as the Android enum
+ * name (`YPET` / `MCHERRY` / …), so the reading side must be able to parse Python's spelling;
+ * otherwise the dropdown silently falls back to "select a fluorophore".
  */
 class FluorophoreCanonicalTest {
 
-    // ── 1. canonical itself ────────────────────────────────────────────────
+    // ── 1. canonical itself ──────────────────────────────────────────────
     @Test
     fun resolvesCanonicalEnumNamesInAnyCase() {
         Fluorophore.values().forEach { expected ->
@@ -27,7 +28,7 @@ class FluorophoreCanonicalTest {
 
     @Test
     fun resolvesOwnDisplayNameForEveryCategory() {
-        // all 6 classes must be covered -- missing one means some preset cannot be read
+        // All 6 categories must be covered -- missing one means one kind of preset cannot be read
         assertEquals(Fluorophore.YPET, canonicalFluorophore("Ypet"))
         assertEquals(Fluorophore.EGFP, canonicalFluorophore("EGFP"))
         assertEquals(Fluorophore.MCHERRY, canonicalFluorophore("mCherry"))
@@ -36,7 +37,7 @@ class FluorophoreCanonicalTest {
         assertEquals(Fluorophore.FLUORESCEIN, canonicalFluorophore("Fluorescein"))
     }
 
-    // ── 2. cross-platform: keys / display names of Python FSSA ────────────────────────────
+    // ── 2. Cross-platform: Python FSSA keys / display names ──────────────
     @Test
     fun resolvesPythonFssaKeysWhenItStillShipsOldNames() {
         assertEquals(Fluorophore.EGFP, canonicalFluorophore("EGFP"))
@@ -49,7 +50,7 @@ class FluorophoreCanonicalTest {
     fun resolvesPythonFssaDisplayNames() {
         assertEquals(Fluorophore.YPET, canonicalFluorophore("Ypet (Venus variant)"))
         assertEquals(Fluorophore.FLUORESCEIN, canonicalFluorophore("Fluorescein (sodium salt)"))
-        // dirty spellings with odd casing and spaces inside parentheses must resolve too
+        // Sloppy spellings from case differences and spaces inside parentheses must also be recognised
         assertEquals(Fluorophore.YPET, canonicalFluorophore("YPET (VENUS VARIANT)"))
         assertEquals(Fluorophore.FLUORESCEIN, canonicalFluorophore("fluorescein(sodium salt)"))
     }
@@ -64,7 +65,7 @@ class FluorophoreCanonicalTest {
         assertEquals(Fluorophore.EGFP, canonicalFluorophore("egfp"))
     }
 
-    // ── 3. unrecognisable input must return null so the caller can fail explicitly ────────────────────
+    // ── 3. Unrecognised input must return null and let the caller fail loudly ────
     @Test
     fun unrecognisedInputReturnsNullInsteadOfAFallback() {
         assertNull(canonicalFluorophore(null))
@@ -72,12 +73,12 @@ class FluorophoreCanonicalTest {
         assertNull(canonicalFluorophore("   "))
         assertNull(canonicalFluorophore("---"))
         assertNull(canonicalFluorophore("DsRed"))
-        assertNull(canonicalFluorophore("mCherri"))   // one letter off; fuzzy matching is not allowed
+        assertNull(canonicalFluorophore("mCherri"))   // one letter off, fuzzy matching is not allowed
         assertNull(canonicalFluorophore("mCherry2"))
         assertNull(canonicalFluorophore("sampleFluorophore#60"))
     }
 
-    // ── 4. the fluorophore field of a curve preset goes through the same resolution path ────────────────────
+    // ── 4. The fluorophore field of curve presets goes through the same resolution path ────
     @Test
     fun pythonExportedPresetFluorophoreFieldIsResolvable() {
         val json = """
@@ -97,13 +98,13 @@ class FluorophoreCanonicalTest {
             }
         """.trimIndent()
         val payload = org.fungalsentinel.app.data.preset.CurvePresetPayload.fromJson(json)
-        assertEquals("mCherry", payload.fluorophore)          // the original text is kept when persisted
+        assertEquals("mCherry", payload.fluorophore)          // stays verbatim on disk
         assertEquals(Fluorophore.MCHERRY, canonicalFluorophore(payload.fluorophore))
         assertEquals("MCHERRY", canonicalFluorophore(payload.fluorophore)!!.name)
         assertEquals("590–630 nm", canonicalFluorophore(payload.fluorophore)!!.integrationRangeNm)
     }
 
-    // ── 5. the two enums have been merged into one ───────────────────────────────────────
+    // ── 5. The two enums have been merged into one ───────────────────────
     @Test
     fun onlyOneFluorophoreEnumIsDeclaredInTheApp() {
         val declarations = sourceRoot().walkTopDown()
@@ -115,11 +116,11 @@ class FluorophoreCanonicalTest {
             }
             .toList()
         assertEquals(
-            "Fluorophore must be declared exactly once (single source of truth); found ${declarations.size}: $declarations",
+            "Fluorophore must have exactly one declaration (single source of truth); actually found ${declarations.size}: $declarations",
             1, declarations.size
         )
         assertEquals(
-            "the single declaration must live in the data layer, Entities.kt",
+            "The single declaration must live in the data layer, Entities.kt",
             "org/fungalsentinel/app/data/model/Entities.kt",
             declarations.single().substringAfter("main/java/").substringBefore(":")
         )

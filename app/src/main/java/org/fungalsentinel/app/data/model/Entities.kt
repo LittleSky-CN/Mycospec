@@ -7,11 +7,12 @@ import androidx.room.PrimaryKey
 import java.util.Locale
 
 /**
- * The single source of truth for fluorophores (**the only enum of its kind in this project**).
+ * The single source of truth for fluorophores (**the only such enum in the project**).
  *
- * canonical ID == [Fluorophore.name]（`YPET` / `EGFP` / `MCHERRY` / `CFP` /
- * `MTURQUOISE2` / `FLUORESCEIN`), because those are exactly the values stored in the existing
- * `projects.fluorophore` data, and changing the Python side is cheaper than migrating the existing database.
+ * The canonical ID is [Fluorophore.name] (`YPET` / `EGFP` / `MCHERRY` / `CFP` /
+ * `MTURQUOISE2` / `FLUORESCEIN`), because those are exactly the values already
+ * stored in the existing `projects.fluorophore` data — changing the Python side
+ * is cheaper than migrating the existing database.
  */
 enum class Fluorophore(val displayName: String, val integrationRangeNm: String) {
     YPET("Ypet", "500–530 nm"),
@@ -23,11 +24,12 @@ enum class Fluorophore(val displayName: String, val integrationRangeNm: String) 
 }
 
 /**
- * Normalised into a lookup key: case-insensitive, and strips all whitespace, hyphens (`-` / en-dash / em-dash),
- * underscores, dots, slashes and parentheses.
+ * Normalises a name into a lookup key: case-insensitive, with all whitespace,
+ * hyphens (`-` / en-dash / em-dash), underscores, dots, slashes and parentheses
+ * removed.
  *
- * Example: `"m-Turquoise2"` / `"mturquoise2"` / `"MTURQUOISE2"` -> `"mturquoise2"`,
- * `"Ypet (Venus variant)"` → `"ypetvenusvariant"`。
+ * For example: `"m-Turquoise2"` / `"mturquoise2"` / `"MTURQUOISE2"` →
+ * `"mturquoise2"`, and `"Ypet (Venus variant)"` → `"ypetvenusvariant"`.
  */
 private val FLUOROPHORE_NOISE = Regex("[\\s_./()–—-]+")
 
@@ -35,16 +37,19 @@ private fun normalizeFluorophoreKey(name: String): String =
     FLUOROPHORE_NOISE.replace(name.trim().lowercase(Locale.US), "")
 
 /**
- * Explicit alias table (keys already passed through [normalizeFluorophoreKey]), each class listed exhaustively.
+ * Explicit alias table (keys already passed through [normalizeFluorophoreKey]),
+ * listed exhaustively per fluorophore.
  *
- * Why an explicit table instead of fuzzy / substring matching: there are only these 6 fluorophore classes, so listing them one by one
- * guarantees that no loose rule ever misclassifies `CFP` as something else.
+ * Why an explicit table instead of fuzzy / substring matching: there are only
+ * these 6 fluorophores, so listing them exhaustively rules out a loose rule
+ * misjudging `CFP` as something else.
  *
- * Before the Python FSSA side moved to canonical IDs, cross-platform curve presets carried its display names,
- * so those spellings must have a real alias entry here.
+ * Until the Python FSSA side is reworked to canonical, cross-platform curve
+ * presets carry its display names, so every one of those spellings needs a real
+ * alias here.
  */
 private val FLUOROPHORE_ALIASES: Map<String, Fluorophore> = mapOf(
-    // YPET -- Python display name "Ypet (Venus variant)"
+    // YPET — Python display name "Ypet (Venus variant)"
     "ypet" to Fluorophore.YPET,
     "ypetvenusvariant" to Fluorophore.YPET,
     // EGFP
@@ -53,22 +58,26 @@ private val FLUOROPHORE_ALIASES: Map<String, Fluorophore> = mapOf(
     "mcherry" to Fluorophore.MCHERRY,
     // CFP
     "cfp" to Fluorophore.CFP,
-    // MTURQUOISE2 -- Python key "mTurquoise2"; the common variant "m-turquoise2" normalises to the same key
+    // MTURQUOISE2 — Python key "mTurquoise2"; the common variant "m-turquoise2"
+    // normalises to the same key
     "mturquoise2" to Fluorophore.MTURQUOISE2,
-    // FLUORESCEIN -- Python display name "Fluorescein (sodium salt)"
+    // FLUORESCEIN — Python display name "Fluorescein (sodium salt)"
     "fluorescein" to Fluorophore.FLUORESCEIN,
     "fluoresceinsodiumsalt" to Fluorophore.FLUORESCEIN
 )
 
 /**
- * Resolves any spelling of a fluorophore into the canonical [Fluorophore].
+ * Resolves any spelling of a fluorophore to the canonical [Fluorophore].
  *
- * This is the **only** "string -> fluorophore" entry point: the Step 3 dropdown, the ViewModel's band lookup and
- * the `fluorophore` field of curve presets must all go through here, so that presets exported by Python FSSA
- * (`mCherry` / `Ypet (Venus variant)` / `Fluorescein (sodium salt)` ...) can be read back.
+ * This is the **only** "string → fluorophore" entry point: the Step 3 dropdown,
+ * the ViewModel's band lookup and the `fluorophore` field of a curve preset must
+ * all go through here, so that presets exported by Python FSSA (`mCherry` /
+ * `Ypet (Venus variant)` / `Fluorescein (sodium salt)` …) resolve correctly.
  *
- * Returns `null` when it cannot recognise the input -- **the caller** decides whether to fail or degrade; this function never silently falls back,
- * so a dirty value in an external preset produces a clear message for the user instead of quietly reading the wrong channel.
+ * Returns `null` when it cannot resolve — **the caller** decides whether to fail
+ * or degrade; this function does not silently fall back, so a dirty value in an
+ * external preset gives the user a clear message instead of quietly reading the
+ * wrong channel.
  */
 fun canonicalFluorophore(name: String?): Fluorophore? {
     val key = normalizeFluorophoreKey(name ?: return null)
@@ -87,16 +96,18 @@ data class ProjectEntity(
     val status: String = "IN_PROGRESS",
     val hasBlueFilter: Boolean = false, // NEW: Filter mode flag
     /**
-     * [v2.2.8] the report snapshot that was persisted.
+     * [v2.2.8] The persisted report snapshot.
      *
-     * Why this column is required: `loadWavelengthPreset()` / `loadSpdPreset()` /
-     * `loadCurvePreset()` only update [ReportData] in uiState and **do not** write any row to the `captures`
-     * table. In other words the fact that "this project used such-and-such preset for Step 1" has no carrier other than
-     * the in-memory reportData -- if it is not persisted, the provenance information is lost forever when the project
-     * is reopened from History.
+     * Why this column has to exist: `loadWavelengthPreset()` / `loadSpdPreset()` /
+     * `loadCurvePreset()` only update the [ReportData] held in uiState and
+     * **never** write any record to the `captures` table. In other words the fact
+     * "this project used preset X in Step 1" has no carrier other than the
+     * in-memory reportData — if it is not persisted, the provenance is lost
+     * forever once the project is reopened from History.
      *
-     * null means an old project (persisted before MIGRATION_3_4) or one that has not produced a report yet; readers
-     * degrade safely with "restoration failed -> fall back to ReportData()".
+     * null means an old project (persisted before MIGRATION_3_4) or a report that
+     * has not been produced yet; readers degrade safely with
+     * "restore failed → fall back to ReportData()".
      */
     val reportDataJson: String? = null
 )

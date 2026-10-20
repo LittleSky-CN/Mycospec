@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import java.util.Locale
 
-/** In-app language switcher (system / en / zh / es / ny), minSdk-24 safe. */
+/** In-app language switcher (system / en / zh / es / ny / fr), minSdk-24 safe. */
 object LanguageManager {
     const val SYSTEM = "system"
     private const val PREF_NAME = "app_language_prefs"

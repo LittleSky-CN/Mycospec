@@ -59,7 +59,7 @@ class CameraManager(private val context: Context) {
         private val EXPOSURE_RANGE_MS = 1L..600_000L
         private val ISO_RANGE = 50..1600
         private val FOCUS_RANGE_D = 0f..5f
-        private const val RESULT_WAIT_MS = 3000L     // [v2.2.6] 10s -> 3s, shortens the blocking window
+        private const val RESULT_WAIT_MS = 3000L     // [v2.2.6] 10s → 3s, shorter blocking window
         private const val POLL_INTERVAL_MS = 20L
         private const val CAPTURE_TIMEOUT_MS = 30_000L
     }
@@ -86,7 +86,7 @@ class CameraManager(private val context: Context) {
     @Volatile private var pendingCaptureResult: TotalCaptureResult? = null
     @Volatile private var captureFailed = false
     @Volatile private var lastPreviewResult: TotalCaptureResult? = null
-    @Volatile private var captureInFlight = false   // [v2.2.6] single-frame in-flight mutex, prevents queueing deadlocks from rapid taps
+    @Volatile private var captureInFlight = false   // [v2.2.6] Single-frame in-flight mutex, prevents queue deadlock from rapid taps
     @Volatile private var captureTimeout: Runnable? = null
 
     private val _isReady = MutableStateFlow(false)
@@ -115,7 +115,7 @@ class CameraManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun openCamera(previewSurface: Surface) {
-        if (!hasCameraPermission()) { onError?.invoke("Camera permission not granted"); return }
+        if (!hasCameraPermission()) { onError?.invoke(context.getString(R.string.cam_err_permission)); return }
         val generation = synchronized(cameraOpenLock) {
             if (cameraOpening || cameraDevice != null) return
             cameraOpening = true
@@ -126,7 +126,7 @@ class CameraManager(private val context: Context) {
         startThreads()
         _isReady.value = false
         try {
-            val rawCameraId = findRawCapableCamera() ?: throw IllegalStateException("No RAW-capable camera found")
+            val rawCameraId = findRawCapableCamera() ?: throw IllegalStateException(context.getString(R.string.cam_err_no_raw))
             cameraCharacteristics = androidCameraManager.getCameraCharacteristics(rawCameraId)
             val rawSize = chooseRawSize()
             rawImageReader = ImageReader.newInstance(rawSize.width, rawSize.height, ImageFormat.RAW_SENSOR, 2).apply {
@@ -163,14 +163,14 @@ class CameraManager(private val context: Context) {
                     }
                     camera.close(); _isReady.value = false
                     captureInFlight = false
-                    onError?.invoke("Camera device error: $error")
+                    onError?.invoke(context.getString(R.string.cam_err_device, error))
                 }
             }, backgroundHandler)
         } catch (e: Exception) {
             synchronized(cameraOpenLock) {
                 if (generation == cameraOpenGeneration) cameraOpening = false
             }
-            onError?.invoke("Camera access error: ${e.message}")
+            onError?.invoke(context.getString(R.string.cam_err_access, e.message))
         }
     }
 
@@ -217,11 +217,11 @@ class CameraManager(private val context: Context) {
                     }
                     override fun onConfigureFailed(session: CameraCaptureSession) {
                         session.close()
-                        onError?.invoke("Session configuration failed")
+                        onError?.invoke(context.getString(R.string.cam_err_session))
                     }
                 }, backgroundHandler
             )
-        } catch (e: CameraAccessException) { onError?.invoke("Session creation failed: ${e.message}") }
+        } catch (e: CameraAccessException) { onError?.invoke(context.getString(R.string.cam_err_session_create, e.message)) }
     }
 
     private fun startPreview() {
@@ -234,7 +234,7 @@ class CameraManager(private val context: Context) {
                     lastPreviewResult = result
                 }
             }, backgroundHandler)
-        } catch (e: CameraAccessException) { onError?.invoke("Preview start failed: ${e.message}") }
+        } catch (e: CameraAccessException) { onError?.invoke(context.getString(R.string.cam_err_preview, e.message)) }
     }
 
     private fun applyManualControls(builder: CaptureRequest.Builder) {
@@ -287,10 +287,10 @@ class CameraManager(private val context: Context) {
         if (_isReady.value && !captureInFlight) startPreview()
     }
 
-    /** [v2.2.6] OnePlus/ColorOS session-block workaround: stopRepeating before capture and restart the preview afterwards; the mutex prevents queueing */
+    /** [v2.2.6] OnePlus/ColorOS session blocking workaround: stopRepeating before capture and restart the preview afterwards; the mutex prevents queueing */
     fun captureRaw() {
-        val session = captureSession ?: run { onError?.invoke("Session not ready"); return }
-        val device = cameraDevice ?: run { onError?.invoke("Camera not open"); return }
+        val session = captureSession ?: run { onError?.invoke(context.getString(R.string.cam_err_session_not_ready)); return }
+        val device = cameraDevice ?: run { onError?.invoke(context.getString(R.string.cam_err_camera_not_open)); return }
         val started = synchronized(captureStateLock) {
             if (captureInFlight) false
             else {
@@ -299,7 +299,7 @@ class CameraManager(private val context: Context) {
                 true
             }
         }
-        if (!started) { onError?.invoke("Capture busy — previous frame still processing"); return }
+        if (!started) { onError?.invoke(context.getString(R.string.cam_err_busy)); return }
         try {
             pendingCaptureResult = null; captureFailed = false
             val request = device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
@@ -307,7 +307,7 @@ class CameraManager(private val context: Context) {
             try {
                 session.stopRepeating()
             } catch (e: CameraAccessException) {
-                onError?.invoke("Could not prepare camera for capture: ${e.message}")
+                onError?.invoke(context.getString(R.string.cam_err_prepare, e.message))
                 finishCaptureCycle()
                 return
             }
@@ -333,7 +333,7 @@ class CameraManager(private val context: Context) {
             }
             synchronized(captureStateLock) { captureTimeout = timeout }
             if (backgroundHandler?.postDelayed(timeout, CAPTURE_TIMEOUT_MS) != true) {
-                onError?.invoke("Could not schedule capture timeout")
+                onError?.invoke(context.getString(R.string.cam_err_timeout_schedule))
                 finishCaptureCycle()
                 return
             }
@@ -343,12 +343,12 @@ class CameraManager(private val context: Context) {
                 }
                 override fun onCaptureFailed(s: CameraCaptureSession, r: CaptureRequest, f: android.hardware.camera2.CaptureFailure) {
                     captureFailed = true
-                    onError?.invoke("Capture failed: reason=${f.reason}")
+                    onError?.invoke(context.getString(R.string.cam_err_capture_failed, f.reason))
                     finishCaptureCycle()
                 }
             }, backgroundHandler)
         } catch (e: Exception) {
-            onError?.invoke("Capture dispatch failed: ${e.message}")
+            onError?.invoke(context.getString(R.string.cam_err_dispatch, e.message))
             finishCaptureCycle()
         }
     }
@@ -389,7 +389,7 @@ class CameraManager(private val context: Context) {
         try {
             val result = waitForResult() ?: lastPreviewResult
             if (result == null) {
-                onError?.invoke("No capture result available (callback lost)")
+                onError?.invoke(context.getString(R.string.cam_err_no_result))
                 return
             }
             val saturation = computeSaturationRatio(image)
@@ -408,14 +408,14 @@ class CameraManager(private val context: Context) {
             _lastMetadata.value = metadata
             if (dngPolicy != DngPolicy.NONE) saveDng(image, metadata, result)
         } catch (e: Exception) {
-            onError?.invoke("RAW processing failed: ${e.message}")
+            onError?.invoke(context.getString(R.string.cam_err_raw_proc, e.message))
         } finally {
             image.close()
             finishCaptureCycle()
         }
     }
 
-    /** [v2.2.6] white-level adaptation: saturation is judged from the sensor's actual bit depth, supporting 10/12/14/16-bit */
+    /** [v2.2.6] White level auto-adaptation: determines saturation from the actual sensor bit depth, compatible with 10/12/14/16-bit */
     private fun computeSaturationRatio(image: Image): Float {
         val white = cameraCharacteristics?.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL) ?: 16383
         val threshold = (white * 0.98f).toInt()
@@ -448,14 +448,14 @@ class CameraManager(private val context: Context) {
             dngCreator.close()
             file.canonicalFile.setLastModified(System.currentTimeMillis())
             if (file.length() < 1024) {
-                onError?.invoke("DNG file too small (${file.length()} bytes) — possible write failure")
+                onError?.invoke(context.getString(R.string.cam_err_dng_small, file.length()))
                 file.delete()
                 return
             }
             onDngSaved?.invoke(file, metadata)
             Log.d(TAG, "DNG saved: ${file.absolutePath} (${file.length()} bytes)")
         } catch (e: Exception) {
-            onError?.invoke("DNG save failed: ${e.message}")
+            onError?.invoke(context.getString(R.string.cam_err_dng_save, e.message))
             file.delete()
         }
     }

@@ -39,8 +39,8 @@ fun Step3SampleScreen(
     val sampleCaptures = uiState.sampleCaptures
     val report = uiState.reportData
 
-    // resolved through canonicalFluorophore: presets exported by Python FSSA may carry non-canonical spellings such as "mCherry" /
-    // "Fluorescein (sodium salt)", and an exact match would silently drop the value
+    // Resolved via canonicalFluorophore: presets exported by Python FSSA may use non-canonical
+    // forms such as "mCherry" / "Fluorescein (sodium salt)", which exact matching would silently drop
     val reportFluor = canonicalFluorophore(report.sampleFluorophore)
     var selectedFluorophore by remember(report.sampleFluorophore) { mutableStateOf(reportFluor) }
     var showBlankCapture by remember { mutableStateOf(false) }
@@ -161,7 +161,8 @@ private fun FluorophoreDropdown(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    selected?.let { "${it.displayName} (${it.integrationRangeNm})" } ?: "— 请选择荧光物质 —",
+                    selected?.let { "${it.displayName} (${it.integrationRangeNm})" }
+                        ?: stringResource(R.string.step3_fluorophore_placeholder),
                     color = if (selected == null) AppColors.Error else AppColors.TextPrimary,
                     fontWeight = FontWeight.SemiBold, fontSize = 13.sp
                 )

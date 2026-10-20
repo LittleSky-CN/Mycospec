@@ -103,7 +103,7 @@ cd mycospec
 ./gradlew :app:testDebugUnitTest        # Windows: gradlew.bat :app:testDebugUnitTest
 ```
 
-Expected result on v2.3.0: **86 tests across 9 classes, 0 failures**, reproducible
+Expected result on v2.3.0: **118 tests across 16 classes, 0 failures**, reproducible
 by anyone — no device, no DNG files, no network, **every test runs on synthetic
 input**:
 
@@ -135,7 +135,7 @@ carry identical expectations:
 
 ```bash
 # Android side (this repository)
-./gradlew :app:testDebugUnitTest        # ≥ 86 tests across 9 classes
+./gradlew :app:testDebugUnitTest        # ≥ 118 tests across 16 classes
 
 # Python side
 cd /path/to/fungal-sentinel-spectral-analyzer

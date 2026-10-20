@@ -14,9 +14,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.fungalsentinel.app.R
 import org.fungalsentinel.app.data.AppSettings
 import org.fungalsentinel.app.ui.theme.AppColors
 import java.util.Locale
@@ -68,7 +70,7 @@ fun CameraControlPanel(
                     }
                 }
                 IconButton(onClick = { expanded = !expanded }) {
-                    Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Toggle", tint = AppColors.TextPrimary)
+                    Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, stringResource(R.string.camera_toggle_controls), tint = AppColors.TextPrimary)
                 }
             }
             AnimatedVisibility(expanded, enter = expandVertically(), exit = shrinkVertically()) {
@@ -85,7 +87,7 @@ fun CameraControlPanel(
 private fun ExposureSlider(valueMs: Long, onValueChange: (Long) -> Unit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text("EXP", color = AppColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+            Text(stringResource(R.string.camera_label_exp), color = AppColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
             Text(formatExposure(valueMs), color = AppColors.TextPrimary, fontSize = 12.sp, modifier = Modifier.width(72.dp))
             Slider(sliderFromExp(valueMs), { onValueChange(expFromSlider(it)) }, valueRange = 0f..1f, modifier = Modifier.weight(1f),
                 colors = SliderDefaults.colors(thumbColor = AppColors.Accent, activeTrackColor = AppColors.Accent, inactiveTrackColor = AppColors.Outline))
@@ -102,7 +104,7 @@ private fun ExposureSlider(valueMs: Long, onValueChange: (Long) -> Unit) {
 private fun FocusSlider(valueDiopter: Float, onValueChange: (Float) -> Unit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text("FOC", color = AppColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+            Text(stringResource(R.string.camera_label_foc), color = AppColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
             Text(formatFocus(valueDiopter), color = AppColors.TextPrimary, fontSize = 12.sp, modifier = Modifier.width(72.dp))
             Slider(valueDiopter, onValueChange, valueRange = 0f..5f, modifier = Modifier.weight(1f),
                 colors = SliderDefaults.colors(thumbColor = AppColors.Accent, activeTrackColor = AppColors.Accent, inactiveTrackColor = AppColors.Outline))

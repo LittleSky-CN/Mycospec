@@ -38,9 +38,9 @@ import org.fungalsentinel.app.R
  * Camera2 preview view.
  *
  * Features:
- * - handles the lifecycle automatically (reopens / closes the camera in onStart / onStop)
- * - rebuilds the preview when the Surface size changes
- * - provides the Surface to CameraManager
+ * - Automatic lifecycle handling (onStart/onStop reopens/closes the camera)
+ * - Rebuilds the preview when the surface size changes
+ * - Provides a Surface to CameraManager
  */
 @Composable
 fun CameraPreviewView(

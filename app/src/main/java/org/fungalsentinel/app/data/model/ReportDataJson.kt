@@ -5,34 +5,41 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * [v2.2.8] text codec for [ReportData] <-> JSON.
+ * [v2.2.8] Text codec for [ReportData] ↔ JSON.
  *
  * ### Why it is needed
- * `ProjectViewModel` keeps the whole report in memory as `ProjectUiState.reportData`.
- * The three `load*Preset` entry points only touch that in-memory state and **write no row to the `captures` table**,
- * so "this project used such-and-such preset for Step 1" has no second carrier beyond reportData itself.
- * As long as the report is not persisted, reopening a finished project from History loses the provenance forever.
- * This file provides the codec needed to persist and restore it.
+ * `ProjectViewModel` keeps the whole report in memory as
+ * `ProjectUiState.reportData`. The three `load*Preset` entry points only change
+ * that in-memory state and **write no record at all to the `captures` table**, so
+ * "this project used preset X in Step 1" has no carrier other than reportData
+ * itself. As long as the report is not persisted, reopening a finished project
+ * from History loses the provenance permanently. This file provides the codec
+ * needed to persist and restore it.
  *
  * ### Why org.json
- * It ships with the platform and adds no new main dependency; `app/build.gradle.kts` already declares
- * `testImplementation("org.json:json:20250517")`, so JVM unit tests can run the real implementation
- * (mockable android.jar would stub out every org.json method).
+ * It ships with the platform and adds no new main dependency;
+ * `app/build.gradle.kts` already declares
+ * `testImplementation("org.json:json:20250517")`, so JVM unit tests run the real
+ * implementation too (the mockable android.jar stubs out every org.json method).
  * Gson / kotlinx.serialization / Moshi are therefore not introduced.
  *
  * ### Contract
- * - **key name = property name of [ReportData]**. The anti-omission guard in `ReportDataJsonTest` relies on this
- *   invariant: add a property but forget to update this file and the guard case fails.
- * - nullable scalars are written as `JSONObject.NULL` (**not** `null` -- `JSONObject.put(key, null)`
- *   deletes the key in recent org.json versions, which would make the guard case think a field was dropped).
- * - deserialization is **wrapped in try/catch throughout**: malformed JSON, wrong types and unknown schemas all return null,
- *   letting the caller degrade safely and never letting old data crash the app.
- * - numbers always go through `Locale.US` (JSONObject uses `Double.toString` internally,
- *   which is already locale-independent; this only stops us from introducing a default-locale `String.format`).
+ * - **Key names are the [ReportData] property names.** The anti-omission guard in
+ *   `ReportDataJsonTest` relies on that invariant: adding a property without
+ *   updating this file fails the guard case.
+ * - Nullable scalars are written as `JSONObject.NULL` (**not** `null` — in recent
+ *   org.json `JSONObject.put(key, null)` means "remove the key", which would make
+ *   the guard case wrongly report a missing field).
+ * - Deserialization is **try/catch throughout**: malformed JSON, type mismatches
+ *   and unknown schemas all return null so the caller can degrade safely — old
+ *   data must never crash the app.
+ * - Numbers always go through `Locale.US` (`JSONObject` uses `Double.toString`
+ *   internally and is already locale-independent; this only constrains us not to
+ *   introduce `String.format` with the default locale).
  */
 private const val KEY_SCHEMA = "schema"
 
-/** Current schema version. Bump it by 1 whenever the meaning or shape of [ReportData] changes. */
+/** Current schema version. Bump it whenever the meaning or shape of [ReportData] changes. */
 const val REPORT_DATA_SCHEMA: Int = 1
 
 fun ReportData.toJsonString(): String = JSONObject().apply {
@@ -130,13 +137,13 @@ fun ReportData.toJsonString(): String = JSONObject().apply {
     put("spdWarnings", spdWarnings.toJsonStrings())
     put("isLogFit", isLogFit)
 
-    // ─── step status ───
+    // ─── Step status ───
     put("step1Status", step1Status)
     put("step2Status", step2Status)
     put("step3Status", step3Status)
     put("step4Status", step4Status)
 
-    // ─── provenance ───
+    // ─── Provenance ───
     put("step1Source", step1Source)
     putStringOrNull("step1PresetName", step1PresetName)
     putStringOrNull("step1PresetFile", step1PresetFile)
@@ -156,8 +163,9 @@ fun ReportData.toJsonString(): String = JSONObject().apply {
 }.toString()
 
 /**
- * Deserialization. **Any** failure returns null: the caller degrades safely with "restoration failed -> fall back to `ReportData()`"
- * and old or partial data must never crash the app.
+ * Deserialization. Returns null on **any** failure: callers degrade safely with
+ * "restore failed → fall back to `ReportData()`" so that old or truncated data
+ * never crashes the app.
  */
 fun reportDataFromJson(raw: String?): ReportData? {
     if (raw.isNullOrBlank()) return null
@@ -258,13 +266,13 @@ fun reportDataFromJson(raw: String?): ReportData? {
             spdWarnings = o.optStrings("spdWarnings"),
             isLogFit = o.requireBoolean("isLogFit"),
 
-            // step status
+            // Step status
             step1Status = o.requireString("step1Status"),
             step2Status = o.requireString("step2Status"),
             step3Status = o.requireString("step3Status"),
             step4Status = o.requireString("step4Status"),
 
-            // provenance
+            // Provenance
             step1Source = o.requireString("step1Source"),
             step1PresetName = o.optStringOrNull("step1PresetName"),
             step1PresetFile = o.optStringOrNull("step1PresetFile"),
@@ -286,14 +294,16 @@ fun reportDataFromJson(raw: String?): ReportData? {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// write side
+// Write side
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * NaN / Infinity have no legal JSON representation, and org.json's `testValidity` **throws** `JSONException`
- * for them outright (rather than quietly writing null). In production code quantities such as `spdCrossing*` or
- * the spectral arrays can in principle evaluate to non-finite values, so the write side always clamps them back to finite ones:
- * non-null scalars fall back to [fallback] (the default of [ReportData]), array elements fall back to 0.
+ * NaN / Infinity have no legal representation in JSON, and org.json's
+ * `testValidity` **throws** `JSONException` on them (it does not quietly write
+ * null). In production, quantities like `spdCrossing*` or the spectrum arrays can
+ * in theory come out non-finite, so the write side always clamps them back to
+ * finite values first: non-nullable scalars fall back to [fallback] (the
+ * [ReportData] default), array elements fall back to 0.
  */
 private fun Double.finiteOr(fallback: Double): Double = if (isFinite()) this else fallback
 private fun Float.finiteOr(fallback: Float): Double = if (isFinite()) toDouble() else fallback.toDouble()
@@ -331,11 +341,13 @@ private fun Map<String, String>.toJsonStringMap(): JSONObject = JSONObject().als
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// read side
+// Read side
 //
-// `JSONObject.isNull(key)` returns true both for "key absent" and for "value is JSONObject.NULL",
-// so every `optXxxOrNull` naturally folds both cases into null -- exactly the lenient semantics we want.
-// Non-null scalars use `optXxx(key, default)`, so both a missing key and an explicit NULL fall back to the default value.
+// `JSONObject.isNull(key)` returns true both for "key absent" and for "value is
+// JSONObject.NULL", so every `optXxxOrNull` naturally collapses both cases into
+// null — exactly the lenient semantics we want. Non-nullable scalars use
+// `optXxx(key, default)`, where both absence and explicit NULL fall back to the
+// default.
 // ─────────────────────────────────────────────────────────────────────────────
 
 private fun JSONObject.optStringOrNull(key: String): String? =
@@ -348,9 +360,11 @@ private fun JSONObject.optDoubleOrNull(key: String): Double? =
     if (isNull(key)) null else optDouble(key).takeIf { it.isFinite() }
 
 /**
- * Non-null but **a missing field means the data is broken**: do not silently fill in a default; let the whole deserialization
- * return null so the caller falls back to a fresh `ReportData()`. Otherwise a partial snapshot would masquerade as
- * "the user really never ran Step 1", which is far harder to diagnose than an outright restoration failure.
+ * Non-nullable, but **a missing field counts as corrupt data**: instead of
+ * silently filling in a default, let the whole deserialization return null so
+ * the caller falls back to a fresh `ReportData()`. Otherwise a truncated
+ * snapshot would masquerade as "the user really never ran Step 1", which is
+ * harder to debug than an outright restore failure.
  */
 private fun JSONObject.requireString(key: String): String =
     getString(key)

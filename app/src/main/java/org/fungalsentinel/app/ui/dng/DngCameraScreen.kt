@@ -64,7 +64,7 @@ fun DngCameraScreen(
     var lastSavedFile by remember { mutableStateOf<String?>(null) }
 
     val savedMessage = stringResource(R.string.dng_saved)
-    val failedMessage = "Failed to save to gallery"
+    val failedMessage = stringResource(R.string.dng_save_failed)
 
     LaunchedEffect(Unit) {
         cameraManager.onDngSaved = { file, _ ->
@@ -129,7 +129,7 @@ fun DngCameraScreen(
                             .clickable(onClick = onBack),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.ArrowDownward, contentDescription = "Back", tint = AppColors.TextPrimary)
+                        Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.back), tint = AppColors.TextPrimary)
                     }
                     TutorialButton(
                         onClick = tutorial::show,
@@ -228,7 +228,7 @@ fun DngCameraScreen(
                         .padding(8.dp)
                 ) {
                     Text(
-                        text = "Last: $lastSavedFile",
+                        text = stringResource(R.string.dng_last_saved, lastSavedFile ?: ""),
                         color = AppColors.Accent,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -251,7 +251,7 @@ fun DngCameraScreen(
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.ArrowDownward, contentDescription = "Back", tint = AppColors.TextPrimary)
+                    Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.back), tint = AppColors.TextPrimary)
                 }
                 TutorialButton(onClick = tutorial::show)
             }

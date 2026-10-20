@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
  * Half-screen layout.
  * Trigger rule: Settings toggle ON AND landscape AND light sensor covered.
  * Hysteresis: covered < 10 lux, uncovered > 30 lux (no flicker at threshold).
- * 【v2.2.3】Added neon border to prevent edge-touch issues.
+ * [v2.2.3] Added neon border to prevent edge-touch issues.
  */
 @Composable
 fun HalfScreenLayout(

@@ -84,7 +84,7 @@ fun HalfScreenPreviewScreen(
                 title = { Text(stringResource(R.string.half_preview_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = { TutorialButton(onClick = tutorial::show) }
@@ -149,7 +149,7 @@ fun HalfScreenPreviewScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Covered\n${(ratio * 100).roundToInt()}%",
+                        text = stringResource(R.string.half_preview_covered_pct, (ratio * 100).roundToInt()),
                         color = Color.Gray,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -168,8 +168,9 @@ fun HalfScreenPreviewScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = if (lux < 0f) "Light: n/a"
-                        else "Light: %.0f lux — %s".format(
+                        text = if (lux < 0f) stringResource(R.string.half_preview_light_na)
+                        else stringResource(
+                            R.string.half_preview_light,
                             lux,
                             if (covered) stringResource(R.string.half_preview_covered)
                             else stringResource(R.string.half_preview_uncovered)

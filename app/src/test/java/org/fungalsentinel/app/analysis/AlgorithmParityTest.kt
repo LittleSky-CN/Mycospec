@@ -142,17 +142,26 @@ class AlgorithmParityTest {
         )
 
         assertNotNull(result)
-        // Weights must equal resp_c / Σ resp_c and form a partition of unity.
+        // Since schema v3 the result is indexed by WAVELENGTH on the canonical
+        // 380..780 nm grid, so its arrays are 401 long no matter how many pixels
+        // the fixture had. The 31 nm-wide fixture axis therefore lives at grid
+        // indices 50..80 only.
         val res = result!!
+        assertEquals(401, res.gridPoints)
+        assertTrue("expected masked grid points, got ${res.maskedCount}", res.maskedCount >= 10)
+        // Weights must equal resp_c / Σ resp_c and form a partition of unity.
+        // The derived curves are RESAMPLED onto the grid together with the
+        // responses, so the identity holds to interpolation accuracy rather than
+        // bit-exactly (see the note in SpdCalibrationResult).
         val eps = 1e-6f
         var checked = 0
-        for (i in 0 until n) {
+        for (i in res.wavelengths.indices) {
             if (!res.mask[i]) continue
             val total = res.respR[i] + res.respG[i] + res.respB[i] + eps
-            assertEquals(res.respR[i] / total, res.wR[i], 1e-6f)
-            assertEquals(res.respG[i] / total, res.wG[i], 1e-6f)
-            assertEquals(res.respB[i] / total, res.wB[i], 1e-6f)
-            assertEquals(1f, res.wR[i] + res.wG[i] + res.wB[i], 1e-5f)
+            assertEquals(res.respR[i] / total, res.wR[i], 1e-3f)
+            assertEquals(res.respG[i] / total, res.wG[i], 1e-3f)
+            assertEquals(res.respB[i] / total, res.wB[i], 1e-3f)
+            assertEquals(1f, res.wR[i] + res.wG[i] + res.wB[i], 1e-4f)
             checked++
         }
         assertTrue("expected at least 10 masked wavelengths, got $checked", checked >= 10)
@@ -191,8 +200,17 @@ class AlgorithmParityTest {
         )
 
         assertNotNull(result)
-        assertTrue(result!!.respG[15] > result.respG[14] * 5f)
-        assertTrue(result.respG[15] > result.respG[16] * 5f)
+        // No smoothing IS still the rule for the response itself -- but it is now
+        // carried on the 1 nm wavelength grid, so the spike is addressed by
+        // WAVELENGTH, not by pixel index. This fixture uses slope = 1 px/nm with
+        // λ(0) = 430 nm, i.e. its pixels sit exactly on the grid nodes, so the
+        // spike must land on node 445 nm unchanged.
+        val res = result!!
+        fun indexOfNm(nm: Float): Int = res.wavelengths.indexOfFirst { it >= nm }
+        val peak = indexOfNm(445f)
+        assertEquals(445f, res.wavelengths[peak], 0f)
+        assertTrue(res.respG[peak] > res.respG[peak - 1] * 5f)
+        assertTrue(res.respG[peak] > res.respG[peak + 1] * 5f)
     }
 
     @Test

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MycoSpec</string>
+    <string name="app_name" translatable="false">MycoSpec</string>
     <string name="home_welcome">Welcome to MycoSpec</string>
     <string name="home_tagline">Pocket Spectral Analyzer</string>
     <string name="home_intro">Choose an action to start an experiment or continue a previous one.</string>
@@ -101,11 +101,12 @@
     <string name="tutorial_step4_title">Standard curve</string>
     <string name="tutorial_step4_body">To build the standard curve, insert each standard and its blank into the sample port and enter the corresponding concentration.</string>
     <string name="settings_language">Language</string>
-    <string name="language_system">Follow system</string>
-    <string name="language_english">English</string>
-    <string name="language_chinese">Chinese</string>
-    <string name="language_spanish">Español</string>
-    <string name="language_chichewa">Chichewa</string>
+    <string name="language_system" translatable="false">Follow system</string>
+    <string name="language_english" translatable="false">English</string>
+    <string name="language_chinese" translatable="false">中文</string>
+    <string name="language_spanish" translatable="false">Español</string>
+    <string name="language_chichewa" translatable="false">Chichewa</string>
+    <string name="language_french" translatable="false">Français</string>
     <string name="tutorial_capture_title">Capture Help</string>
     <string name="tutorial_capture_body">Use Capture to shoot 1–5 RAW frames, or import from Gallery / Files (DNG). Keep phone, slit, grating, ISO and focus unchanged between frames. Tap the × on a thumbnail to delete it.</string>
     <string name="tutorial_report_title">Report Help</string>
@@ -181,9 +182,14 @@
     <!-- v2.2.6 preset parity: L3 drift is a soft hint, never a rejection (DEF-A04) -->
     <string name="st_spd_drift_warn">Wavelength mapping drifted %1$.1f nm — SPD correction may be off; consider re-running Step 2</string>
     <string name="st_spd_drift_severe">Wavelength mapping drifted %1$.1f nm (different device or positioning shot?) — quantitative results are unreliable</string>
-    <string name="st_spd_recomputed">SPD response recomputed for the current wavelength mapping</string>
-    <string name="st_spd_legacy_no_recompute">Legacy preset without raw lamp profiles — cannot recompute; response used as saved</string>
     <string name="st_spd_skip_reason"> [SPD skipped: %1$s]</string>
+    <!-- schema v3: SPD presets are stored as wavelength-indexed JSON files (SAF export/import) -->
+    <string name="act_export_spd_preset">Export SPD file</string>
+    <string name="act_import_spd_preset">Import SPD file</string>
+    <string name="st_spd_export_ok">SPD preset exported (MycoSpec SPD schema v3)</string>
+    <string name="st_spd_export_failed">SPD export failed — %1$s</string>
+    <string name="st_spd_export_nothing">Nothing to export — run or load a Step 2 calibration first</string>
+    <string name="st_spd_import_store_failed">The SPD file is valid, but it could not be saved as a local preset</string>
     <string name="lbl_group_counts">Blank: %1$d | Sample: %2$d</string>
     <string name="lbl_preset_name">Preset name</string>
     <string name="note_step2_keep">Keep phone, grating, slit, ISO, and focus unchanged. Use the standard source matching the SPD configured in Settings.</string>
@@ -218,7 +224,7 @@
     <string name="warn_low_r2">Low R² (&lt;0.95) — curve may not be reliable</string>
     <string name="warn_negative_pred">Negative prediction — check blank / calibration</string>
     <string name="warn_out_of_range">Prediction outside calibration range</string>
-    <string name="warn_log_switch">Low Linear R² (%.2f), switched to Logarithmic fit.</string>
+    <string name="warn_log_switch">Low Linear R² (%1$.2f), switched to Logarithmic fit.</string>
     <string name="st_filter_mode"> [filter mode]</string>
     <string name="step1_g_error_filter">— (filter mode)</string>
     <string name="report_fig3_filter">Figure 3: Two-point Fit (G+R) [Filter Mode]</string>
@@ -235,4 +241,174 @@
     <string name="cam_err_permission">Camera permission not granted</string>
     <string name="cam_err_access">Camera access error: %1$s</string>
     <string name="cam_err_dispatch">Capture dispatch failed: %1$s</string>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         v2.3.1 i18n sweep: generic actions, accessibility labels
+         ══════════════════════════════════════════════════════════════════ -->
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_export">Export</string>
+    <string name="action_dismiss">×</string>
+    <string name="action_reset">Reset</string>
+    <string name="cd_close">Close</string>
+    <string name="cd_remove">Remove</string>
+    <string name="cd_capture_index">Capture %1$d</string>
+
+    <!-- ══════════════ Report screen ══════════════ -->
+    <string name="report_title">MycoSpec Analysis Report</string>
+    <string name="report_project">Project: %1$s</string>
+    <string name="report_page">— Page %1$d —</string>
+    <string name="report_page1_title">Step 1: Wavelength Calibration</string>
+    <string name="report_page2_title">Step 2: Spectral Response &amp; Fusion — MycoSpec v2.3.0</string>
+    <string name="report_page3_title">Step 3: Sample Analysis</string>
+    <string name="report_page4_title">Step 4: Concentration Regression</string>
+    <string name="report_fig1">Figure 1: Positioning preview with Auto ROI</string>
+    <string name="report_auto_roi">Auto X ROI  R(%1$snm) G(%2$snm) B(%3$snm)</string>
+    <string name="report_fig2">Figure 2: Automatic 1D Profiles and Dynamic Peak Windows</string>
+    <string name="report_fig3">Figure 3: Two-point Fit (B+R) with Third-point Validation (G)</string>
+    <string name="report_fit">Fit: p = %1$.4fλ %2$+.2f   Train (B, R)   Validate (G)   Error: %3$+.2f nm</string>
+    <string name="report_sec_wl_params">Wavelength Calibration Parameters</string>
+    <string name="report_lbl_source">Source</string>
+    <string name="report_lbl_preset_name">Preset name</string>
+    <string name="report_lbl_preset_file_id">Preset file ID</string>
+    <string name="report_lbl_imported_at">Imported at</string>
+    <string name="report_lbl_mapping_equation">[Wavelength Mapping Equation]</string>
+    <string name="report_lbl_calibration_metadata">[Calibration Metadata]</string>
+    <string name="report_val_calibration_metadata">Exposure: %1$s   X ROI: %2$s</string>
+    <string name="report_lbl_validation_results">[Validation Results]</string>
+    <string name="report_val_validation_results">Train: %1$s   Validate: %2$s</string>
+    <string name="report_val_g_residual">G Residual: %1$s   G Error: %2$s</string>
+    <string name="report_lbl_peak_estimator">[Peak Estimator]</string>
+    <string name="report_val_peak_estimator">Valley-bounded Gaussian core (v1.4.5); legacy centroid = diagnostic only</string>
+    <string name="report_calibration_quality">Calibration Quality: %1$s</string>
+    <string name="report_fig4a">Figure 4a: Positioning LEDs — RAW measured (independent data)</string>
+    <string name="report_fig4b">Figure 4b: SPD-corrected (thin) + ONE pointwise-fused curve (thick)</string>
+    <string name="report_fig4c">Figure 4c: Camera absolute response = Lamp_c / SPD_true (masked)</string>
+    <string name="report_fig4d">Figure 4d: Response-proportional channel weights (sum = 1) with responsivity crossings</string>
+    <string name="report_sec_spd_params">SPD Response &amp; Fusion Parameters</string>
+    <string name="report_lbl_status_source">Status / source</string>
+    <string name="report_val_status_source">%1$s · %2$s</string>
+    <string name="report_lbl_frames_exposure">Frames / Exposure</string>
+    <string name="report_val_frames_exposure">%1$s / %2$s</string>
+    <string name="report_lbl_effective_band">[Effective Band]</string>
+    <string name="report_val_effective_band">%1$s | masked px %2$s | ratio 0.1</string>
+    <string name="report_lbl_responsivity_crossings">[Responsivity Crossings (diagnostic only)]</string>
+    <string name="report_lbl_cross_channel_agreement">[Cross-channel Agreement]</string>
+    <string name="report_lbl_fused_curve_peak">[Fused Curve Peak]</string>
+    <string name="report_lbl_response_peaks">[Response Peaks (absolute)]</string>
+    <string name="report_lbl_raw_positioning_peaks">[RAW Positioning Peaks]</string>
+    <string name="report_lbl_corrected_positioning_peaks">[Corrected Positioning Peaks]</string>
+    <string name="report_lbl_method">[Method]</string>
+    <string name="report_fig7">Figure 7: Blank-subtracted &amp; SPD-corrected spectrum vs Blank</string>
+    <string name="report_fig7_note">Green = corrected sample, Red = blank\nLow-response bands (below 20 percent of the channel peak) are excluded; isolated spikes are replaced locally.</string>
+    <string name="report_sec_sample_params">Sample Analysis Parameters</string>
+    <string name="report_val_fluorophore">%1$s (%2$s)</string>
+    <string name="report_lbl_analysis_channel">Analysis channel</string>
+    <string name="report_lbl_spd_correction">SPD correction</string>
+    <string name="report_lbl_peak_wavelength">[Peak Wavelength]</string>
+    <string name="report_lbl_peak_intensity">[Peak Intensity]</string>
+    <string name="report_lbl_fwhm">[FWHM]</string>
+    <string name="report_lbl_centroid">[Centroid]</string>
+    <string name="report_lbl_integration_window">Integration window</string>
+    <string name="report_lbl_blank_mean_area">Blank mean area</string>
+    <string name="report_lbl_sample_mean_area">Sample mean area</string>
+    <string name="report_lbl_corrected_area">[Corrected Integrated Area]</string>
+    <string name="report_lbl_sd_replicates">Sample SD / Replicates</string>
+    <string name="report_val_sd_replicates">%1$s / %2$s</string>
+    <string name="report_fig8">Figure 8: Standard curve with unknown sample</string>
+    <string name="report_sec_conc_params">Concentration Parameters</string>
+    <string name="report_lbl_standard">Standard</string>
+    <string name="report_lbl_regression_formula">[Regression Formula]</string>
+    <string name="report_lbl_predicted_conc">[Predicted Concentration]</string>
+    <string name="report_warning">⚠ %1$s</string>
+
+    <!-- ══════════════ Report: provenance / status field values ══════════════ -->
+    <string name="report_source_not_run">Not run</string>
+    <string name="report_source_preset">Preset · %1$s</string>
+    <string name="report_source_live">Live calibration</string>
+    <string name="report_source_live_detail">Live calibration · %1$s</string>
+    <string name="report_source_live_curve">Live standard curve</string>
+    <string name="report_spd_status_pending">Pending</string>
+    <string name="report_spd_status_calibrated">Calibrated (%1$d lamp frame(s))</string>
+    <string name="report_spd_method_note">Numerator = Pos (independent LEDs); pointwise ops only; response-proportional weights (sum = 1)</string>
+    <string name="report_spd_response_fused">Fused continuous curve F(λ) available (Report Page 2)</string>
+    <string name="report_peaks_from_preset">Loaded from preset (peaks rounded to px)</string>
+    <string name="report_analysis_error">Analysis error: %1$s</string>
+    <string name="report_val_x_roi">[%1$d, %2$d] (Width: %3$d px)</string>
+    <string name="report_val_training_points">B(%1$snm), R(%2$snm)</string>
+    <string name="report_val_validation_point">G(%1$snm)</string>
+    <string name="report_val_g_residual_px">%1$+.2f pixels</string>
+    <string name="report_val_integration_window">[%1$d, %2$d] px</string>
+    <string name="report_val_integrated_area">%1$.1f (ch=%2$s, resp=%3$s)</string>
+
+    <!-- ══════════════ Step status suffixes ══════════════ -->
+    <string name="st_rb_swap_retry"> [R/B swap retry]</string>
+    <string name="st_rb_auto_corrected"> [R/B auto-corrected]</string>
+    <string name="st_exp_echo"> [exp b=%1$.3fs s=%2$.3fs]</string>
+    <string name="st_log_fit"> (Log-Fit)</string>
+    <string name="st_missing_exposure"> ⚠ %1$d frame(s) missing exposure, not normalized</string>
+    <string name="warn_negative_slope">Negative slope detected — check for overexposure or incorrect blank subtraction.</string>
+
+    <!-- ══════════════ History screen ══════════════ -->
+    <string name="history_tab_projects">Projects</string>
+    <string name="history_tab_wl_presets">λ Presets</string>
+    <string name="history_tab_spd_presets">SPD Presets</string>
+    <string name="history_in_progress">In progress – tap to continue</string>
+    <string name="history_finished">Finished</string>
+    <string name="history_wl_presets_empty">No wavelength presets yet. Save one from Step 1.</string>
+    <string name="history_spd_presets_empty">No SPD presets yet. Save one from Step 2.</string>
+    <string name="history_delete_preset_title">Delete preset</string>
+    <string name="history_delete_preset_msg">Delete \"%1$s\"? This cannot be undone.</string>
+    <string name="history_edit_preset_title">Edit preset</string>
+    <string name="history_slope_label">Slope (px/nm)</string>
+    <string name="history_intercept_label">Intercept (px)</string>
+    <string name="history_rg_coefficient">R/G coefficient</string>
+    <string name="history_bg_coefficient">B/G coefficient</string>
+    <string name="history_preset_summary_wl">slope=%1$s intercept=%2$s</string>
+    <string name="history_preset_summary_curve">slope=%1$s intercept=%2$s R²=%3$s</string>
+    <string name="history_preset_summary_spd">R=%1$s B=%2$s</string>
+
+    <!-- ══════════════ Settings / parameters / reset ══════════════ -->
+    <string name="settings_channel_nm">%1$s (nm)</string>
+    <string name="settings_current_source">Current source: %1$s</string>
+    <string name="settings_spd_installed">SPD CSV installed</string>
+    <string name="settings_focus_section">Focus Control</string>
+    <string name="settings_infinity">Infinity (∞)</string>
+    <string name="settings_macro">Macro</string>
+    <string name="settings_diagnostic_log">Diagnostic log</string>
+    <string name="settings_log_desc">Rolling local log (2 MB max). Never uploaded automatically.</string>
+    <string name="settings_save_log">Save diagnostic log (%1$d KB)</string>
+    <string name="settings_clear_log">Clear diagnostic log</string>
+    <string name="log_share_title">Save diagnostic log</string>
+    <string name="parameters_title">Parameters</string>
+    <string name="parameters_exposure">Exposure (ms, 10–3000)</string>
+    <string name="parameters_iso">ISO (50–1600)</string>
+    <string name="parameters_focus">Focus (D, 0 = ∞)</string>
+    <string name="parameters_wb">White balance (K or Auto)</string>
+    <string name="reset_confirm_title">Reset current experiment?</string>
+    <string name="reset_confirm_body">This will clear all captures, calibrations, and standards.\nHistory and published DNG files will be kept.</string>
+
+    <!-- ══════════════ Half-screen preview ══════════════ -->
+    <string name="half_preview_covered_pct">Covered\n%1$d%%</string>
+    <string name="half_preview_light">Light: %1$.0f lux — %2$s</string>
+    <string name="half_preview_light_na">Light: n/a</string>
+
+    <!-- ══════════════ Sample / fluorophore ══════════════ -->
+    <string name="step3_fluorophore_placeholder">— Select a fluorophore —</string>
+
+    <!-- ══════════════ Camera manager: errors without a resource yet ══════════════ -->
+    <string name="cam_err_session_create">Session creation failed: %1$s</string>
+    <string name="cam_err_session_not_ready">Session not ready</string>
+    <string name="cam_err_camera_not_open">Camera not open</string>
+    <string name="cam_err_busy">Capture busy — previous frame still processing</string>
+    <string name="cam_err_prepare">Could not prepare camera for capture: %1$s</string>
+    <string name="cam_err_timeout_schedule">Could not schedule capture timeout</string>
+
+    <!-- ══════════════ SPD loader (CSV import) ══════════════ -->
+    <string name="spd_err_cannot_open">Cannot open file</string>
+    <string name="spd_err_too_short">CSV too short</string>
+    <string name="spd_err_parse_failed">Parse failed</string>
 </resources>

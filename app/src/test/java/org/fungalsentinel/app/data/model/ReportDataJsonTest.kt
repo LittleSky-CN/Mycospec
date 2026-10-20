@@ -10,23 +10,26 @@ import org.junit.Test
 import java.lang.reflect.Modifier
 
 /**
- * [v2.2.8] codec contract of the persisted [ReportData] snapshot.
+ * [v2.2.8] Encode/decode contract for the persisted [ReportData] snapshot.
  *
- * The point of this file is not "to verify that org.json works" but to hold one invariant:
- * **when a finished project is reopened from History, the report and the Step 1/2/4 preset provenance must come back unchanged.**
- * The three `load*Preset` only touch reportData in memory and never write to the `captures` table, so this snapshot is the
- * only carrier of the provenance -- a serialiser that drops any single field causes permanent data loss.
+ * The point of this file is not "verify that org.json works", it is to hold one invariant:
+ * **when a finished project is reopened from History, the report and the Step 1/2/4 preset
+ * provenance must come back exactly as they were.**
+ * The three `load*Preset` calls only mutate the in-memory reportData and never write the
+ * `captures` table, so this snapshot is the only carrier of provenance information -- any
+ * field the serializer misses is permanent data loss.
  *
- * Coverage: full-field round trip (102 fields asserted one by one), default round trip, malformed-input degradation,
- * schema mismatch degradation, three special containers, and the **anti-omission guard**.
+ * Coverage: full-field round trip (102 fields asserted one by one), default-value round trip,
+ * malformed-input degradation, schema-version mismatch degradation, three special containers,
+ * and the **anti-omission guardrail**.
  */
 class ReportDataJsonTest {
 
     // ─────────────────────────────────────────────────────────────────────
-    // 1. full-field round trip
+    // 1. Full-field round trip
     // ─────────────────────────────────────────────────────────────────────
 
-    /** Every field is set to a **non-default** value, so forgetting to serialise any of them is caught by an assertion. */
+    /** Every field is filled with a **non-default** value, so any missing serialization is caught by an assertion. */
     private fun fullyPopulated() = ReportData(
         // ─── Step 1 wavelength calibration ───
         wavelengthQuality = "wavelengthQuality#1",
@@ -120,13 +123,13 @@ class ReportDataJsonTest {
         spdWarnings = listOf("spdWarnings.a", "spdWarnings.b"),
         isLogFit = true,
 
-        // ─── step status ───
+        // ─── Step statuses ───
         step1Status = "step1Status#85",
         step2Status = "step2Status#86",
         step3Status = "step3Status#87",
         step4Status = "step4Status#88",
 
-        // ─── provenance ───
+        // ─── Provenance ───
         step1Source = "step1Source#89",
         step1PresetName = "step1PresetName#90",
         step1PresetFile = "step1PresetFile#91",
@@ -151,10 +154,11 @@ class ReportDataJsonTest {
         assertNotNull("deserialization must not return null", out)
         out!!
 
-        // whole-object equality: equals on a data class covers all 102 fields and is the last safety net.
-        assertEquals("the whole ReportData must be identical after a round trip", src, out)
+        // Whole-object equality: the data class equals covers all 102 fields and is the last line of defence.
+        assertEquals("the whole ReportData must be equal after the round trip", src, out)
 
-        // per-field assertions: the whole-object assertion only reports "not equal" once, while per-field pins down the exact field.
+        // Per-field assertions: a whole-object failure only reports "not equal" once, whereas
+        // per-field assertions pinpoint the exact field immediately.
         // ─── Step 1 wavelength calibration ───
         assertEquals("wavelengthQuality", src.wavelengthQuality, out.wavelengthQuality)
         assertEquals("wavelengthGError", src.wavelengthGError, out.wavelengthGError)
@@ -247,13 +251,13 @@ class ReportDataJsonTest {
         assertEquals("spdWarnings", src.spdWarnings, out.spdWarnings)
         assertEquals("isLogFit", src.isLogFit, out.isLogFit)
 
-        // ─── step status ───
+        // ─── Step statuses ───
         assertEquals("step1Status", src.step1Status, out.step1Status)
         assertEquals("step2Status", src.step2Status, out.step2Status)
         assertEquals("step3Status", src.step3Status, out.step3Status)
         assertEquals("step4Status", src.step4Status, out.step4Status)
 
-        // ─── provenance ───
+        // ─── Provenance ───
         assertEquals("step1Source", src.step1Source, out.step1Source)
         assertEquals("step1PresetName", src.step1PresetName, out.step1PresetName)
         assertEquals("step1PresetFile", src.step1PresetFile, out.step1PresetFile)
@@ -274,11 +278,11 @@ class ReportDataJsonTest {
     fun defaultRoundTrip_preservesDefaults() {
         val out = reportDataFromJson(ReportData().toJsonString())
         assertNotNull(out)
-        assertEquals("a default ReportData must be identical after a round trip", ReportData(), out)
+        assertEquals("a default ReportData must be equal after the round trip", ReportData(), out)
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 2. degradation path: every exception must become null and never be thrown to the caller
+    // 2. Degradation path: any exception must turn into null, never be thrown to the caller
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -288,14 +292,14 @@ class ReportDataJsonTest {
         assertNull("whitespace only", reportDataFromJson("   \n\t "))
         assertNull("not JSON", reportDataFromJson("this is not json at all"))
         assertNull("truncated JSON", reportDataFromJson("{\"schema\":1,\"wavelengthQuality\":"))
-        assertNull("a JSON array instead of an object", reportDataFromJson("[1,2,3]"))
+        assertNull("JSON array instead of object", reportDataFromJson("[1,2,3]"))
         assertNull("only schema, everything else missing", reportDataFromJson("{\"schema\":1}"))
         assertNull(
-            "a field that should be an array was given a string",
+            "field should be an array but a string was given",
             reportDataFromJson("{\"schema\":1,\"redProfile\":\"not-an-array\"}")
         )
         assertNull(
-            "a field that should be a number was given a string",
+            "field should be a number but a string was given",
             reportDataFromJson("{\"schema\":1,\"spdFrames\":\"not-a-number\"}")
         )
     }
@@ -304,15 +308,16 @@ class ReportDataJsonTest {
     fun unknownSchema_returnsNull() {
         val raw = ReportData().toJsonString()
 
-        // establish the baseline first: a normal snapshot of the current schema must restore, otherwise the assertions below are meaningless.
-        assertNotNull("a normal snapshot of the current schema must restore", reportDataFromJson(raw))
+        // Establish the baseline first: a normal snapshot of the current schema must be
+        // recoverable, otherwise the assertions below are meaningless.
+        assertNotNull("a normal snapshot of the current schema must be recoverable", reportDataFromJson(raw))
 
         assertNull(
             "a future schema version must be rejected",
             reportDataFromJson(JSONObject(raw).put("schema", REPORT_DATA_SCHEMA + 1).toString())
         )
         assertNull(
-            "an older schema version must be rejected",
+            "a too-old schema version must be rejected",
             reportDataFromJson(JSONObject(raw).put("schema", REPORT_DATA_SCHEMA - 1).toString())
         )
         assertNull(
@@ -326,7 +331,7 @@ class ReportDataJsonTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 3. three special containers
+    // 3. Three special containers
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -378,20 +383,24 @@ class ReportDataJsonTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 4. anti-omission guard
+    // 4. Anti-omission guardrail
     //
-    // the easiest way for the serialiser to rot: someone adds a field to ReportData and updates the ViewModel
-    // but forgets ReportDataJson.kt -- the value of that field is then lost forever after reopening the project,
-    // with no compile error and no test failure. The three cases below exist to plug exactly that hole.
+    // The most likely way for the serializer to rot: someone adds a field to ReportData and
+    // updates the ViewModel, but forgets to update ReportDataJson.kt -- so the value of that
+    // field is permanently lost when the project is reopened, with no compile error and no
+    // test failure. The three cases below are designed to plug exactly that hole.
     // ─────────────────────────────────────────────────────────────────────
 
     /**
-     * all property names of [ReportData], reflected from **the class itself** rather than from a hand-written list.
+     * All property names of [ReportData], reflected from **the class itself** rather than a
+     * hand-written list.
      *
-     * `declaredFields` is used instead of `declaredMethods`: the backing field names of a data class match the property names
-     * verbatim, so there is no need to reverse-engineer them from `getXxx` / `isXxx` -- the latter would mangle a Boolean property
-     * that already starts with `is`, such as `isLogFit`. This also avoids pulling in `kotlin-reflect`:
-     * its version must match kotlin-stdlib exactly, and adding a dependency just for one assertion is not worth it.
+     * Uses `declaredFields` rather than `declaredMethods`: for a data class the backing field
+     * names match the property names verbatim, so there is no need to reverse-engineer
+     * `getXxx` / `isXxx` -- the latter gets it wrong for Boolean properties such as `isLogFit`
+     * that already start with `is`. This also avoids pulling in `kotlin-reflect`: its version
+     * must be strictly aligned with kotlin-stdlib, and adding a dependency for one assertion
+     * is not worth it.
      */
     private fun reportDataPropertyNames(): Set<String> =
         ReportData::class.java.declaredFields
@@ -411,28 +420,31 @@ class ReportDataJsonTest {
         val properties = reportDataPropertyNames()
         val keys = jsonKeys(ReportData().toJsonString())
 
-        // contract: the serialised key set must be exactly "all property names + schema", no more and no less.
+        // Contract: the serialized key set must be exactly "all property names + schema" -- not
+        // one more, not one less.
         assertEquals(
-            "the ReportData property set and the serialised key set differ -- most likely a field was added but " +
-                "ReportDataJson.kt was not updated. Missing keys: ${properties - keys}; " +
+            "ReportData's property set and its serialized key set disagree -- most likely a field " +
+                "was added without updating ReportDataJson.kt. Missing keys: ${properties - keys}; " +
                 "extra keys: ${keys - properties - "schema"}",
             properties + "schema",
             keys
         )
-        // if reflection breaks (both sets become empty) the assertion above would pass spuriously, so pin the size to a lower bound.
+        // If reflection breaks (both sides become empty) the assertion above passes vacuously,
+        // so pin the size to a lower bound here.
         assertTrue(
-            "reflection only found ${properties.size} fields; the guard may have stopped working",
+            "reflection only found ${properties.size} fields, the guardrail may be broken",
             properties.size >= 100
         )
     }
 
     @Test
     fun guardrail_detectsADroppedKey() {
-        // reverse check that the guard has teeth: delete one key by hand and it must name **exactly which** field.
+        // Reverse check that the guardrail has teeth: drop one key by hand and it must pinpoint
+        // **exactly which field** is affected.
         val properties = reportDataPropertyNames()
         val pruned = jsonKeys(ReportData().toJsonString()) - "step1PresetName"
         assertEquals(
-            "after deleting step1PresetName by hand, the guard must name that exact field",
+            "after manually dropping step1PresetName, the guardrail must report exactly this field",
             setOf("step1PresetName"),
             properties - pruned
         )
@@ -440,8 +452,9 @@ class ReportDataJsonTest {
 
     @Test
     fun guardrail_reflectionActuallySeesTheFields() {
-        // one more layer: pin a few known fields spread across different blocks to prove reflection really saw them,
-        // so that a broken filter cannot leave the set empty and let the two assertions above pass spuriously.
+        // One more layer: pin a few known fields from different sections that reflection really
+        // does see, so a broken filter cannot produce an empty set and make the two cases above
+        // pass vacuously.
         val properties = reportDataPropertyNames()
         assertTrue(properties.contains("wavelengthQuality"))
         assertTrue(properties.contains("step1PresetName"))

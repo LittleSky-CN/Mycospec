@@ -34,7 +34,7 @@ class TutorialController internal constructor() {
 fun HelpTopBar(title: String, tutorial: TutorialController, onBack: (() -> Unit)? = null) {
     TopAppBar(
         title = { Text(title) },
-        navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+        navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
         actions = { TutorialButton(onClick = { tutorial.show() }) }
     )
 }
@@ -82,7 +82,7 @@ fun TutorialHost(
 
     if (showDialog) {
         Dialog(
-            onDismissRequest = { showDialog = false }, // closes the dialog only, does not reset state
+            onDismissRequest = { showDialog = false }, // Only closes the dialog, does not reset the state
             properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
         ) {
             Card(
@@ -92,7 +92,7 @@ fun TutorialHost(
             ) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        IconButton(onClick = { showDialog = false }) { Icon(Icons.Default.Close, "Close") }
+                        IconButton(onClick = { showDialog = false }) { Icon(Icons.Default.Close, stringResource(R.string.cd_close)) }
                     }
                     Icon(Icons.Default.Info, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.height(16.dp))
@@ -111,11 +111,11 @@ fun TutorialHost(
                     )
                     Spacer(Modifier.height(20.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        // Skip button: closes only, does not reset state
+                        // Skip button: only closes, does not reset the state
                         OutlinedButton(onClick = { showDialog = false }, modifier = Modifier.weight(1f)) {
                             Text(stringResource(R.string.tutorial_skip))
                         }
-                        // Got it button: closes only; the state was already marked in LaunchedEffect
+                        // Got it button: only closes, the state was already marked in LaunchedEffect
                         Button(onClick = { showDialog = false }, modifier = Modifier.weight(1f)) {
                             Text(stringResource(R.string.tutorial_got_it))
                         }

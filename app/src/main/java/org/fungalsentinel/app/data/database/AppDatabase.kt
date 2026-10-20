@@ -127,11 +127,13 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * [v2.2.8] persists the report snapshot.
+         * [v2.2.8] Persisting the report snapshot.
          *
-         * Deliberately **without** `NOT NULL DEFAULT`: project rows written before v3 have no such snapshot at all,
-         * and a NOT NULL column would force us to invent a default value -- that is, to fabricate content out of nothing. Leaving NULL makes
-         * [reportDataFromJson] return null, and the reader can simply fall back to `ReportData()`.
+         * Deliberately **without** `NOT NULL DEFAULT`: project rows stored before
+         * v3 have no snapshot at all, and NOT NULL would force a made-up default,
+         * which is inventing content out of thin air. Leaving it NULL makes
+         * [reportDataFromJson] return null, and the reader falls back to
+         * `ReportData()`.
          */
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {

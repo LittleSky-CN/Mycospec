@@ -65,9 +65,9 @@ fun HistoryScreen(
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                 TabRow(selectedTabIndex = tab) {
-                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Projects") })
-                    Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("λ Presets") })
-                    Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("SPD Presets") })
+                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.history_tab_projects)) })
+                    Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.history_tab_wl_presets)) })
+                    Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(stringResource(R.string.history_tab_spd_presets)) })
                     Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text(stringResource(R.string.history_curve_presets)) })
                 }
 
@@ -101,9 +101,9 @@ fun HistoryScreen(
                                             )
                                             Text(
                                                 if (project.status == "IN_PROGRESS") {
-                                                    "In progress – tap to continue"
+                                                    stringResource(R.string.history_in_progress)
                                                 } else {
-                                                    "Finished"
+                                                    stringResource(R.string.history_finished)
                                                 },
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = if (project.status == "IN_PROGRESS") {
@@ -115,10 +115,10 @@ fun HistoryScreen(
                                         }
                                         Row {
                                             IconButton(onClick = { onExport(project) }) {
-                                                Icon(Icons.Default.FileDownload, contentDescription = "Export")
+                                                Icon(Icons.Default.FileDownload, contentDescription = stringResource(R.string.action_export))
                                             }
                                             IconButton(onClick = { onDelete(project) }) {
-                                                Icon(Icons.Default.Delete, contentDescription = "Delete")
+                                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete))
                                             }
                                         }
                                     }
@@ -129,14 +129,14 @@ fun HistoryScreen(
 
                     1 -> PresetList(
                         presets = wlPresets,
-                        emptyText = "No wavelength presets yet. Save one from Step 1.",
+                        emptyText = stringResource(R.string.history_wl_presets_empty),
                         onEdit = { editingPreset = it },
                         onDelete = { deleteTarget = it }
                     )
 
                     2 -> PresetList(
                         presets = spdPresets,
-                        emptyText = "No SPD presets yet. Save one from Step 2.",
+                        emptyText = stringResource(R.string.history_spd_presets_empty),
                         onEdit = { editingPreset = it },
                         onDelete = { deleteTarget = it }
                     )
@@ -170,16 +170,16 @@ fun HistoryScreen(
     deleteTarget?.let { preset ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("Delete preset") },
-            text = { Text("Delete \"${preset.name}\"? This cannot be undone.") },
+            title = { Text(stringResource(R.string.history_delete_preset_title)) },
+            text = { Text(stringResource(R.string.history_delete_preset_msg, preset.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     projectViewModel.deletePreset(preset.id)
                     deleteTarget = null
-                }) { Text("Delete") }
+                }) { Text(stringResource(R.string.action_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) { Text("Cancel") }
+                TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -213,26 +213,32 @@ private fun PresetList(
                             Text(p.deviceModel, style = MaterialTheme.typography.bodySmall)
                             Text(
                                 when (p.type) {
-                                    "WAVELENGTH" ->
-                                        "slope=${p.slope?.let { String.format("%.4f", it) } ?: "—"} " +
-                                                "intercept=${p.intercept?.let { String.format("%.2f", it) } ?: "—"}"
-                                    "CURVE" ->
-                                        "slope=${p.slope?.let { String.format("%.4f", it) } ?: "—"} " +
-                                                "intercept=${p.intercept?.let { String.format("%.2f", it) } ?: "—"} " +
-                                                "R²=${p.quality ?: "—"}"
-                                    else ->
-                                        "R=${p.coeffR?.let { String.format("%.4f", it) } ?: "—"} " +
-                                                "B=${p.coeffB?.let { String.format("%.4f", it) } ?: "—"}"
+                                    "WAVELENGTH" -> stringResource(
+                                        R.string.history_preset_summary_wl,
+                                        p.slope?.let { String.format(Locale.US, "%.4f", it) } ?: "—",
+                                        p.intercept?.let { String.format(Locale.US, "%.2f", it) } ?: "—"
+                                    )
+                                    "CURVE" -> stringResource(
+                                        R.string.history_preset_summary_curve,
+                                        p.slope?.let { String.format(Locale.US, "%.4f", it) } ?: "—",
+                                        p.intercept?.let { String.format(Locale.US, "%.2f", it) } ?: "—",
+                                        p.quality ?: "—"
+                                    )
+                                    else -> stringResource(
+                                        R.string.history_preset_summary_spd,
+                                        p.coeffR?.let { String.format(Locale.US, "%.4f", it) } ?: "—",
+                                        p.coeffB?.let { String.format(Locale.US, "%.4f", it) } ?: "—"
+                                    )
                                 },
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
                         Row {
                             IconButton(onClick = { onEdit(p) }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit")
+                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit))
                             }
                             IconButton(onClick = { onDelete(p) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete")
+                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete))
                             }
                         }
                     }
@@ -256,16 +262,16 @@ private fun PresetEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit preset") },
+        title = { Text(stringResource(R.string.history_edit_preset_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true)
+                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.lbl_preset_name)) }, singleLine = true)
                 if (preset.type == "WAVELENGTH") {
-                    OutlinedTextField(slope, { slope = it }, label = { Text("Slope (px/nm)") }, singleLine = true)
-                    OutlinedTextField(intercept, { intercept = it }, label = { Text("Intercept (px)") }, singleLine = true)
+                    OutlinedTextField(slope, { slope = it }, label = { Text(stringResource(R.string.history_slope_label)) }, singleLine = true)
+                    OutlinedTextField(intercept, { intercept = it }, label = { Text(stringResource(R.string.history_intercept_label)) }, singleLine = true)
                 } else if (preset.type == "SPD") {
-                    OutlinedTextField(coeffR, { coeffR = it }, label = { Text("R/G coefficient") }, singleLine = true)
-                    OutlinedTextField(coeffB, { coeffB = it }, label = { Text("B/G coefficient") }, singleLine = true)
+                    OutlinedTextField(coeffR, { coeffR = it }, label = { Text(stringResource(R.string.history_rg_coefficient)) }, singleLine = true)
+                    OutlinedTextField(coeffB, { coeffB = it }, label = { Text(stringResource(R.string.history_bg_coefficient)) }, singleLine = true)
                 }
             }
         },
@@ -280,8 +286,8 @@ private fun PresetEditDialog(
                         coeffB = coeffB.toDoubleOrNull() ?: preset.coeffB
                     )
                 )
-            }) { Text("Save") }
+            }) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
     )
 }

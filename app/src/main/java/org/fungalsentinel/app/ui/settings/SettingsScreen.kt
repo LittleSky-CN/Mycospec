@@ -80,7 +80,7 @@ fun SettingsScreen(
     val spdImporter = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
             val err = SpdLoader.installCustom(context, it)
-            if (err == null) { spdSourceName = SpdLoader.CUSTOM_NAME; Toast.makeText(context, "SPD CSV installed", Toast.LENGTH_SHORT).show() }
+            if (err == null) { spdSourceName = SpdLoader.CUSTOM_NAME; Toast.makeText(context, context.getString(R.string.settings_spd_installed), Toast.LENGTH_SHORT).show() }
             else { Toast.makeText(context, err, Toast.LENGTH_LONG).show() }
         }
     }
@@ -102,18 +102,19 @@ fun SettingsScreen(
                 LanguageRadio("zh", stringResource(R.string.language_chinese), currentLang, selectLanguage)
                 LanguageRadio("es", stringResource(R.string.language_spanish), currentLang, selectLanguage)
                 LanguageRadio("ny", stringResource(R.string.language_chichewa), currentLang, selectLanguage)
+                LanguageRadio("fr", stringResource(R.string.language_french), currentLang, selectLanguage)
             }
 
             SettingsSection(stringResource(R.string.settings_wavelength)) {
-                WavelengthInput("R (nm)", wR) { wR = it; onWavelengthChange(wR, wG, wB) }
-                WavelengthInput("G (nm)", wG) { wG = it; onWavelengthChange(wR, wG, wB) }
-                WavelengthInput("B (nm)", wB) { wB = it; onWavelengthChange(wR, wG, wB) }
+                WavelengthInput(stringResource(R.string.settings_channel_nm, "R"), wR) { wR = it; onWavelengthChange(wR, wG, wB) }
+                WavelengthInput(stringResource(R.string.settings_channel_nm, "G"), wG) { wG = it; onWavelengthChange(wR, wG, wB) }
+                WavelengthInput(stringResource(R.string.settings_channel_nm, "B"), wB) { wB = it; onWavelengthChange(wR, wG, wB) }
             }
 
             SettingsSection(stringResource(R.string.settings_spd)) {
                 Text(text = stringResource(R.string.settings_spd_desc), style = MaterialTheme.typography.bodyMedium, color = AppColors.TextSecondary)
                 Spacer(Modifier.height(8.dp))
-                Text(text = "Current source: $spdSourceName", style = MaterialTheme.typography.bodySmall, color = AppColors.TextSecondary)
+                Text(text = stringResource(R.string.settings_current_source, spdSourceName), style = MaterialTheme.typography.bodySmall, color = AppColors.TextSecondary)
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = { spdImporter.launch("text/*") }) { Text(stringResource(R.string.settings_import_spd)) }
             }
@@ -135,19 +136,24 @@ fun SettingsScreen(
             }
 
             // New Focus Section
-            SettingsSection("Focus Control / 对焦控制") {
+            SettingsSection(stringResource(R.string.settings_focus_section)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Text(text = "Auto Focus (AF)", modifier = Modifier.weight(1f))
+                    Text(text = stringResource(R.string.settings_auto_focus), modifier = Modifier.weight(1f))
                     Switch(checked = af, onCheckedChange = { af = it; onAutoFocusChange(it) })
                 }
                 if (!af) {
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text(text = "Manual Focus (Diopters)", style = MaterialTheme.typography.labelMedium)
+                        Text(text = stringResource(R.string.settings_focus), style = MaterialTheme.typography.labelMedium)
                         Text(text = String.format(Locale.US, "%.2f D", focusD), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = AppColors.Accent)
                     }
                     Slider(value = focusD, onValueChange = { focusD = it; onFocusDiopterChange(it) }, valueRange = 0f..5f, modifier = Modifier.fillMaxWidth())
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) { Text("Infinity (∞)", style = MaterialTheme.typography.bodySmall); Text("Macro", style = MaterialTheme.typography.bodySmall) }
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.settings_infinity), style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.settings_macro), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(text = stringResource(R.string.settings_focus_hint), style = MaterialTheme.typography.bodySmall, color = AppColors.TextSecondary)
                 }
             }
 
@@ -176,12 +182,12 @@ fun SettingsScreen(
             }
 
             app?.let { application ->
-                SettingsSection("Diagnostic log / 诊断日志") {
-                    Text(text = "Rolling local log (2 MB max). Never uploaded automatically.", style = MaterialTheme.typography.bodySmall, color = AppColors.TextSecondary)
+                SettingsSection(stringResource(R.string.settings_diagnostic_log)) {
+                    Text(text = stringResource(R.string.settings_log_desc), style = MaterialTheme.typography.bodySmall, color = AppColors.TextSecondary)
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { application.shareLog(context) }, modifier = Modifier.fillMaxWidth()) { Text("Save diagnostic log (${logSize / 1024} KB)") }
+                    OutlinedButton(onClick = { application.shareLog(context) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_save_log, (logSize / 1024).toInt())) }
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { application.clearLog() }, modifier = Modifier.fillMaxWidth()) { Text("Clear diagnostic log") }
+                    OutlinedButton(onClick = { application.clearLog() }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_clear_log)) }
                 }
             }
             Spacer(Modifier.height(32.dp))

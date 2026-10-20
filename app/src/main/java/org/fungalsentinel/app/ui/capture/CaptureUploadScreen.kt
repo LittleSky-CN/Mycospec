@@ -222,7 +222,7 @@ private fun NeonThumbnail(uri: Uri, index: Int, onRemove: () -> Unit) {
         } else {
             AsyncImage(
                 model = uri,
-                contentDescription = "Capture ${index + 1}",
+                contentDescription = stringResource(R.string.cd_capture_index, index + 1),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
@@ -241,7 +241,7 @@ private fun NeonThumbnail(uri: Uri, index: Int, onRemove: () -> Unit) {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                Icons.Default.Close, "Remove",
+                Icons.Default.Close, stringResource(R.string.cd_remove),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(12.dp)
             )

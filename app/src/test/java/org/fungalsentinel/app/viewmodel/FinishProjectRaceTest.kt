@@ -13,46 +13,54 @@ import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 /**
- * [v2.2.8-D1] lost-update race when writing the project row (projects table).
+ * [v2.2.8-D1] The lost-update race on writes to the project row (the projects table).
  *
- * The same row carries both the **report snapshot** (written every time Step 4 produces a result) and the **flow state** (Finish writes
- * `FINISHED` / `finishedAt`), and the two paths each run in a fire-and-forget coroutine. If each writes back its own
- * `copy()`, the later write wipes out the earlier result for the whole row:
+ * The same row has to carry both the **report snapshot** (written every time Step 4 produces a
+ * result) and the **workflow state** (`FINISHED` / `finishedAt`, written on Finish), and the two
+ * paths each run in a fire-and-forget coroutine. If each one writes back from the copy it holds
+ * via `copy()`, the later write wipes out the whole row written by the earlier one:
  *
  * ```
- * persistReportSnapshot : reads  (status=IN_PROGRESS, finishedAt=null)   <- stale
- * finishProject         : writes (status=FINISHED,    finishedAt=ts)
- * persistReportSnapshot : writes (status=IN_PROGRESS, finishedAt=null)   <- pollutes
+ * persistReportSnapshot : read  (status=IN_PROGRESS, finishedAt=null)   <- stale
+ * finishProject         : write (status=FINISHED,    finishedAt=ts)
+ * persistReportSnapshot : write (status=IN_PROGRESS, finishedAt=null)   <- polluted
  * ```
  *
- * The symptom is **silent**: `shouldRestoreProvenance()` requires `status == "FINISHED"`, and once it is pushed back to
- * `IN_PROGRESS`, reopening from History no longer restores the provenance of Steps 1/2/4 -- meaning the provenance loss
- * we just fixed would reproduce verbatim through a different trigger path.
+ * The symptom is **silent**: `shouldRestoreProvenance()` requires `status == "FINISHED"`, so once
+ * it is knocked back to `IN_PROGRESS` the Step 1/2/4 provenance is no longer restored when the
+ * project is reopened from History -- in other words, the provenance loss that was just fixed
+ * would reproduce itself verbatim through a different trigger path.
  *
  * ## Why this is enough, and why no mockk / Robolectric
  *
- * `ProjectViewModel` depends on `Application` + two Room databases and cannot be instantiated in a JVM unit test (see
- * the class KDoc of `ReopenProvenanceTest`). The fix therefore extracted both writes into top-level suspend functions
- * -- [`finishProjectLocked()`] / [`persistReportSnapshotLocked()`] -- **the production path in the ViewModel
- * calls exactly this code**, and here we drive it with fake reader / writer doubles instead of copying an equivalent implementation.
- * If someone bypasses them in the ViewModel and calls `dao.updateProject(...)` directly, neither fake can catch it, but such a change
- * (`projectMetadataMutex` disappearing from the three write sites) is obvious at review time.
+ * `ProjectViewModel` depends on `Application` + two Room databases and cannot be instantiated in
+ * a JVM unit test (see the class KDoc of `ReopenProvenanceTest`). The fix therefore extracted both
+ * writes into top-level suspend functions -- [`finishProjectLocked()`] /
+ * [`persistReportSnapshotLocked()`] -- and **the ViewModel's production path calls exactly this
+ * code**, so the fakes below drive it directly instead of duplicating an equivalent implementation.
+ * Anyone who bypasses them inside the ViewModel and calls `dao.updateProject(...)` directly will
+ * not be caught by these two fakes, but that kind of change (making `projectMetadataMutex`
+ * disappear from three write sites) is visible at a glance in review.
  *
- * ## Why **deterministic** cases are possible here
+ * ## Why the cases here can be **deterministic**
  *
- * Both barriers use rendezvous `Channel`s, never `sleep` / `delay`:
+ * Both barriers use a rendezvous `Channel`, never `sleep` / `delay`:
  *
- * - the slow coroutine notifies the examiner and waits "**after reading, before writing**" -- that point sits exactly in the middle of the critical section,
- *   so "it holds a stale copy" happens 100% of the time;
- * - before releasing, `yield()` several times to give up every scheduling slot: with a lock the opponent coroutine queues on the lock (it cannot proceed,
- *   so no amount of `yield` helps), without a lock it finishes right at this step. The same script can therefore distinguish both implementations.
+ * - The slow coroutine reports to the examiner and waits for release **after reading and before
+ *   writing** -- exactly inside the critical section, so "it is holding a stale copy" happens
+ *   100% of the time;
+ * - Before releasing it, `yield()` a few times to hand over every scheduling opportunity: with a
+ *   lock the opponent coroutine queues on the lock (it cannot get it, no matter how often you
+ *   `yield`), without a lock it finishes at this step. The same script can therefore distinguish
+ *   the two implementations.
  *
- * The verdict ignores intermediate states (the intermediate states of a race are random anyway) and only looks at **the whole row finally persisted**: that is exactly
- * the only thing `openProject()` will ever read.
+ * The verdict ignores the intermediate process (the middle of a race is random by nature) and
+ * looks only at **the final row in the database**: which is exactly the only thing
+ * `openProject()` ever reads.
  */
 class FinishProjectRaceTest {
 
-    /** Pretends to be that single row of the projects table: overwrites the whole row and records every write. */
+    /** Pretends to be that row in the projects table: whole-row overwrite writes, keeping a trace of every write. */
     private class FakeProjectRow(initial: ProjectEntity) {
         var row: ProjectEntity = initial
             private set
@@ -70,7 +78,7 @@ class FinishProjectRaceTest {
     private fun unfinishedRow() = ProjectEntity(id = 1, name = "demo", status = "IN_PROGRESS")
 
     // ─────────────────────────────────────────────────────────────────────
-    // 1. the snapshot write takes off first: the stale row it read must not wipe out the later Finish
+    // 1. The snapshot write takes off first: the stale row it read must not clobber the later Finish
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -80,13 +88,13 @@ class FinishProjectRaceTest {
         val readDone = Channel<Unit>(Channel.RENDEZVOUS)
         val allowWrite = Channel<Unit>(Channel.RENDEZVOUS)
 
-        // (1) simulate the persistReportSnapshot() triggered by a Step 4 result: take the lock -> read the stale row -> block
+        // 1. Simulate persistReportSnapshot() triggered by a Step 4 result: take the lock → read the stale row → block
         val flying = launch {
             persistReportSnapshotLocked(
                 mutex = mutex,
                 readProject = { row.row },
                 serialize = {
-                    readDone.send(Unit)     // holding the stale copy now, waiting for you to release
+                    readDone.send(Unit)     // already holding the stale copy, waiting for release
                     allowWrite.receive()
                     step4Snapshot
                 },
@@ -95,7 +103,7 @@ class FinishProjectRaceTest {
         }
         readDone.receive()
 
-        // (2) at this blocked moment the user taps Finish
+        // 2. While it is blocked, the user taps Finish
         val finishing = launch {
             finishProjectLocked(
                 mutex = mutex,
@@ -104,35 +112,36 @@ class FinishProjectRaceTest {
                 writeProject = { row.write(it) }
             )
         }
-        // give up every scheduling slot: without a lock, finish completes right at this step.
+        // Hand over every scheduling opportunity: without a lock, finish runs to completion at this step.
         repeat(5) { yield() }
 
-        allowWrite.send(Unit)   // (3) release that stale write-back
+        allowWrite.send(Unit)   // 3. Release the stale write-back
         joinAll(flying, finishing)
 
         assertEquals(
-            "the row finally persisted must be FINISHED: if an in-flight snapshot write can write back the stale row it read, it will push status to IN_PROGRESS and the provenance is lost",
+            "The final row must be FINISHED: if the in-flight snapshot write can write back the stale row it read, it knocks status back to IN_PROGRESS and the provenance is lost with it",
             "FINISHED", row.row.status
         )
         assertNotNull(
-            "finishedAt must not be pushed back to null",
+            "finishedAt must not be clobbered back to null",
             row.row.finishedAt
         )
         assertEquals(
-            "the snapshot must be the one written by Finish (the last write wins)",
+            "The snapshot must be the one written by Finish (the last write wins)",
             finishSnapshot, row.row.reportDataJson
         )
         assertEquals("both writes must happen", 2, row.writes.size)
         assertEquals(
-            "with the same lock, Finish must complete after the stale write-back",
+            "With a shared lock, Finish must complete after the stale write-back",
             listOf("IN_PROGRESS", "FINISHED"), row.writes.map { it.status }
         )
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 2. the opposite order: Finish takes the lock first, so the snapshot write must wait until it finishes before reading,
-    //    and therefore already reads a FINISHED row -- even if it overwrites, no state is lost.
-    //    (this specifically stops an implementation that "only fixed one direction" from sneaking through)
+    // 2. The reverse order: Finish takes the lock first, and the snapshot write must wait for it
+    //    to finish before reading, so what it reads is already the FINISHED row -- even if it
+    //    overwrites, the state is not lost.
+    //    (Specially guards against an implementation that "fixed only one direction".)
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -142,7 +151,7 @@ class FinishProjectRaceTest {
         val readDone = Channel<Unit>(Channel.RENDEZVOUS)
         val allowWrite = Channel<Unit>(Channel.RENDEZVOUS)
 
-        // (1) Finish takes off first and blocks after reading
+        // 1. Finish takes off first and blocks after reading
         val finishing = launch {
             finishProjectLocked(
                 mutex = mutex,
@@ -157,7 +166,7 @@ class FinishProjectRaceTest {
         }
         readDone.receive()
 
-        // (2) in the meantime the Step 4 snapshot write is triggered
+        // 2. Meanwhile the Step 4 snapshot write is triggered
         val flying = launch {
             persistReportSnapshotLocked(
                 mutex = mutex,
@@ -172,19 +181,19 @@ class FinishProjectRaceTest {
         joinAll(finishing, flying)
 
         assertEquals(
-            "the snapshot write must not slip in behind the locked coroutine before Finish and write arbitrarily: the final state must be FINISHED",
+            "The snapshot write must not sit behind the locked coroutine and scribble before Finish: the final state must be FINISHED",
             "FINISHED", row.row.status
         )
         assertNotNull("finishedAt must still be there", row.row.finishedAt)
         assertEquals(
-            "with the lock the snapshot write is ordered after Finish, so it already reads a FINISHED row and must not clobber the phases",
+            "With a lock the snapshot write runs after Finish, so what it read is already the FINISHED row and must not overwrite the phases",
             listOf("FINISHED", "FINISHED"), row.writes.map { it.status }
         )
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 3. contract: when no project is in progress, write not a single byte and change no state at all.
-    //    (this decides whether finishProject() in the ViewModel should keep going on to clear uiState)
+    // 3. Contract: with no project in progress, write nothing and change no state at all.
+    //    (This decides whether finishProject() in the ViewModel should go on to clear uiState.)
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -218,7 +227,7 @@ class FinishProjectRaceTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 4. each path on its own: the fields written by the snapshot write and by the Finish write are correct
+    // 4. Each path on its own: the snapshot write and the Finish write each touch the right fields
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -234,8 +243,8 @@ class FinishProjectRaceTest {
 
         assertEquals(true, written)
         assertEquals(step4Snapshot, row.row.reportDataJson)
-        assertEquals("the snapshot write must not quietly change the flow state", "IN_PROGRESS", row.row.status)
-        assertEquals("the snapshot write must not quietly assign finishedAt", null, row.row.finishedAt)
+        assertEquals("the snapshot write must not change the workflow state on the side", "IN_PROGRESS", row.row.status)
+        assertEquals("the snapshot write must not assign finishedAt on the side", null, row.row.finishedAt)
     }
 
     @Test

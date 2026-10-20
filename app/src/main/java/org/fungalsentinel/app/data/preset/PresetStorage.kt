@@ -26,7 +26,7 @@ data class PresetEntity(
     val peakR: Int? = null, val peakG: Int? = null, val peakB: Int? = null,
     val wlR: Double? = null, val wlG: Double? = null, val wlB: Double? = null,
     val exposureSeconds: Double? = null,
-    /** [v2.2.6] automatic R/B channel swap conclusion (DEF-A01). Mapped to INTEGER by Room, present from DB version 3. */
+    /** [v2.2.6] Automatic R/B channel swap decision (DEF-A01). Mapped by Room to INTEGER; present since DB version 3. */
     val rbSwapped: Boolean? = null,
     val coeffR: Double? = null, val coeffB: Double? = null,
     val frames: Int? = null, val spdSource: String? = null,
@@ -55,7 +55,7 @@ abstract class PresetDatabase : RoomDatabase() {
             }
         }
 
-        /** [v2.2.6] DEF-A01: a WAVELENGTH preset must persist rbSwapped, otherwise it is always false after reloading. */
+        /** [v2.2.6] DEF-A01: a WAVELENGTH preset must persist rbSwapped, otherwise reloading always yields false. */
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE presets ADD COLUMN rbSwapped INTEGER DEFAULT NULL")

@@ -22,7 +22,7 @@ data class AppSettings(
     val calibrationProtection: Boolean = true,
     val autoExposure: Boolean = true,
     val exposureMs: Long = 100L,
-    // [new] focus-related settings
+    // [Added] Focus settings
     val autoFocus: Boolean = true,
     val focusDiopter: Float = 0f
 )
@@ -37,7 +37,7 @@ object AppPreferences {
     private val KEY_PROTECT = booleanPreferencesKey("calibration_protection")
     private val KEY_AE = booleanPreferencesKey("auto_exposure")
     private val KEY_EXP_MS = longPreferencesKey("exposure_ms")
-    // [new] key definitions
+    // [Added] Key definitions
     private val KEY_AF = booleanPreferencesKey("auto_focus")
     private val KEY_FOCUS = floatPreferencesKey("focus_diopter")
 
@@ -53,7 +53,7 @@ object AppPreferences {
                 calibrationProtection = p[KEY_PROTECT] ?: true,
                 autoExposure = p[KEY_AE] ?: true,
                 exposureMs = p[KEY_EXP_MS] ?: 100L,
-                // [new] read the settings
+                // [Added] Read the settings
                 autoFocus = p[KEY_AF] ?: true,
                 focusDiopter = p[KEY_FOCUS] ?: 0f
             )
@@ -70,7 +70,7 @@ object AppPreferences {
             p[KEY_PROTECT] = settings.calibrationProtection
             p[KEY_AE] = settings.autoExposure
             p[KEY_EXP_MS] = settings.exposureMs
-            // [new] save the settings
+            // [Added] Save the settings
             p[KEY_AF] = settings.autoFocus
             p[KEY_FOCUS] = settings.focusDiopter
         }

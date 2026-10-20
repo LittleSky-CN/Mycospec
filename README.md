@@ -152,7 +152,7 @@ app/src/main/java/org/fungalsentinel/app/
 - Emulators validate UI and flow only — never spectral accuracy.
 - Live Camera2 RAW capture is under integration in this milestone; use
   **Gallery / Files (DNG)** upload to exercise the analysis pipeline.
-- Cross-check formal results against Python FSSA v1.4.5 on the same DNG set.
+- Cross-check formal results against Python FSSA v1.5.0 on the same DNG set.
 
 ### Versioning
 Current version **v2.3.0** — the single authoritative version number across this
@@ -177,6 +177,16 @@ v2.0.1, v2.2.8) are retained only as Git history / tags.
   variants) onto the canonical enum. Names arriving from Python FSSA exports or
   hand-edited presets now resolve to the same canonical IDs used by the Python
   side, so the same sample is identified identically on phone and desktop.
+- **Step 2 results are indexed by wavelength, not by pixel.** The response,
+  position, corrected, weight and fused curves are computed per pixel and then
+  resampled once onto the canonical axis (380–780 nm, 1 nm step, 401 points),
+  so a stored SPD preset no longer depends on the sensor width or on the
+  pixel↔nm mapping it was recorded with. Presets are therefore portable between
+  phones and across an app update; the JSON payload carries its own axis.
+- **SPD presets can be exported and imported as files** (SAF, `application/json`)
+  so a calibration made on one phone can be used on another. A preset written
+  by a pre-v2.3.0 build is upgraded onto the wavelength grid on load instead of
+  being rejected.
 
 Analysis semantics are aligned with Python **FSSA v1.5.0**; in particular the
 Step 2 channel fusion uses response-proportional normalisation on both sides
@@ -192,15 +202,19 @@ no device, no DNG files and no network: every test runs on **synthetic input**.
 .\gradlew.bat :app:testDebugUnitTest
 ```
 
-On v2.3.0 that runs **86 tests across 9 classes, 0 failures**:
+On v2.3.0 that runs **118 tests across 16 classes, 0 failures**:
 
 | Test class | What it pins |
 |---|---|
 | `AlgorithmParityTest` | Numerical behaviour of the analysis chain — e.g. replicate clipping, corrected area and SD — against hand-computed expected values |
 | `PresetReuseParityTest` | Reusing an SPD / CURVE preset reproduces the numbers of the original calibration |
+| `SpdGridNumericalParityTest` | Resampling onto the 1 nm grid keeps the response and the Step 3 result within 1 % of the pixel-domain reference |
+| `Step4ParityTest` | Standard-curve regression matches the Python FSSA fit on the same standards |
+| `SpdPresetSchemaV3Test`, `LegacySpdPayloadUpgradeTest` | The SPD payload round-trips through schema v3, and a pre-v3 pixel-indexed preset is upgraded onto the grid rather than rejected |
 | `FluorophoreCanonicalTest` | Canonical fluorophore IDs resolve identically to the Python FSSA side |
 | `ReportDataJsonTest`, `CurvePresetPayloadTest`, `PresetRoundTripTest` | Report and preset serialisation round-trips |
 | `FinishProjectRaceTest`, `ReopenProvenanceTest`, `ReportProvenanceTest` | Provenance survives project completion and history re-open |
+| `LocaleCoverageTest`, `StringResourceFormatTest`, `StringResourceArgCountTest` | Every translatable string exists in all four locales, with matching format specifiers and argument counts |
 
 To reproduce a **measurement** rather than a test, run Steps 1–4 on a real rig and
 cross-check against Python FSSA on the same DNG set — MycoSpec and FSSA are expected to

@@ -20,10 +20,10 @@ object ConcentrationRegressor {
     }
 
     /**
-     * Predicts the concentration from a regression result
-     * @param result the regression result
-     * @param area the measured area / signal intensity
-     * @return the concentration predicted by the linear OLS model
+     * Predicts the concentration from a regression result.
+     * @param result regression result
+     * @param area measured area / signal intensity
+     * @return concentration predicted by the linear OLS model
      */
     fun predict(result: RegressionResult, area: Double): Double {
         return (area - result.intercept) / result.slope
@@ -41,7 +41,7 @@ object ConcentrationRegressor {
         val slope = (n * sumXY - sumX * sumY) / denominator
         val intercept = (sumY - slope * sumX) / n
 
-        // compute R²
+        // Compute R²
         val yMean = sumY / n
         val ssTot = points.sumOf { (it.second - yMean).pow(2) }
         val ssRes = points.sumOf { (it.second - (slope * it.first + intercept)).pow(2) }

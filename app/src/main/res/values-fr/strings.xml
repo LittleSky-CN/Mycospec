@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_welcome">Bienvenue dans MycoSpec</string>
+    <string name="home_tagline">Analyseur spectral de poche</string>
+    <string name="home_intro">Choisissez une action pour démarrer une expérience ou reprendre une expérience précédente.</string>
+    <string name="home_icon_desc">Icône de l\'application MycoSpec</string>
+    <string name="home_new_project">Nouveau projet</string>
+    <string name="home_new_project_desc">Lancer le flux complet de calibration et d\'analyse</string>
+    <string name="home_dng_camera">Appareil photo DNG</string>
+    <string name="home_dng_camera_desc">Capturer des photos RAW DNG et les enregistrer dans la galerie</string>
+    <string name="home_history">Historique</string>
+    <string name="home_history_desc">Consulter, reprendre, exporter ou supprimer des expériences passées</string>
+    <string name="home_settings">Paramètres</string>
+    <string name="home_settings_desc">Longueurs d\'onde, SPD, demi-écran, mode blanc</string>
+    <string name="new_project_title">Nouveau projet</string>
+    <string name="new_project_name_label">Nom du projet</string>
+    <string name="new_project_name_hint">Saisir un nom de projet</string>
+    <string name="new_project_create">Créer le projet et continuer</string>
+    <string name="new_project_name_empty">Veuillez saisir un nom de projet</string>
+    <string name="default_concentration_unit">mg/L</string>
+    <string name="value_not_set">—</string>
+    <string name="delete_standard_group">Supprimer le groupe d\'étalons</string>
+    <string name="step4_capture_title">%1$s — %2$s %3$s</string>
+    <string name="step4_concentration_invalid">Saisir une concentration finie valide.</string>
+    <string name="result_formula_linear">Aire démêlée = %1$.4f × concentration + %2$.2f</string>
+    <string name="result_formula_log">Aire démêlée = %1$.4f × log₁₀(concentration) + %2$.2f</string>
+    <string name="capture_photo">Capturer</string>
+    <string name="upload_gallery">Galerie</string>
+    <string name="upload_files">Fichiers / DNG</string>
+    <string name="capture_hint">Capturer %1$d à %2$d images pour cette série</string>
+    <string name="confirm_captures">Confirmer %1$d vue(s)</string>
+    <string name="step1_title">Étape 1&#160;: calibration des longueurs d\'onde</string>
+    <string name="step1_description">Capturer des vues de positionnement R/V/B pour associer les pixels du capteur aux longueurs d\'onde.</string>
+    <string name="step1_capture_title">Vues de positionnement</string>
+    <string name="step1_capture_subtitle">Source lumineuse RGB devant le téléphone</string>
+    <string name="step1_start_capture">Positionnement</string>
+    <string name="step2_title">Étape 2&#160;: réponse spectrale</string>
+    <string name="step2_description">Corriger la sensibilité des voies R/V/B de la caméra à l\'aide d\'une source caractérisée.</string>
+    <string name="step2_capture_title">Vues SPD</string>
+    <string name="step2_capture_subtitle">Source de lumière blanche devant le téléphone</string>
+    <string name="step2_start_capture">Capture SPD</string>
+    <string name="step3_title">Étape 3&#160;: analyse de l\'échantillon</string>
+    <string name="step3_description">Capturer le blanc et l\'échantillon pour mesurer l\'aire intégrée de fluorescence.</string>
+    <string name="step3_capture_blank_title">Vues du blanc</string>
+    <string name="step3_capture_sample_title">Vues de l\'échantillon</string>
+    <string name="step4_title">Étape 4&#160;: courbe d\'étalonnage</string>
+    <string name="step4_description">Construire la courbe à partir du démêlage spectral corrigé du blanc&#160;: échantillon = α·émission de référence + s·blanc + décalage.</string>
+    <string name="step4_concentration_label">Concentration de l\'étalon</string>
+    <string name="step4_unit_label">Unité</string>
+    <string name="step4_build_curve">Tracer la courbe</string>
+    <string name="step4_apply_preset">Appliquer la courbe</string>
+    <string name="step4_curve_preset_summary">%1$s · %2$s · R²=%3$s</string>
+    <string name="step4_curve_preset_active">Courbe chargée&#160;: %1$s</string>
+    <string name="step4_preset_standard_ignored">Les groupes d\'étalons sont masqués et ne seront pas utilisés tant que ce préréglage est actif.</string>
+    <string name="act_clear_preset">Effacer</string>
+    <string name="next_step">Suivant</string>
+    <string name="result_title">Résultat de l\'analyse</string>
+    <string name="result_regression">Régression</string>
+    <string name="result_r2">R²</string>
+    <string name="result_predicted">Concentration prédite</string>
+    <string name="result_finish">Terminer et enregistrer</string>
+    <string name="result_back_home">Retour à l\'accueil</string>
+    <string name="result_view_report">Rapport complet</string>
+    <string name="result_view_report_hint">Consulter le rapport complet du projet, toutes étapes et préréglages importés compris</string>
+    <string name="dng_title">Appareil photo DNG</string>
+    <string name="dng_capture">Capturer en RAW</string>
+    <string name="dng_saved">DNG enregistré dans la galerie</string>
+    <string name="history_title">Historique</string>
+    <string name="history_curve_presets">Courbes</string>
+    <string name="history_curve_presets_empty">Aucun préréglage de courbe. Enregistrez-en un depuis l\'étape 4.</string>
+    <string name="history_empty">Aucune expérience</string>
+    <string name="settings_title">Paramètres</string>
+    <string name="settings_wavelength">Paramètres des longueurs d\'onde</string>
+    <string name="settings_spd">Paramètres SPD</string>
+    <string name="settings_spd_desc">Importez un fichier CSV de SPD personnalisé (wavelength_nm, intensity) ou utilisez le fichier true_spd.csv fourni.</string>
+    <string name="settings_import_spd">Importer un CSV de SPD</string>
+    <string name="settings_half_screen">Mode demi-écran</string>
+    <string name="settings_half_screen_toggle">Activer le mode demi-écran</string>
+    <string name="settings_half_screen_preview">Faites glisser la limite pour ajuster la zone couverte&#160;:</string>
+    <string name="settings_blank_mode">Mode de capture du blanc</string>
+    <string name="settings_blank_mode_desc">Unique&#160;: un seul blanc pour toutes les étapes. Complet&#160;: un blanc séparé par groupe d\'étalons.</string>
+    <string name="blank_mode_single">Blanc unique</string>
+    <string name="blank_mode_full">Par groupe</string>
+    <string name="settings_calibration_protection">Protection de calibration</string>
+    <string name="settings_calibration_protection_desc">Bloquer les étapes suivantes lorsque l\'erreur de validation du vert dépasse 10 nm.</string>
+    <string name="tutorial_skip">Ignorer</string>
+    <string name="tutorial_got_it">Compris</string>
+    <string name="tutorial_button_desc">Afficher l\'aide</string>
+    <string name="back">Retour</string>
+    <string name="tutorial_home_title">Bienvenue dans MycoSpec</string>
+    <string name="tutorial_home_body">Cette application fonctionne avec un matériel dédié pour mesurer la concentration de fluorescence et évaluer le risque de moisissure dans vos échantillons.</string>
+    <string name="tutorial_project_title">Assembler le matériel</string>
+    <string name="tutorial_project_body">Assemblez le matériel comme indiqué et posez le téléphone dessus.</string>
+    <string name="tutorial_step1_title">Calibration des longueurs d\'onde</string>
+    <string name="tutorial_step1_body">Insérez le kit de calibration dans le porte-échantillon, la section de calibration des longueurs d\'onde (source RGB) face au téléphone. Capturez ensuite 1 à 5 images.</string>
+    <string name="tutorial_step2_title">Calibration de la réponse spectrale</string>
+    <string name="tutorial_step2_body">Insérez le kit de calibration dans le porte-échantillon, la section de calibration de la source (lumière blanche) face au téléphone. Capturez ensuite 1 à 5 images.</string>
+    <string name="tutorial_step3_title">Capture de l\'échantillon</string>
+    <string name="tutorial_step3_body">Insérez votre échantillon ou le blanc dans le porte-échantillon et capturez 1 à 5 images.</string>
+    <string name="tutorial_step4_title">Courbe d\'étalonnage</string>
+    <string name="tutorial_step4_body">Pour construire la courbe d\'étalonnage, insérez chaque étalon et son blanc dans le porte-échantillon puis saisissez la concentration correspondante.</string>
+    <string name="settings_language">Langue</string>
+    <string name="tutorial_capture_title">Aide à la capture</string>
+    <string name="tutorial_capture_body">Utilisez «&#160;Capturer&#160;» pour prendre 1 à 5 vues RAW, ou importez depuis la galerie / les fichiers (DNG). Gardez le téléphone, la fente, le réseau, les ISO et la mise au point identiques entre les vues. Touchez le × d\'une vignette pour la supprimer.</string>
+    <string name="tutorial_report_title">Aide du rapport</string>
+    <string name="tutorial_report_body">Le rapport rassemble tous les résultats calculés&#160;: page 1 correspondance des longueurs d\'onde et validation du vert, page 2 réponse spectrale et courbe fusionnée, page 3 aire de l\'échantillon corrigée du blanc, page 4 régression de la concentration. Les valeurs se mettent à jour automatiquement après chaque série.</string>
+    <string name="tutorial_result_title">Aide du résultat</string>
+    <string name="tutorial_result_body">Consultez la formule de régression, le R² et la concentration prédite. «&#160;Terminer&#160;» enregistre le projet dans l\'historique&#160;; un R² faible ou une prédiction négative signalent une courbe peu fiable.</string>
+    <string name="tutorial_dng_title">Aide de l\'appareil DNG</string>
+    <string name="tutorial_dng_body">Appareil photo RAW autonome&#160;: chaque prise enregistre un DNG dans Pictures/FungalSentinel, dans votre galerie. Utilisez-le pour collecter des vues témoin en dehors d\'un projet.</string>
+    <string name="tutorial_history_title">Aide de l\'historique</string>
+    <string name="tutorial_history_body">Projets&#160;: touchez un projet en cours pour le reprendre là où vous en étiez. Onglets de préréglages&#160;: consultez, renommez, modifiez ou supprimez les calibrations enregistrées. L\'export produit une archive ZIP.</string>
+    <string name="tutorial_settings_title">Aide des paramètres</string>
+    <string name="tutorial_settings_body">Configurez la langue, les longueurs d\'onde de positionnement, la source SPD, le cache demi-écran, le mode blanc et la protection de calibration. Les changements s\'appliquent immédiatement aux nouveaux calculs.</string>
+    <string name="tutorial_parameters_title">Aide des paramètres de prise de vue</string>
+    <string name="tutorial_parameters_body">Réglez les paramètres de capture&#160;: exposition 10–3000 ms, ISO 50–1600, mise au point 0–5 D (0 = infini) et balance des blancs. Gardez-les fixes pendant une même expérience.</string>
+    <string name="settings_open_preview">Ouvrir l\'aperçu demi-écran</string>
+    <string name="half_preview_title">Aperçu demi-écran</string>
+    <string name="half_preview_hint">Couvrez le capteur de lumière avant pour tester le déclenchement&#160;; faites glisser le curseur ci-dessous pour déplacer la limite.</string>
+    <string name="tutorial_half_preview_title">Aperçu demi-écran</string>
+    <string name="tutorial_half_preview_body">Orientez le téléphone dans l\'un ou l\'autre sens paysage. Couvrez le capteur de lumière avant pour tester la séparation et utilisez le curseur pour ajuster la part d\'écran couverte.</string>
+    <string name="half_preview_covered">Couverte</string>
+    <string name="half_preview_uncovered">Découverte</string>
+    <string name="settings_exposure">Exposition</string>
+    <string name="settings_auto_exposure">Exposition auto (AE)</string>
+    <string name="settings_exposure_time">Temps d\'exposition</string>
+    <string name="act_save_preset">Enregistrer</string>
+    <string name="act_load_preset">Charger</string>
+    <string name="act_view_report">Voir le rapport</string>
+    <string name="act_capture">Capturer</string>
+    <string name="act_add_group">Ajouter un étalon</string>
+    <string name="lbl_target_fluorophore">Fluorophore cible</string>
+    <string name="lbl_blank_captures">Vues du blanc</string>
+    <string name="lbl_sample_captures">Vues de l\'échantillon</string>
+    <string name="lbl_standard_groups">Groupes d\'étalons (%1$d)</string>
+    <string name="note_blank_single">Mode blanc&#160;: UNIQUE — le blanc de l\'étape 3 est réutilisé pour l\'échantillon et tous les groupes d\'étalons&#160;; l\'étape 4 ne capture que les échantillons.</string>
+    <string name="note_blank_full">Mode blanc&#160;: COMPLET — l\'étape 4 capture un blanc séparé par groupe d\'étalons.</string>
+    <string name="st_idle1">Inactif — aucune vue de positionnement</string>
+    <string name="st_idle2">Inactif — aucune vue SPD</string>
+    <string name="st_idle3">Inactif — blanc/échantillon non capturés</string>
+    <string name="st_idle4">Inactif — courbe non construite</string>
+    <string name="st_processing_frames">Traitement — analyse de %1$d vue(s)…</string>
+    <string name="st_decoded">%1$d/%2$d décodée(s)</string>
+    <string name="st_undecodable">indécodable&#160;: %1$s</string>
+    <string name="st_failed_decode">Échec — %1$s&#160;: fichier non pris en charge ou corrompu, ou autorisation perdue</string>
+    <string name="st_failed_peak">Échec — détection du pic impossible (%1$s)&#160;; reprenez avec plus de lumière</string>
+    <string name="st_computed_quality">Calculé — qualité %1$s&#160;; %2$s</string>
+    <string name="st_suspect">&#160;; ⚠ pic(s) suspect(s), voir le diagnostic</string>
+    <string name="st_blocked_step1">Bloqué — l\'étape 1 n\'a pas encore été calculée</string>
+    <string name="st_blocked_pos">Bloqué — vues de positionnement indécodables&#160;; relancez l\'étape 1 (%1$s)</string>
+    <string name="st_failed_spd_source">Échec — source SPD absente (Paramètres → SPD)</string>
+    <string name="st_failed_spd_degenerate">Échec — calibration dégénérée (%1$s)&#160;; vérifiez l\'exposition de la lampe</string>
+    <string name="st_computed_spd">Calculé — %1$d vue(s) de lampe&#160;; masqué %2$s&#160;; %3$s</string>
+    <string name="st_blocked_band">Bloqué — choisissez d\'abord un fluorophore</string>
+    <string name="st_failed_window">Échec — fenêtre d\'intégration vide&#160;; vérifiez la correspondance de l\'étape 1</string>
+    <string name="st_computed_sample">Calculé — voie=%1$s, rép=%2$s&#160;; blanc %3$s&#160;; échantillon %4$s</string>
+    <string name="st4_blocked_groups">Bloqué — ajoutez au moins 2 groupes d\'étalons</string>
+    <string name="st4_processing">Traitement — décodage des étalons et régression…</string>
+    <string name="st4_processing_preset">Traitement — application de la courbe enregistrée à l\'échantillon courant…</string>
+    <string name="st4_preset_applied">Courbe enregistrée appliquée — R²=%1$s, n=%2$d</string>
+    <string name="st_curve_preset_loaded">Préréglage de courbe chargé — %1$s. Appliquez-le à l\'échantillon courant.</string>
+    <string name="st_curve_preset_reapply">Préréglage de courbe chargé — réappliquez-le à l\'échantillon mis à jour.</string>
+    <string name="st4_failed_groups">Échec — %1$d groupe(s) d\'étalons utilisable(s) seulement</string>
+    <string name="st4_failed_reg">Échec — régression dégénérée (concentrations en doublon&#160;?)</string>
+    <string name="st4_computed">Calculé — R²=%1$s, n=%2$d</string>
+    <string name="st_warn_count">&#160;; ⚠ %1$d avertissement(s)</string>
+    <string name="st_preset_loaded">Préréglage chargé — %1$s</string>
+    <string name="st_preset_rb_restored">Correction auto R/V restaurée depuis le préréglage</string>
+    <string name="st_preset_roi_restored">ROI en X restaurée depuis le préréglage ([%1$d, %2$d])</string>
+    <string name="st_spd_preset_invalid">Préréglage SPD rejeté — %1$s</string>
+    <string name="st_spd_no_payload">ce préréglage ne transporte aucune charge utile SPD</string>
+    <string name="st_spd_not_applied">Correction SPD NON appliquée</string>
+    <string name="st_spd_drift_warn">La correspondance des longueurs d\'onde a dérivé de %1$.1f nm — la correction SPD peut être faussée&#160;; pensez à relancer l\'étape 2</string>
+    <string name="st_spd_drift_severe">La correspondance des longueurs d\'onde a dérivé de %1$.1f nm (appareil ou vue de positionnement différente&#160;?) — les résultats quantitatifs ne sont pas fiables</string>
+    <string name="st_spd_skip_reason"> [SPD ignorée&#160;: %1$s]</string>
+    <string name="act_export_spd_preset">Exporter le SPD</string>
+    <string name="act_import_spd_preset">Importer le SPD</string>
+    <string name="st_spd_export_ok">Préréglage SPD exporté (schéma SPD MycoSpec v3)</string>
+    <string name="st_spd_export_failed">Échec de l\'export SPD — %1$s</string>
+    <string name="st_spd_export_nothing">Rien à exporter — lancez ou chargez d\'abord une calibration de l\'étape 2</string>
+    <string name="st_spd_import_store_failed">Le fichier SPD est valide, mais il n\'a pas pu être enregistré comme préréglage local</string>
+    <string name="lbl_group_counts">Blanc&#160;: %1$d | Échantillon&#160;: %2$d</string>
+    <string name="lbl_preset_name">Nom du préréglage</string>
+    <string name="note_step2_keep">Gardez le téléphone, le réseau, la fente, les ISO et la mise au point inchangés. Utilisez la source standard correspondant au SPD configuré dans les paramètres.</string>
+    <string name="note_step4_min">Ajoutez au moins 2 groupes de concentration pour construire la courbe (3 ou plus recommandés).</string>
+    <string name="step1_short">Longueurs d\'onde</string>
+    <string name="step2_short">Réponse spectrale</string>
+    <string name="step3_short">Échantillon</string>
+    <string name="step4_short">Étalonnage</string>
+    <string name="settings_focus">Mise au point manuelle (dioptries)</string>
+    <string name="settings_focus_hint">0 = infini. Augmentez jusqu\'à ce que les raies spectrales paraissent les plus fines dans l\'aperçu en direct.</string>
+    <string name="st4_blocked_blank">Bloqué — capturez d\'abord le blanc partagé à l\'étape 3</string>
+    <string name="new_project_filter_title">Filtre bleu installé</string>
+    <string name="new_project_filter_desc">Utiliser l\'ajustement à deux points V+R (la voie B est absorbée par le filtre)</string>
+    <string name="camera_hint_align">Alignez la lumière et touchez le déclencheur</string>
+    <string name="camera_starting">Démarrage de la caméra…</string>
+    <string name="camera_capturing">Capture RAW en cours…</string>
+    <string name="cam_err_capture_timeout">Délai d\'attente dépassé pour l\'image RAW. Veuillez réessayer.</string>
+    <string name="cam_err_capture_recovery">Impossible de récupérer la caméra après le dépassement du délai&#160;: %1$s</string>
+    <string name="camera_toggle_controls">Afficher/masquer les commandes manuelles</string>
+    <string name="camera_label_exp">EXP</string>
+    <string name="camera_label_foc">MAP</string>
+    <string name="camera_permission_denied">Autorisation de la caméra refusée</string>
+    <string name="camera_permission_required">L\'accès à la caméra est nécessaire pour capturer des images RAW.</string>
+    <string name="camera_permission_retry">Demander l\'accès à la caméra</string>
+    <string name="camera_permission_settings">Ouvrir les paramètres de l\'application</string>
+    <string name="dng_save_failed">Échec de l\'enregistrement dans la galerie</string>
+    <string name="dng_last_saved">Dernier&#160;: %1$s</string>
+    <string name="settings_auto_focus">Autofocus (AF)</string>
+    <string name="warn_saturation">Le signal chute aux concentrations élevées — saturation possible du capteur (surexposition). Réduisez le temps d\'exposition.</string>
+    <string name="warn_negative_area">Aire(s) d\'étalon négative(s) — vérifiez l\'appariement du blanc / la correction SPD</string>
+    <string name="warn_negative_sample">Aire de l\'échantillon négative — prédiction peu fiable</string>
+    <string name="warn_low_r2">R² faible (&lt;0.95) — la courbe peut manquer de fiabilité</string>
+    <string name="warn_negative_pred">Prédiction négative — vérifiez le blanc / la calibration</string>
+    <string name="warn_out_of_range">Prédiction hors de la plage de calibration</string>
+    <string name="warn_log_switch">R² linéaire faible (%1$.2f), bascule vers l\'ajustement logarithmique.</string>
+    <string name="st_filter_mode"> [mode filtre]</string>
+    <string name="step1_g_error_filter">— (mode filtre)</string>
+    <string name="report_fig3_filter">Figure 3&#160;: ajustement à deux points (V+R) [mode filtre]</string>
+    <string name="report_fit_filter">Ajustement&#160;: p = %1$.4fλ %2$+.2f   Entraînement (V, R)   [mode filtre]</string>
+    <string name="cam_err_no_raw">Aucune caméra compatible RAW trouvée</string>
+    <string name="cam_err_device">Erreur du périphérique caméra&#160;: %1$d</string>
+    <string name="cam_err_session">Échec de la configuration de la session</string>
+    <string name="cam_err_preview">Échec du démarrage de l\'aperçu&#160;: %1$s</string>
+    <string name="cam_err_capture_failed">Échec de la capture&#160;: motif=%1$d</string>
+    <string name="cam_err_no_result">Aucun résultat de capture pour cette vue</string>
+    <string name="cam_err_dng_small">Fichier DNG trop petit (%1$d octets) — échec d\'écriture possible</string>
+    <string name="cam_err_dng_save">Échec de l\'enregistrement du DNG&#160;: %1$s</string>
+    <string name="cam_err_raw_proc">Échec du traitement RAW&#160;: %1$s</string>
+    <string name="cam_err_permission">Autorisation de la caméra non accordée</string>
+    <string name="cam_err_access">Erreur d\'accès à la caméra&#160;: %1$s</string>
+    <string name="cam_err_dispatch">Échec de l\'envoi de la capture&#160;: %1$s</string>
+
+    <!-- ══════════ Actions génériques / étiquettes d\'accessibilité ══════════ -->
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Annuler</string>
+    <string name="action_save">Enregistrer</string>
+    <string name="action_delete">Supprimer</string>
+    <string name="action_edit">Modifier</string>
+    <string name="action_export">Exporter</string>
+    <string name="action_dismiss">×</string>
+    <string name="action_reset">Réinitialiser</string>
+    <string name="cd_close">Fermer</string>
+    <string name="cd_remove">Retirer</string>
+    <string name="cd_capture_index">Vue %1$d</string>
+
+    <!-- ══════════ Écran de rapport ══════════ -->
+    <string name="report_title">Rapport d\'analyse MycoSpec</string>
+    <string name="report_project">Projet&#160;: %1$s</string>
+    <string name="report_page">— Page %1$d —</string>
+    <string name="report_page1_title">Étape 1&#160;: calibration des longueurs d\'onde</string>
+    <string name="report_page2_title">Étape 2&#160;: réponse spectrale et fusion — MycoSpec v2.3.0</string>
+    <string name="report_page3_title">Étape 3&#160;: analyse de l\'échantillon</string>
+    <string name="report_page4_title">Étape 4&#160;: régression de la concentration</string>
+    <string name="report_fig1">Figure 1&#160;: aperçu de positionnement avec ROI automatique</string>
+    <string name="report_auto_roi">ROI auto en X  R(%1$snm) V(%2$snm) B(%3$snm)</string>
+    <string name="report_fig2">Figure 2&#160;: profils 1D automatiques et fenêtres de pic dynamiques</string>
+    <string name="report_fig3">Figure 3&#160;: ajustement à deux points (B+R) avec validation par un troisième point (V)</string>
+    <string name="report_fit">Ajustement&#160;: p = %1$.4fλ %2$+.2f   Entraînement (B, R)   Validation (V)   Erreur&#160;: %3$+.2f nm</string>
+    <string name="report_sec_wl_params">Paramètres de calibration des longueurs d\'onde</string>
+    <string name="report_lbl_source">Source</string>
+    <string name="report_lbl_preset_name">Nom du préréglage</string>
+    <string name="report_lbl_preset_file_id">Identifiant du fichier de préréglage</string>
+    <string name="report_lbl_imported_at">Importé le</string>
+    <string name="report_lbl_mapping_equation">[Équation de correspondance des longueurs d\'onde]</string>
+    <string name="report_lbl_calibration_metadata">[Métadonnées de calibration]</string>
+    <string name="report_val_calibration_metadata">Exposition&#160;: %1$s   ROI en X&#160;: %2$s</string>
+    <string name="report_lbl_validation_results">[Résultats de validation]</string>
+    <string name="report_val_validation_results">Entraînement&#160;: %1$s   Validation&#160;: %2$s</string>
+    <string name="report_val_g_residual">Résidu du vert&#160;: %1$s   Erreur du vert&#160;: %2$s</string>
+    <string name="report_lbl_peak_estimator">[Estimateur de pic]</string>
+    <string name="report_val_peak_estimator">Noyau gaussien borné par les vallées (v1.4.5)&#160;; le centroïde historique n\'est qu\'un diagnostic</string>
+    <string name="report_calibration_quality">Qualité de la calibration&#160;: %1$s</string>
+    <string name="report_fig4a">Figure 4a&#160;: LED de positionnement — mesures RAW (données indépendantes)</string>
+    <string name="report_fig4b">Figure 4b&#160;: corrigé SPD (fin) + UNE courbe fusionnée point par point (épais)</string>
+    <string name="report_fig4c">Figure 4c&#160;: réponse absolue de la caméra = Lampe_c / SPD_vrai (masquée)</string>
+    <string name="report_fig4d">Figure 4d&#160;: poids des voies proportionnels à la réponse (somme = 1) avec croisements de réponse</string>
+    <string name="report_sec_spd_params">Paramètres de réponse SPD et de fusion</string>
+    <string name="report_lbl_status_source">État / source</string>
+    <string name="report_val_status_source">%1$s · %2$s</string>
+    <string name="report_lbl_frames_exposure">Vues / Exposition</string>
+    <string name="report_val_frames_exposure">%1$s / %2$s</string>
+    <string name="report_lbl_effective_band">[Bande effective]</string>
+    <string name="report_val_effective_band">%1$s | px masqués %2$s | ratio 0.1</string>
+    <string name="report_lbl_responsivity_crossings">[Croisements de réponse (diagnostic uniquement)]</string>
+    <string name="report_lbl_cross_channel_agreement">[Concordance entre voies]</string>
+    <string name="report_lbl_fused_curve_peak">[Pic de la courbe fusionnée]</string>
+    <string name="report_lbl_response_peaks">[Pics de réponse (absolus)]</string>
+    <string name="report_lbl_raw_positioning_peaks">[Pics de positionnement RAW]</string>
+    <string name="report_lbl_corrected_positioning_peaks">[Pics de positionnement corrigés]</string>
+    <string name="report_lbl_method">[Méthode]</string>
+    <string name="report_fig7">Figure 7&#160;: spectre corrigé du blanc et du SPD face au blanc</string>
+    <string name="report_fig7_note">Vert = échantillon corrigé, Rouge = blanc\nLes bandes à faible réponse (moins de 20 pour cent du pic de la voie) sont exclues&#160;; les pics isolés sont remplacés localement.</string>
+    <string name="report_sec_sample_params">Paramètres d\'analyse de l\'échantillon</string>
+    <string name="report_val_fluorophore">%1$s (%2$s)</string>
+    <string name="report_lbl_analysis_channel">Voie d\'analyse</string>
+    <string name="report_lbl_spd_correction">Correction SPD</string>
+    <string name="report_lbl_peak_wavelength">[Longueur d\'onde du pic]</string>
+    <string name="report_lbl_peak_intensity">[Intensité du pic]</string>
+    <string name="report_lbl_fwhm">[FWHM]</string>
+    <string name="report_lbl_centroid">[Centroïde]</string>
+    <string name="report_lbl_integration_window">Fenêtre d\'intégration</string>
+    <string name="report_lbl_blank_mean_area">Aire moyenne du blanc</string>
+    <string name="report_lbl_sample_mean_area">Aire moyenne de l\'échantillon</string>
+    <string name="report_lbl_corrected_area">[Aire intégrée corrigée]</string>
+    <string name="report_lbl_sd_replicates">Écart-type / Répétitions</string>
+    <string name="report_val_sd_replicates">%1$s / %2$s</string>
+    <string name="report_fig8">Figure 8&#160;: courbe d\'étalonnage avec l\'échantillon inconnu</string>
+    <string name="report_sec_conc_params">Paramètres de concentration</string>
+    <string name="report_lbl_standard">Étalon</string>
+    <string name="report_lbl_regression_formula">[Formule de régression]</string>
+    <string name="report_lbl_predicted_conc">[Concentration prédite]</string>
+    <string name="report_warning">⚠ %1$s</string>
+
+    <!-- ══════════ Rapport&#160;: valeurs de provenance et d\'état ══════════ -->
+    <string name="report_source_not_run">Non exécuté</string>
+    <string name="report_source_preset">Préréglage · %1$s</string>
+    <string name="report_source_live">Calibration en direct</string>
+    <string name="report_source_live_detail">Calibration en direct · %1$s</string>
+    <string name="report_source_live_curve">Courbe d\'étalonnage en direct</string>
+    <string name="report_spd_status_pending">En attente</string>
+    <string name="report_spd_status_calibrated">Calibré (%1$d vue(s) de lampe)</string>
+    <string name="report_spd_method_note">Numérateur = Positionnement (LED indépendantes)&#160;; opérations point par point uniquement&#160;; poids proportionnels à la réponse (somme = 1)</string>
+    <string name="report_spd_response_fused">Courbe continue fusionnée F(λ) disponible (page 2 du rapport)</string>
+    <string name="report_peaks_from_preset">Chargé depuis le préréglage (pics arrondis au pixel)</string>
+    <string name="report_analysis_error">Erreur d\'analyse&#160;: %1$s</string>
+    <string name="report_val_x_roi">[%1$d, %2$d] (Largeur&#160;: %3$d px)</string>
+    <string name="report_val_training_points">B(%1$snm), R(%2$snm)</string>
+    <string name="report_val_validation_point">V(%1$snm)</string>
+    <string name="report_val_g_residual_px">%1$+.2f pixels</string>
+    <string name="report_val_integration_window">[%1$d, %2$d] px</string>
+    <string name="report_val_integrated_area">%1$.1f (voie=%2$s, rép=%3$s)</string>
+
+    <!-- ══════════ Suffixes d\'état des étapes ══════════ -->
+    <string name="st_rb_swap_retry"> [nouvelle tentative d\'inversion R/B]</string>
+    <string name="st_rb_auto_corrected"> [R/B auto-corrigé]</string>
+    <string name="st_exp_echo"> [exp b=%1$.3fs é=%2$.3fs]</string>
+    <string name="st_log_fit"> (Ajustement log)</string>
+    <string name="st_missing_exposure"> ⚠ %1$d vue(s) sans exposition, non normalisée(s)</string>
+    <string name="warn_negative_slope">Pente négative détectée — vérifiez une surexposition ou une soustraction du blanc incorrecte.</string>
+
+    <!-- ══════════ Écran d\'historique ══════════ -->
+    <string name="history_tab_projects">Projets</string>
+    <string name="history_tab_wl_presets">λ</string>
+    <string name="history_tab_spd_presets">SPD</string>
+    <string name="history_in_progress">En cours – touchez pour continuer</string>
+    <string name="history_finished">Terminé</string>
+    <string name="history_wl_presets_empty">Aucun préréglage de longueurs d\'onde. Enregistrez-en un depuis l\'étape 1.</string>
+    <string name="history_spd_presets_empty">Aucun préréglage SPD. Enregistrez-en un depuis l\'étape 2.</string>
+    <string name="history_delete_preset_title">Supprimer le préréglage</string>
+    <string name="history_delete_preset_msg">Supprimer «&#160;%1$s&#160;»&#160;? Cette action est irréversible.</string>
+    <string name="history_edit_preset_title">Modifier le préréglage</string>
+    <string name="history_slope_label">Pente (px/nm)</string>
+    <string name="history_intercept_label">Ordonnée à l\'origine (px)</string>
+    <string name="history_rg_coefficient">Coefficient R/V</string>
+    <string name="history_bg_coefficient">Coefficient B/V</string>
+    <string name="history_preset_summary_wl">pente=%1$s ordonnée=%2$s</string>
+    <string name="history_preset_summary_curve">pente=%1$s ordonnée=%2$s R²=%3$s</string>
+    <string name="history_preset_summary_spd">R=%1$s B=%2$s</string>
+
+    <!-- ══════════ Paramètres / réinitialisation ══════════ -->
+    <string name="settings_channel_nm">%1$s (nm)</string>
+    <string name="settings_current_source">Source actuelle&#160;: %1$s</string>
+    <string name="settings_spd_installed">CSV de SPD installé</string>
+    <string name="settings_focus_section">Mise au point</string>
+    <string name="settings_infinity">Infini (∞)</string>
+    <string name="settings_macro">Macro</string>
+    <string name="settings_diagnostic_log">Journal de diagnostic</string>
+    <string name="settings_log_desc">Journal local tournant (2 Mo max). Jamais envoyé automatiquement.</string>
+    <string name="settings_save_log">Enregistrer le journal (%1$d Ko)</string>
+    <string name="settings_clear_log">Effacer le journal</string>
+    <string name="log_share_title">Enregistrer le journal de diagnostic</string>
+    <string name="parameters_title">Paramètres</string>
+    <string name="parameters_exposure">Exposition (ms, 10–3000)</string>
+    <string name="parameters_iso">ISO (50–1600)</string>
+    <string name="parameters_focus">Mise au point (D, 0 = ∞)</string>
+    <string name="parameters_wb">Balance des blancs (K ou auto)</string>
+    <string name="reset_confirm_title">Réinitialiser l\'expérience en cours&#160;?</string>
+    <string name="reset_confirm_body">Cela effacera toutes les captures, calibrations et étalons.\nL\'historique et les fichiers DNG publiés seront conservés.</string>
+
+    <!-- ══════════ Aperçu demi-écran ══════════ -->
+    <string name="half_preview_covered_pct">Couverte\n%1$d&#160;%%</string>
+    <string name="half_preview_light">Lumière&#160;: %1$.0f lux — %2$s</string>
+    <string name="half_preview_light_na">Lumière&#160;: n/d</string>
+
+    <!-- ══════════ Échantillon / fluorophore ══════════ -->
+    <string name="step3_fluorophore_placeholder">— Choisissez un fluorophore —</string>
+
+    <!-- ══════════ Caméra&#160;: erreurs sans ressource existante ══════════ -->
+    <string name="cam_err_session_create">Échec de la création de la session&#160;: %1$s</string>
+    <string name="cam_err_session_not_ready">Session non prête</string>
+    <string name="cam_err_camera_not_open">Caméra non ouverte</string>
+    <string name="cam_err_busy">Caméra occupée — la vue précédente est encore en traitement</string>
+    <string name="cam_err_prepare">Impossible de préparer la caméra pour la capture&#160;: %1$s</string>
+    <string name="cam_err_timeout_schedule">Impossible de programmer le délai d\'attente de capture</string>
+
+    <!-- ══════════ Import SPD (CSV) ══════════ -->
+    <string name="spd_err_cannot_open">Impossible d\'ouvrir le fichier</string>
+    <string name="spd_err_too_short">CSV trop court</string>
+    <string name="spd_err_parse_failed">Échec de l\'analyse</string>
+</resources>

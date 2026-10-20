@@ -8,28 +8,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [v2.2.8] restoration boundaries of the Step 1/2/4 provenance when reopening a project from History.
+ * [v2.2.8] The boundaries of Step 1/2/4 provenance restoration when reopening a project from History.
  *
  * `openProject()` mixes two purposes whose correct answers are opposite:
  *
- * | project status   | purpose                    | should live overwrite the provenance?          |
- * |-----------------|--------------------|------------------------|
- * | `IN_PROGRESS`  | continue an unfinished project | **yes** -- the data really comes from an on-site recomputation |
- * | `FINISHED`     | view a historical report   | **no** -- the user came to read last time's report |
+ * | Project status | Purpose                        | Should provenance be overwritten by live data? |
+ * |----------------|--------------------------------|------------------------------------------------|
+ * | `IN_PROGRESS`  | Continue an unfinished project | **Yes** -- the data really comes from a live recomputation |
+ * | `FINISHED`     | View the historical report     | **No** -- the user came to see the report from last time |
  *
- * There is one more boundary: **restore the provenance only (12 fields), never the numbers**.
- * Numbers must match the current real state; provenance is the historical fact of "where this project originally came from".
+ * There is also one more boundary: **restore only the provenance (12 fields), never the numbers**.
+ * The numbers must match the current real state; provenance is the historical fact of "how this
+ * project came to be".
  *
- * As in `ReportProvenanceTest`: the ViewModel depends on Application + two Room databases and cannot be
- * instantiated in a JVM unit test, so here we assert directly against **the pure functions in the production code** -- namely
- * `shouldRestoreProvenance()` (the gate) and `ReportData.restoreProvenance()` (the move),
- * which are exactly the two that `openProject()` calls.
+ * As in `ReportProvenanceTest`: the ViewModel depends on Application + two Room databases and
+ * cannot be instantiated in a JVM unit test, so here we assert directly on **the pure functions in
+ * the production code** -- namely `shouldRestoreProvenance()` (the gate) and
+ * `ReportData.restoreProvenance()` (the transfer), which are exactly the two that `openProject()`
+ * calls.
  */
 class ReopenProvenanceTest {
 
     private val at = "2026-10-17 09:30:00"
 
-    /** Provenance in the snapshot: Steps 1/2/4 were all imported from presets originally. */
+    /** The provenance in the snapshot: Step 1/2/4 were all imported from presets originally. */
     private fun snapshotProvenance() = ReportData(
         step1Source = "Preset · Lab WL 2026",
         step1PresetName = "Lab WL 2026",
@@ -51,8 +53,9 @@ class ReopenProvenanceTest {
     )
 
     /**
-     * the provenance after it was overwritten by `analyzePositioning()` / `analyzeSpd()` on reopen --
-     * i.e. the on-site calibration values written by `withLiveWavelength` / `withLiveSpd`.
+     * The provenance after reopening, once it has been overwritten by `analyzePositioning()` /
+     * `analyzeSpd()` -- that is, the live calibration values written by `withLiveWavelength` /
+     * `withLiveSpd`.
      */
     private fun liveProvenance() = ReportData(
         step1Source = "Live calibration",
@@ -75,7 +78,7 @@ class ReopenProvenanceTest {
     )
 
     // ─────────────────────────────────────────────────────────────────────
-    // 1. FINISHED + a preset was imported -> the provenance keeps "Preset -- ..."
+    // 1. FINISHED + a preset was imported → provenance stays "Preset · …"
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -83,7 +86,7 @@ class ReopenProvenanceTest {
         val snapshot = snapshotProvenance()
         val recomputed = liveProvenance()
 
-        assertTrue("a FINISHED project must restore the provenance", shouldRestoreProvenance("FINISHED", snapshot))
+        assertTrue("a FINISHED project must restore its provenance", shouldRestoreProvenance("FINISHED", snapshot))
 
         val out = recomputed.restoreProvenance(snapshot)
 
@@ -105,8 +108,9 @@ class ReopenProvenanceTest {
         assertEquals("preset://11", out.step4PresetFile)
         assertEquals(at, out.step4ImportedAt)
 
-        // the three *Params are "provenance that carries numbers" and are **deliberately not** in the restore list (12, not 15);
-        // they must keep the values written by the recomputation. See the KDoc of restoreProvenance in ProjectViewModel.
+        // The three *Params are "provenance that carries numbers" and are **deliberately not** in
+        // the restore list (12 rather than 15), so they must keep the recomputed values.
+        // See the KDoc of restoreProvenance in ProjectViewModel.
         assertEquals(recomputed.step1Params, out.step1Params)
         assertEquals(recomputed.spdParams, out.spdParams)
         assertEquals(recomputed.step4Params, out.step4Params)
@@ -115,7 +119,7 @@ class ReopenProvenanceTest {
         assertNotEquals(snapshot.step4Params, out.step4Params)
     }
 
-    /** The provenance fields must **really** come from the snapshot rather than coincidentally equal the recomputed values. */
+    /** The provenance fields must **really** come from the snapshot, not merely happen to equal the recomputed values. */
     @Test
     fun finishedProject_restoreActuallyMovesTheValues() {
         val snapshot = snapshotProvenance()
@@ -139,8 +143,8 @@ class ReopenProvenanceTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 2. IN_PROGRESS + a preset was imported -> the provenance stays live and is not restored
-    //    (this specifically prevents writing the gate condition backwards)
+    // 2. IN_PROGRESS + a preset was imported → provenance stays live, no restore
+    // (this one specifically guards against writing the gate condition backwards)
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -148,17 +152,18 @@ class ReopenProvenanceTest {
         val snapshot = snapshotProvenance()
 
         assertFalse(
-            "IN_PROGRESS means continuing the project, so the provenance must be overwritten by the on-site recomputation",
+            "IN_PROGRESS means continuing the project, so the provenance must be overwritten by the live recomputation",
             shouldRestoreProvenance("IN_PROGRESS", snapshot)
         )
-        // no other non-FINISHED status restores either, so that the code does not just compare against the single string "IN_PROGRESS".
+        // Every other non-FINISHED status is also not restored, so that the code cannot get away
+        // with checking only the single string "IN_PROGRESS".
         assertFalse(shouldRestoreProvenance(null, snapshot))
         assertFalse(shouldRestoreProvenance("ARCHIVED", snapshot))
-        assertFalse(shouldRestoreProvenance("FINISHED ", snapshot)) // a trailing space does not count
+        assertFalse(shouldRestoreProvenance("FINISHED ", snapshot)) // trailing space does not count
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 3. restored == null -> do not restore, and the restore function itself must not crash or invent values
+    // 3. restored == null → no restore, and the restore function itself neither crashes nor invents values
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -169,7 +174,8 @@ class ReopenProvenanceTest {
 
     @Test
     fun restoreFromBlankProvenance_isInertAndNonNull() {
-        // even when the provenance in the snapshot is all defaults, restoration must copy it faithfully, without crashing or fabricating.
+        // Even if the snapshot's provenance is all defaults, the restore must copy it faithfully:
+        // no crash, no fabrication.
         val receiver = snapshotProvenance()
         val out = receiver.restoreProvenance(ReportData())
 
@@ -181,19 +187,20 @@ class ReopenProvenanceTest {
         assertNull(out.spdPresetName)
         assertNull(out.step4PresetName)
 
-        // the three *Params are not in the restore list, so they must keep the receiver's values instead of being cleared to emptyMap.
+        // The three *Params are not in the restore list and must keep the receiver's original
+        // values rather than being cleared to emptyMap.
         assertEquals(receiver.step1Params, out.step1Params)
         assertEquals(receiver.spdParams, out.spdParams)
         assertEquals(receiver.step4Params, out.step4Params)
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 4. the most important one: restore the provenance only, never the numbers
+    // 4. The most important case: restore only provenance, never the numbers
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     fun restoreProvenance_leavesNumericFieldsAlone() {
-        // current = what analyzePositioning / analyzeSpd / analyzeSample computed after reopening
+        // current = computed after reopening by analyzePositioning / analyzeSpd / analyzeSample
         val recomputed = ReportData(
             slope = -2.71,
             intercept = 1800.5,
@@ -211,12 +218,12 @@ class ReopenProvenanceTest {
             regressionFormula = "Unmixed area = 12.5000 * Conc + 3.25",
             predictedConcentration = "1.234",
             replicates = 3,
-            // the three *Params take part as well: recomputed value vs snapshot value
+            // The three *Params take part too: recomputed value vs snapshot value
             step1Params = linkedMapOf("slope_k" to "-2.710000", "cfa" to "RGGB"),
             spdParams = linkedMapOf("spd_csv" to "true_spd.csv (bundled)"),
             step4Params = linkedMapOf("r2" to "0.9910")
         )
-        // from = the snapshot, whose numbers all differ from the recomputed results
+        // from = the snapshot, every number differs from the recomputed result
         val snapshot = ReportData(
             slope = -2.739,
             intercept = 1807.68,
@@ -231,10 +238,10 @@ class ReopenProvenanceTest {
             correctedAreaValue = 42.0,
             curveSlope = 99.0,
             curveIntercept = -5.0,
-            regressionFormula = "formula from the snapshot",
+            regressionFormula = "formula from snapshot",
             predictedConcentration = "999.000",
             replicates = 9,
-            // provenance part: comes from the preset
+            // Provenance part: comes from the preset
             step1Source = "Preset · Lab WL 2026",
             step1PresetName = "Lab WL 2026",
             step1PresetFile = "preset://7",
@@ -254,7 +261,7 @@ class ReopenProvenanceTest {
 
         val out = recomputed.restoreProvenance(snapshot)
 
-        // pin every one down: the numbers must be the **recomputed** values, not the snapshot's.
+        // Pinned one by one: the numbers must be the **recomputed** values, not the snapshot's.
         assertEquals("slope must be the recomputed value", recomputed.slope, out.slope)
         assertEquals("intercept must be the recomputed value", recomputed.intercept, out.intercept)
         assertEquals("gErrorNm must be the recomputed value", recomputed.gErrorNm, out.gErrorNm)
@@ -272,15 +279,16 @@ class ReopenProvenanceTest {
         assertEquals("predictedConcentration must be the recomputed value", recomputed.predictedConcentration, out.predictedConcentration)
         assertEquals("replicates must be the recomputed value", recomputed.replicates, out.replicates)
 
-        // the three *Params are likewise "provenance that carries numbers" and must keep the recomputed values.
+        // The three *Params are likewise "provenance that carries numbers" and must keep the recomputed values.
         assertEquals("step1Params must be the recomputed value", recomputed.step1Params, out.step1Params)
         assertEquals("spdParams must be the recomputed value", recomputed.spdParams, out.spdParams)
         assertEquals("step4Params must be the recomputed value", recomputed.step4Params, out.step4Params)
 
-        // strongest assertion: the whole reportData equals "the recomputed result with only those 12 provenance fields replaced by the snapshot's".
-        // this one covers the remaining dozens of fields; any out-of-bounds move makes it fail.
+        // The strongest assertion: the whole reportData equals "the recomputed result" with only
+        // those 12 provenance fields swapped for the snapshot's. This covers the remaining dozens
+        // of fields, so any out-of-bounds transfer makes it fail.
         assertEquals(
-            "after restoration it must equal exactly: recomputed result + the 12 snapshot provenance fields, no more and no less",
+            "after restore it must equal exactly \"the recomputed result + the 12 snapshot provenance fields\", no more and no less",
             recomputed.copy(
                 step1Source = snapshot.step1Source,
                 step1PresetName = snapshot.step1PresetName,
@@ -300,46 +308,47 @@ class ReopenProvenanceTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // 5. Case B: preset imported only, no positioning frame captured
+    // 5. Case B: only a preset was imported, no positioning frames were taken
     //
-    // this pins down the bottom-right cell of the table above -- after dropping *Params, this kind of project
-    // **still shows the preset parameters** in its report, because `analyzePositioning()` returns early at :1228 and
-    // nobody ever overwrites the preset params in the baseline.
+    // This pins the bottom-right cell of the table above -- after excluding *Params, the
+    // report of such a project **still shows the preset parameters**, because
+    // `analyzePositioning()` returns early at :1228 and nothing ever overwrites the preset
+    // params sitting in the baseline.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     fun caseB_presetOnlyNoFrames_stillShowsPresetParams() {
         val snapshot = snapshotProvenance()
 
-        // (1) baseline: openProject starts from the snapshot and only replaces fluorophore / band with the project entity's values
+        // 1. Baseline: openProject starts from the snapshot and only swaps fluorophore / band for the project entity's values
         val baseline = reopenBaseline(snapshot, "EGFP", 500 to 540)
 
-        // (2) the positioning frame is empty -> analyzePositioning() returns early at :1228 and touches no field
-        //     (this step cannot run the ViewModel directly on the JVM, so it is expressed equivalently as
-        //      "no recomputation write was applied to the baseline".)
+        // 2. No positioning frames → analyzePositioning() returns early at :1228 and touches no field
+        //    (this step cannot run the ViewModel directly on the JVM, so it is expressed
+        //     equivalently as "no recomputation write is applied to the baseline")
         assertTrue("a FINISHED project takes the restore path", shouldRestoreProvenance("FINISHED", snapshot))
 
-        // (3) restore: move only the 12 provenance fields and not params, so the preset values in the baseline survive unchanged
+        // 3. Restore: only the 12 provenance fields are moved, params are not -- so the preset values in the baseline stay as they are
         val out = baseline.restoreProvenance(snapshot)
 
-        assertEquals("in Case B params are still the preset values", snapshot.step1Params, out.step1Params)
+        assertEquals("under Case B the params are still the preset values", snapshot.step1Params, out.step1Params)
         assertEquals("-2.738911", out.step1Params["slope_k"])
         assertEquals("BGGR (R/B swapped)", out.step1Params["cfa"])
         assertEquals(snapshot.spdParams, out.spdParams)
         assertEquals(snapshot.step4Params, out.step4Params)
 
-        // the provenance rows are the preset ones too
+        // The provenance rows also come from the preset
         assertEquals("Preset · Lab WL 2026", out.step1Source)
         assertEquals("Lab WL 2026", out.step1PresetName)
         assertEquals("preset://7", out.step1PresetFile)
         assertEquals(at, out.step1ImportedAt)
 
-        // fluorophore / band come from the project entity, not from the snapshot
+        // fluorophore / band come from the project entity rather than the snapshot
         assertEquals("EGFP", out.sampleFluorophore)
         assertEquals("500–540 nm", out.sampleBand)
     }
 
-    /** The other half of Case B: when the snapshot is null the baseline falls back to an empty report, without crashing or leaving residue. */
+    /** The other half of Case B: with a null snapshot the baseline falls back to a blank report -- no crash, no leftovers. */
     @Test
     fun caseB_nullSnapshot_fallsBackToBlankReport() {
         val out = reopenBaseline(null, "MCHERRY", 590 to 630)
@@ -348,19 +357,19 @@ class ReopenProvenanceTest {
         assertEquals(emptyMap<String, String>(), out.step1Params)
     }
 
-    /** The baseline must keep the snapshot content verbatim rather than cherry-picking fields. */
+    /** The baseline must preserve the snapshot verbatim, not cherry-pick a subset of fields. */
     @Test
     fun reopenBaseline_preservesTheWholeSnapshot() {
         val snapshot = snapshotProvenance().copy(
             slope = -2.739,
             redProfile = listOf(7f, 8f, 9f),
-            regressionFormula = "formula from the snapshot"
+            regressionFormula = "formula from snapshot"
         )
         val out = reopenBaseline(snapshot, "YPET", 500 to 530)
 
         assertEquals(snapshot.copy(sampleFluorophore = "YPET", sampleBand = "500–530 nm"), out)
         assertEquals(-2.739, out.slope!!, 0.0)
         assertEquals(listOf(7f, 8f, 9f), out.redProfile)
-        assertEquals("formula from the snapshot", out.regressionFormula)
+        assertEquals("formula from snapshot", out.regressionFormula)
     }
 }

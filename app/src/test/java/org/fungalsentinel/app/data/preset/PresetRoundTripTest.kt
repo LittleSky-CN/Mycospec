@@ -2,7 +2,9 @@ package org.fungalsentinel.app.data.preset
 
 import org.fungalsentinel.app.analysis.SpectralResponseCalibrator
 import org.fungalsentinel.app.analysis.SpdCalibrationResult
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -11,6 +13,11 @@ import org.junit.Test
 /**
  * Save -> load -> reuse coverage for the three preset types declared in
  * [PresetTypes] (WAVELENGTH / SPD / CURVE).
+ *
+ * Since schema v3 an SPD payload is indexed by WAVELENGTH on the canonical
+ * uniform grid (380..780 nm step 1 nm, 401 points) and nothing in it depends on
+ * the pixel<->nm mapping any more. Every SPD fixture below therefore rides on
+ * [SpectralResponseCalibrator.canonicalGrid].
  *
  * These tests exercise everything that can be exercised without an Android
  * framework runtime (no Room, no ViewModel).  The Room round-trip itself is
@@ -21,41 +28,67 @@ class PresetRoundTripTest {
 
     // ---------------------------------------------------------------- SPD --
 
+    /** The toJson file-level metadata cannot default to Build.* in a JVM unit test. */
+    private fun write(r: SpdCalibrationResult): String = SpectralResponseCalibrator.toJson(
+        r, deviceModel = "Pixel 8", appVersion = "2.3.0", createdAt = "2026-10-18T12:00:00Z"
+    )
+
+    private fun grid(): FloatArray = SpectralResponseCalibrator.canonicalGrid()
+
     private fun spd(): SpdCalibrationResult {
-        val n = 64
-        val wavelengths = FloatArray(n) { 430f + it * 3.5f }          // strictly increasing
+        val w = grid()
+        val n = w.size                                            // 401
         fun ramp(offset: Float) = FloatArray(n) { (it + offset) * 1.7f }
+        // The Step 2 mask: valid band AND lamp SPD above the threshold.
+        val mask = BooleanArray(n) { w[it] >= 430f && w[it] <= 660f }
         return SpdCalibrationResult(
-            wavelengths = wavelengths,
+            wavelengths = w,
             respR = ramp(1f), respG = ramp(2f), respB = ramp(3f),
             posR = ramp(4f), posG = ramp(5f), posB = ramp(6f),
             corrR = ramp(7f), corrG = ramp(8f), corrB = ramp(9f),
             // v1.4 response-proportional fusion weights (sum == 1 pointwise)
             wB = FloatArray(n) { 0.2f + it * 0.001f },
             wG = FloatArray(n) { 0.3f + it * 0.001f },
-            wR = FloatArray(n) { 0.4f - it * 0.002f },
+            wR = FloatArray(n) { 0.4f - it * 0.001f },
             fused = FloatArray(n) { 12.5f + it },
-            mask = BooleanArray(n) { it % 4 != 0 },
-            effectiveBandNm = 430f to 650.5f,
-            maskedCount = n - n / 4, totalCount = n, thresholdRatio = 0.1f,
+            mask = mask,
+            effectiveBandNm = 430f to 660f,
+            validRangeNm = 430f to 660f,
+            maskedCount = mask.count { it }, gridPoints = n, thresholdRatio = 0.1f,
             crossingBG = 483.25f, crossingGR = 577.75f, agreementPct = 3.125f,
             peakRespR = 110.5f to 595.5f,
             peakRespG = 210.5f to 522.5f,
             peakRespB = 310.5f to 467.5f,
             fusedPeak = 0.12345f to 512.25f,
             exposureSeconds = 0.2, frames = 3, spdSource = "true_spd.csv (bundled)",
-            rbSwapped = true
+            rbSwapped = true,
+            slope = -2.738911, intercept = 3198.4744, gErrorNm = 5.512,
+            xRoiStart = 1204, xRoiEnd = 2871, sensorHeight = 3072
         )
     }
 
     @Test
-    fun spdCalibrationRoundTripsEveryV14Field() {
+    fun spdCalibrationRoundTripsEveryV3Field() {
         val original = spd()
-        val restored = SpectralResponseCalibrator.fromJson(SpectralResponseCalibrator.toJson(original))
+        val json = JSONObject(write(original))
+
+        // ---- file-level metadata: written by Android AND by the desktop ----
+        assertEquals(3, json.getInt("schema_version"))
+        assertEquals("SPD", json.getString("preset_type"))
+        assertEquals("2.3.0", json.getString("app_version"))
+        assertEquals("2026-10-18T12:00:00Z", json.getString("created_at"))
+        assertEquals("Pixel 8", json.getString("device_model"))
+        assertEquals("uniform_wavelength", json.getJSONObject("axis").getString("kind"))
+        assertEquals(380.0, json.getJSONObject("axis").getDouble("start_nm"), 1e-12)
+        assertEquals(780.0, json.getJSONObject("axis").getDouble("stop_nm"), 1e-12)
+        assertEquals(1.0, json.getJSONObject("axis").getDouble("step_nm"), 1e-12)
+
+        val restored = SpectralResponseCalibrator.fromJson(json.toString())
 
         assertNotNull(restored)
         restored!!
 
+        assertEquals(SpectralResponseCalibrator.canonicalGrid().size, restored.gridPoints)
         assertArray("wavelengths", original.wavelengths, restored.wavelengths)
         assertArray("respR", original.respR, restored.respR)
         assertArray("respG", original.respG, restored.respG)
@@ -66,16 +99,18 @@ class PresetRoundTripTest {
         assertArray("corrR", original.corrR, restored.corrR)
         assertArray("corrG", original.corrG, restored.corrG)
         assertArray("corrB", original.corrB, restored.corrB)
-        // v1.4 response-proportional weights -- the fields the SPD preset payload
-        // must carry so a reused calibration reproduces the original fusion.
+        // The derived curves that report Figure 4a/4b/4c/4d draw from. With Mode B
+        // gone there is no raw lamp spectrum to rebuild them from, so they have to
+        // survive the payload.
         assertArray("wB", original.wB, restored.wB)
         assertArray("wG", original.wG, restored.wG)
         assertArray("wR", original.wR, restored.wR)
         assertArray("fused", original.fused, restored.fused)
         assertArray("mask", original.mask, restored.mask)
         assertEquals(original.effectiveBandNm, restored.effectiveBandNm)
+        assertEquals(original.validRangeNm, restored.validRangeNm)
         assertEquals(original.maskedCount, restored.maskedCount)
-        assertEquals(original.totalCount, restored.totalCount)
+        assertEquals(original.gridPoints, restored.gridPoints)
         assertEquals(original.thresholdRatio, restored.thresholdRatio, 0f)
         assertEquals(original.crossingBG, restored.crossingBG, 0f)
         assertEquals(original.crossingGR, restored.crossingGR, 0f)
@@ -88,63 +123,59 @@ class PresetRoundTripTest {
         assertEquals(original.frames, restored.frames)
         assertEquals(original.spdSource, restored.spdSource)
         assertEquals(original.rbSwapped, restored.rbSwapped)
+        assertEquals(original.sensorHeight, restored.sensorHeight)
     }
 
     @Test
-    fun spdCalibrationRoundTripsTheTraceabilityAndModeBFields() {
-        // DEF-A04 (fixed): the payload now carries the mapping it was baked with
-        // plus the un-contaminated Mode B inputs (raw lamp profiles + reference
-        // SPD grid), so a reloaded preset can be re-derived for a drifted
-        // mapping instead of being silently interpolated.
-        val original = spd().copy(
-            slope = -2.738911, intercept = 3198.4744, gErrorNm = 5.512,
-            xRoiStart = 1204, xRoiEnd = 2871,
-            lampR = FloatArray(64) { 1f + it },
-            lampG = FloatArray(64) { 2f + it },
-            lampB = FloatArray(64) { 3f + it },
-            spdRefWl = FloatArray(31) { 430f + it * 10f },
-            spdRefVal = FloatArray(31) { 0.5f + it * 0.01f }
-        )
-        val restored = SpectralResponseCalibrator.fromJsonStrict(
-            SpectralResponseCalibrator.toJson(original))
+    fun spdCalibrationRoundTripsTheTraceabilityFieldsAndCarriesNoRawLampData() {
+        // The mapping (slope/intercept), the Step 1 residual, the X-ROI and the
+        // sensor geometry travel with the file for DIAGNOSTICS ONLY -- the
+        // drift hint. Nothing rebuilds a curve from them: after v3 the response
+        // owns its own wavelength axis, so the Mode B inputs (raw lamp profiles
+        // and the reference lamp grid) are gone for good.
+        val original = spd()
+        val json = JSONObject(write(original))
 
+        val forbidden = listOf(
+            // Mode B inputs deleted with Mode B
+            "lampR", "lampG", "lampB", "spdRefWl", "spdRefVal",
+            // pre-v3 keys that MUST NOT come back
+            "version", "respR", "respG", "respB", "totalCount", "exposure",
+            "bandLo", "bandHi", "xRoiStart", "xRoiEnd", "gErrorNm",
+            "thresholdRatio", "crossingBG", "crossingGR", "peakR", "peakG", "peakB"
+        )
+        forbidden.forEach { assertFalse("'$it' must not be written any more", json.has(it)) }
+
+        val restored = SpectralResponseCalibrator.fromJsonStrict(json.toString())
         assertEquals(-2.738911, restored.slope, 1e-12)
         assertEquals(3198.4744, restored.intercept, 1e-9)
         assertEquals(5.512, restored.gErrorNm!!, 1e-9)
         assertEquals(1204, restored.xRoiStart)
         assertEquals(2871, restored.xRoiEnd)
-        // Mode B arrays are serialised with 6 significant digits (§7.2), so they
-        // round-trip to ~1e-6 relative, not bit-exact.
-        assertArrayApprox("lampR", original.lampR!!, restored.lampR!!)
-        assertArrayApprox("lampG", original.lampG!!, restored.lampG!!)
-        assertArrayApprox("lampB", original.lampB!!, restored.lampB!!)
-        assertArrayApprox("spdRefWl", original.spdRefWl!!, restored.spdRefWl!!)
-        assertArrayApprox("spdRefVal", original.spdRefVal!!, restored.spdRefVal!!)
-        // A payload without lamp* (legacy) must still load -- Mode A fallback.
-        val legacy = SpectralResponseCalibrator.fromJsonStrict(
-            SpectralResponseCalibrator.toJson(spd()))
-        assertNull(legacy.lampR)
-        assertNull(legacy.spdRefWl)
-        assertTrue(legacy.slope.isNaN())
+        assertEquals(3072, restored.sensorHeight)
     }
 
     @Test
     fun spdPayloadForAFullSensorStaysInsideTheCursorWindow() {
-        // Mode B makes the payload considerably bigger.  `payloadJson` is a
-        // SQLite TEXT column read through a CursorWindow (default 2 MB), so
-        // N=3072 -- a full-height sensor -- has to stay comfortably below it.
-        val n = 3072
+        // `payloadJson` is a SQLite TEXT column read through a CursorWindow
+        // (default 2 MB). A v3 payload always carries 13 GRID-indexed arrays --
+        // the same count whether the sensor had 640 or 3072 rows -- so the size
+        // no longer scales with the sensor height at all.
+        val w = grid()
+        val n = w.size
         fun ramp(offset: Float) = FloatArray(n) { (it + offset) * 1.7f }
+        val mask = BooleanArray(n) { w[it] >= 430f && w[it] <= 660f }
         val big = SpdCalibrationResult(
-            wavelengths = FloatArray(n) { 430f + it * 0.09f },
+            wavelengths = w,
             respR = ramp(1f), respG = ramp(2f), respB = ramp(3f),
             posR = ramp(4f), posG = ramp(5f), posB = ramp(6f),
             corrR = ramp(7f), corrG = ramp(8f), corrB = ramp(9f),
             wB = FloatArray(n) { 0.2f }, wG = FloatArray(n) { 0.3f }, wR = FloatArray(n) { 0.5f },
             fused = FloatArray(n) { 12.5f + it * 0.01f },
-            mask = BooleanArray(n) { it % 4 != 0 },
-            effectiveBandNm = 430f to 706.5f,
-            maskedCount = n - n / 4, totalCount = n, thresholdRatio = 0.1f,
+            mask = mask,
+            effectiveBandNm = 430f to 660f,
+            validRangeNm = 430f to 660f,
+            maskedCount = mask.count { it }, gridPoints = n, thresholdRatio = 0.1f,
             crossingBG = 483.25f, crossingGR = 577.75f, agreementPct = 3.125f,
             peakRespR = 110.5f to 595.5f,
             peakRespG = 210.5f to 522.5f,
@@ -152,41 +183,40 @@ class PresetRoundTripTest {
             fusedPeak = 0.12345f to 512.25f,
             exposureSeconds = 0.2, frames = 3, spdSource = "true_spd.csv (bundled)",
             rbSwapped = false,
-            slope = -2.738911, intercept = 3198.4744,
-            lampR = ramp(10f), lampG = ramp(11f), lampB = ramp(12f),
-            spdRefWl = FloatArray(301) { 400f + it }, spdRefVal = FloatArray(301) { 0.5f }
+            slope = -2.738911, intercept = 3198.4744, gErrorNm = 5.512,
+            xRoiStart = 1204, xRoiEnd = 2871, sensorHeight = 3072
         )
-        val json = SpectralResponseCalibrator.toJson(big)
+        val payload = write(big)
+        println("[METRIC] v3 full-sensor SPD payload = ${payload.length} chars (N=3072 sensor)")
         assertTrue(
-            "N=3072 payload is ${json.length} chars, expected < 1_000_000 (CursorWindow guard)",
-            json.length < 1_000_000
+            "payload is ${payload.length} chars, expected < 1_000_000 (CursorWindow guard)",
+            payload.length < 1_000_000
         )
-        val restored = SpectralResponseCalibrator.fromJsonStrict(json)
+        val restored = SpectralResponseCalibrator.fromJsonStrict(payload)
         assertEquals(n, restored.wavelengths.size)
-        assertEquals(n, restored.lampG!!.size)
-        assertEquals(301, restored.spdRefWl!!.size)
+        assertEquals(401, restored.gridPoints)
+        assertEquals(3072, restored.sensorHeight)
     }
 
     @Test
     fun spdCalibrationRoundTripKeepsTheRbSwapFlag() {
         // DEF-A02 mitigation check: the R/B auto-correction flag survives the
         // SPD payload (it does NOT survive the WAVELENGTH preset -- see below).
-        val restored = SpectralResponseCalibrator.fromJson(SpectralResponseCalibrator.toJson(spd()))
+        val restored = SpectralResponseCalibrator.fromJson(write(spd()))
         assertEquals(true, restored!!.rbSwapped)
-        val notSwapped = SpectralResponseCalibrator.fromJson(
-            SpectralResponseCalibrator.toJson(spd().copy(rbSwapped = false)))
+        val notSwapped = SpectralResponseCalibrator.fromJson(write(spd().copy(rbSwapped = false)))
         assertEquals(false, notSwapped!!.rbSwapped)
     }
 
     @Test
     fun spdCalibrationFromJsonReturnsNullForTruncatedPayload() {
-        // Characterisation: a broken payload degrades to null -- and
-        // ProjectViewModel.loadSpdPreset() then silently falls back to the
-        // "legacy preset" branch, which leaves SPD correction DISABLED with no
-        // error shown to the user.  See DEF-A03.
+        // DEF-A03: a broken payload degrades to null and
+        // ProjectViewModel.loadSpdPreset() then calls failSpdPreset() with the
+        // reason, so the user is told instead of silently running uncorrected.
         assertNull(SpectralResponseCalibrator.fromJson("{}"))
         assertNull(SpectralResponseCalibrator.fromJson("not json at all"))
-        assertNull(SpectralResponseCalibrator.fromJson("{\"version\":2}"))
+        assertNull(SpectralResponseCalibrator.fromJson("{\"schema_version\":2}"))
+        assertNull(SpectralResponseCalibrator.fromJson("{\"version\":3}"))
     }
 
     @Test
@@ -194,15 +224,15 @@ class PresetRoundTripTest {
         // DEF-A03 (fixed): a missing key must be REJECTED, not silently
         // zero-filled. `fromJson` keeps its nullable signature and reports the
         // failure as null; `fromJsonStrict` surfaces the reason.
-        val payload = SpectralResponseCalibrator.toJson(spd())
-        val stripped = org.json.JSONObject(payload).apply { remove("respG") }.toString()
+        val payload = write(spd())
+        val stripped = JSONObject(payload).apply { remove("response_g") }.toString()
 
-        assertNull("a payload missing respG must not restore", SpectralResponseCalibrator.fromJson(stripped))
+        assertNull("a payload missing response_g must not restore", SpectralResponseCalibrator.fromJson(stripped))
         assertThrows<IllegalArgumentException> { SpectralResponseCalibrator.fromJsonStrict(stripped) }
 
         // A length mismatch is rejected the same way.
-        val short = org.json.JSONObject(payload)
-            .apply { put("respB", org.json.JSONArray((0 until 7).map { 1.0 })) }
+        val short = JSONObject(payload)
+            .apply { put("response_b", org.json.JSONArray((0 until 7).map { 1.0 })) }
             .toString()
         assertNull(SpectralResponseCalibrator.fromJson(short))
         assertThrows<IllegalArgumentException> { SpectralResponseCalibrator.fromJsonStrict(short) }
@@ -210,7 +240,7 @@ class PresetRoundTripTest {
         // The intact payload still round-trips.
         val restored = SpectralResponseCalibrator.fromJson(payload)
         assertNotNull(restored)
-        assertEquals(64, restored!!.respG.size)
+        assertEquals(401, restored!!.respG.size)
     }
 
     // -------------------------------------------------------------- CURVE --
@@ -257,7 +287,7 @@ class PresetRoundTripTest {
     fun curvePresetRoundTripsItsEmbeddedSpdCalibration() {
         // A CURVE preset embeds the SPD calibration so Step 4 can be reused
         // without redoing Step 2.  The embedded payload must round-trip too.
-        val original = curvePayload(spdJson = SpectralResponseCalibrator.toJson(spd()))
+        val original = curvePayload(spdJson = write(spd()))
         val restored = CurvePresetPayload.fromJson(original.toJson())
 
         assertNotNull(restored.spdCalibrationJson)
@@ -266,15 +296,15 @@ class PresetRoundTripTest {
         assertNotNull(originalSpd)
         assertNotNull(restoredSpd)
         assertArray("embedded wavelengths", originalSpd!!.wavelengths, restoredSpd!!.wavelengths)
-        assertArray("embedded respG", originalSpd.respG, restoredSpd.respG)
-        assertArray("embedded wG", originalSpd.wG, restoredSpd.wG)
+        assertArray("embedded response_g", originalSpd.respG, restoredSpd.respG)
+        assertArray("embedded weight_g", originalSpd.wG, restoredSpd.wG)
         assertArray("embedded fused", originalSpd.fused, restoredSpd.fused)
         assertEquals(originalSpd.rbSwapped, restoredSpd.rbSwapped)
     }
 
     @Test
     fun curvePresetRejectsBrokenEmbeddedSpdCalibration() {
-        val broken = curvePayload(spdJson = "{\"version\":2}")
+        val broken = curvePayload(spdJson = "{\"schema_version\":2}")
         assertThrows<IllegalArgumentException> { broken.validate() }
         assertThrows<IllegalArgumentException> { CurvePresetPayload.fromJson(broken.toJson()) }
     }
@@ -387,14 +417,6 @@ class PresetRoundTripTest {
         assertEquals("$label size", expected.size, actual.size)
         expected.indices.forEach { i ->
             assertEquals("$label[$i]", expected[i], actual[i], 0f)
-        }
-    }
-
-    /** 6-significant-digit arrays: compare to 1e-5 relative. */
-    private fun assertArrayApprox(label: String, expected: FloatArray, actual: FloatArray) {
-        assertEquals("$label size", expected.size, actual.size)
-        expected.indices.forEach { i ->
-            assertEquals("$label[$i]", expected[i], actual[i], Math.abs(expected[i]) * 1e-5f + 1e-7f)
         }
     }
 

@@ -244,21 +244,21 @@ class ReportProvenanceTest {
         assertTrue(r.step4Params.isEmpty())
     }
 
-    // ─── D2: steps that were never executed must not lie about their source ─────────────────────────────────────
+    // ─── D2: steps that never ran must not misreport their source ──────────
 
     @Test
     fun unrunStepsNeverClaimALiveOrBundledSource() {
         val r = ReportData()
         assertFalse(
-            "Step 1 was never run, yet it claims Live: ${r.step1Source}",
+            "Step 1 never ran but claims to be Live: ${r.step1Source}",
             r.step1Source.startsWith("Live")
         )
         assertFalse(
-            "Step 4 was never run, yet it claims Live: ${r.step4Source}",
+            "Step 4 never ran but claims to be Live: ${r.step4Source}",
             r.step4Source.startsWith("Live")
         )
         assertFalse(
-            "Step 2 was never run, yet it references a reference spectrum file: ${r.spdSource}",
+            "Step 2 never ran but references a reference spectrum file: ${r.spdSource}",
             r.spdSource.contains("true_spd.csv")
         )
         assertFalse(r.step1Source.startsWith("Preset"))
@@ -266,14 +266,14 @@ class ReportProvenanceTest {
         assertFalse(r.spdSource.startsWith("Preset"))
     }
 
-    // ─── D1: the SPD re-run triggered by a Step 1 preset must not clear the Step 2 preset provenance ────
+    // ─── D1: the SPD rerun triggered by a Step 1 preset must not clear Step 2's preset provenance ────
 
     @Test
     fun spdPresetProvenanceSurvivesTheStep1PresetRerun() {
         val p = spdPreset()
         val before = ReportData().withSpdPreset(p, driftNm = 1.0f, at = at)
-        // this is exactly what the cascaded analyzeSpd() at the end of loadWavelengthPreset does:
-        // applySpdResult() writes the numbers, withLiveSpd() rewrites the provenance to live.
+        // This is exactly what the analyzeSpd() cascade at the end of loadWavelengthPreset does:
+        // applySpdResult() writes the numbers and withLiveSpd() rewrites the provenance as live.
         val afterRerun = before
             .withLiveSpd("true_spd.csv (bundled)", at)
             .copy(spdStatus = "Calibrated (3 lamp frame(s))")
@@ -285,13 +285,14 @@ class ReportProvenanceTest {
         assertEquals("preset://3", restored.spdPresetFile)
         assertEquals(at, restored.spdImportedAt)
         assertEquals("1.000", restored.spdParams["drift_nm"])
-        // the recomputed numbers themselves must be kept; only the provenance is restored
+        // The recomputed numbers themselves must be kept; only the provenance is restored
         assertEquals("Calibrated (3 lamp frame(s))", restored.spdStatus)
     }
 
     @Test
     fun rerunningSpdWithoutAPresetStaysLive() {
-        // reverse guard: when there was no preset provenance to begin with (the user re-ran on site), it must stay live.
+        // Reverse guardrail: when there was no preset provenance to begin with (a live rerun by
+        // the user), it must stay live.
         val before = ReportData()
         val afterRerun = before.withLiveSpd("true_spd.csv (bundled)", at)
 
@@ -303,7 +304,7 @@ class ReportProvenanceTest {
         assertNull(restored.spdPresetFile)
     }
 
-    // ─── D4: an SPD preset that never really landed must not leave "Preset -- X" behind ─────────────────
+    // ─── D4: an SPD preset that was never really applied must not leave "Preset · X" ────────
 
     @Test
     fun spdPresetThatWasNeverAppliedLeavesNoPresetProvenance() {

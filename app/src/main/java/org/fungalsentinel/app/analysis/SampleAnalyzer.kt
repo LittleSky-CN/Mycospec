@@ -67,8 +67,9 @@ object SampleAnalyzer {
         responseThresholdFraction: Float = 0.20f
     ): SampleAnalysisResult? {
         if (blankFrames.isEmpty() || sampleFrames.isEmpty()) return null
-        // go through canonicalFluorophore: this used to be a case-sensitive exact match, so "mCherry"
-        // was classified as the default "G" channel (a real bug). Branching on the enum cannot be circumvented by spelling
+        // Go through canonicalFluorophore: this used to be a case-sensitive exact
+        // match, so "mCherry" fell through to the default "G" channel (a real bug);
+        // the enum branch can no longer be bypassed by spelling
         val channel = when (canonicalFluorophore(fluorophore)) {
             Fluorophore.MCHERRY -> "R"
             Fluorophore.CFP, Fluorophore.MTURQUOISE2 -> "B"
@@ -226,7 +227,8 @@ object SampleAnalyzer {
             fwhmNm = if (windowSize > 1) abs(wls[windowSize - 1] - wls[0]) else 0.0
         }
 
-        // [fix] force visIdx to be sorted by increasing wavelength, otherwise the X axis flips and the plot turns into a ramp
+        // [Fix] Force visIdx to be sorted by increasing wavelength so a reversed
+        // X axis cannot produce a slope in the plot
         val visIdx = (0 until n).filter { lam[it] in VIS_LO.toFloat()..VIS_HI.toFloat() }
             .sortedBy { lam[it] }
 

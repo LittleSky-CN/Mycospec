@@ -45,7 +45,7 @@ fun Step1WavelengthScreen(
     val status = report.step1Status
     val token = status.substringBefore('|')
     val message = status.substringAfter('|', status)
-    // [unified] status colours converge: green = success / translucent green = processing / red = failure / grey = idle
+    // [Unified] Status colors converge: green = success / translucent green = processing / red = failed / gray = idle
     val statusColor = statusTextColor(token)
 
     val tutorial = TutorialHost(
@@ -79,7 +79,7 @@ fun Step1WavelengthScreen(
             ) {
                 NeonHeader("STEP1:", stringResource(R.string.step1_short), onBack, tutorial)
 
-                // info box: outlined with the single accent colour
+                // Info box: bordered with the single accent color
                 NeonOutlineBox(AppColors.Accent) {
                     Text(
                         text = stringResource(R.string.step1_description),
@@ -88,7 +88,7 @@ fun Step1WavelengthScreen(
                     )
                 }
 
-                // status box: neutral outline; the text colour is decided by the status token
+                // Status box: neutral border, the text color is decided by the status token
                 NeonOutlineBox(AppColors.Outline) {
                     Text(
                         text = message,
@@ -147,9 +147,9 @@ fun Step1WavelengthScreen(
             confirmButton = {
                 TextButton(onClick = {
                     if (name.isNotBlank()) { projectViewModel.saveWavelengthPreset(name); showSaveDialog = false }
-                }) { Text("OK") }
+                }) { Text(stringResource(R.string.action_ok)) }
             },
-            dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text("×") } }
+            dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text(stringResource(R.string.action_dismiss)) } }
         )
     }
     if (showLoadDialog) {
@@ -168,7 +168,7 @@ fun Step1WavelengthScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showLoadDialog = false }) { Text("OK") } }
+            confirmButton = { TextButton(onClick = { showLoadDialog = false }) { Text(stringResource(R.string.action_ok)) } }
         )
     }
 }

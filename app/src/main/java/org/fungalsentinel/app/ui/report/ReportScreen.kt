@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -30,6 +31,7 @@ import org.fungalsentinel.app.ui.components.TutorialHost
 import org.fungalsentinel.app.ui.theme.AppColors
 import org.fungalsentinel.app.ui.theme.statusTextColor
 import org.fungalsentinel.app.viewmodel.ProjectViewModel
+import org.fungalsentinel.app.viewmodel.STEP_SOURCE_NOT_RUN
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,6 +44,10 @@ fun ReportScreen(
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
     val r = uiState.reportData
+    // Data-layer sentinel values / nulls are replaced with readable text at render time, so English stored in legacy project JSON is also covered
+    val sourceNotRun = stringResource(R.string.report_source_not_run)
+    val methodNote = stringResource(R.string.report_spd_method_note)
+    fun source(value: String) = if (value == STEP_SOURCE_NOT_RUN) sourceNotRun else value
 
     val tutorial = TutorialHost(
         stepId = "report",
@@ -54,7 +60,7 @@ fun ReportScreen(
             modifier = screenModifier.fillMaxSize(),
             topBar = {
                 HelpTopBar(
-                    title = "MycoSpec Analysis Report",
+                    title = stringResource(R.string.report_title),
                     tutorial = tutorial,
                     onBack = onBack
                 )
@@ -69,17 +75,20 @@ fun ReportScreen(
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
             Text(
-                text = "Project: ${uiState.currentProject?.name ?: "—"}",
+                text = stringResource(
+                    R.string.report_project,
+                    uiState.currentProject?.name ?: stringResource(R.string.value_not_set)
+                ),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = AppColors.TextPrimary
             )
 
             // ═══════ PAGE 1 — Wavelength calibration (parity: FSSA v1.4.5) ═══════
-            PageCard(page = 1, title = "Step 1: Wavelength Calibration") {
+            PageCard(page = 1, title = stringResource(R.string.report_page1_title)) {
                 StatusLine(r.step1Status)
                 if (r.previewUri != null && r.roiStart != null && r.roiEnd != null && r.sensorWidth != null) {
-                    FigureLabel("Figure 1: Positioning preview with Auto ROI")
+                    FigureLabel(stringResource(R.string.report_fig1))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -106,19 +115,19 @@ fun ReportScreen(
                             val sw = r.sensorWidth.coerceAtLeast(1).toFloat()
                             val x0 = r.roiStart / sw * size.width
                             val x1 = r.roiEnd / sw * size.width
-                            // [convergence] the ROI overlay now uses emphatic translucent green instead of bright green 0x4400E676
+                            // [Convergence] ROI overlay switched to translucent accent green, replacing bright green 0x4400E676
                             drawRect(AppColors.Accent.copy(alpha = 0.27f), Offset(x0, 0f), Size(x1 - x0, size.height))
                         }
                     }
                     Text(
-                        "Auto X ROI  R(${r.wlR}nm) G(${r.wlG}nm) B(${r.wlB}nm)",
+                        stringResource(R.string.report_auto_roi, r.wlR, r.wlG, r.wlB),
                         style = MaterialTheme.typography.bodySmall,
                         color = AppColors.TextSecondary
                     )
                     Spacer(Modifier.height(8.dp))
                 }
                 if (r.redProfile.isNotEmpty()) {
-                    FigureLabel("Figure 2: Automatic 1D Profiles and Dynamic Peak Windows")
+                    FigureLabel(stringResource(R.string.report_fig2))
                     ProfileChart(
                         r.redProfile, r.greenProfile, r.blueProfile,
                         windows = r.peakWindows,
@@ -126,13 +135,13 @@ fun ReportScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                 }
-                // [v2.2.2] supports the filter mode: pB is nullable
+                // [v2.2.2] Adapt to the filter mode: pB is nullable
                 if (r.slope != null && r.peakG != null && r.peakR != null) {
                     val isFilterMode = r.peakB == null
                     val title = if (isFilterMode)
-                        "Figure 3: Two-point Fit (G+R) [Filter Mode]"
+                        stringResource(R.string.report_fig3_filter)
                     else
-                        "Figure 3: Two-point Fit (B+R) with Third-point Validation (G)"
+                        stringResource(R.string.report_fig3)
                     FigureLabel(title)
                     FitChart(
                         slope = r.slope, intercept = r.intercept ?: 0.0,
@@ -143,17 +152,29 @@ fun ReportScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                 }
-                SectionTitle("Wavelength Calibration Parameters")
-                ReportLine("Source", r.step1Source)
-                r.step1PresetName?.let { ReportLine("Preset name", it) }
-                r.step1PresetFile?.let { ReportLine("Preset file ID", it) }
-                r.step1ImportedAt?.let { ReportLine("Imported at", it) }
+                SectionTitle(stringResource(R.string.report_sec_wl_params))
+                ReportLine(stringResource(R.string.report_lbl_source), source(r.step1Source))
+                r.step1PresetName?.let { ReportLine(stringResource(R.string.report_lbl_preset_name), it) }
+                r.step1PresetFile?.let { ReportLine(stringResource(R.string.report_lbl_preset_file_id), it) }
+                r.step1ImportedAt?.let { ReportLine(stringResource(R.string.report_lbl_imported_at), it) }
                 r.step1Params.forEach { (k, v) -> ReportLine(k, v) }
-                ReportLine("[Wavelength Mapping Equation]", r.mappingFormula)
-                ReportLine("[Calibration Metadata]", "Exposure: ${r.exposureTime}   X ROI: ${r.xRoi}")
-                ReportLine("[Validation Results]", "Train: ${r.trainingPoints}   Validate: ${r.validationPoint}")
-                ReportLine("", "G Residual: ${r.gResidual}   G Error: ${r.wavelengthGError}")
-                ReportLine("[Peak Estimator]", "Valley-bounded Gaussian core (v1.4.5); legacy centroid = diagnostic only")
+                ReportLine(stringResource(R.string.report_lbl_mapping_equation), r.mappingFormula)
+                ReportLine(
+                    stringResource(R.string.report_lbl_calibration_metadata),
+                    stringResource(R.string.report_val_calibration_metadata, r.exposureTime, r.xRoi)
+                )
+                ReportLine(
+                    stringResource(R.string.report_lbl_validation_results),
+                    stringResource(R.string.report_val_validation_results, r.trainingPoints, r.validationPoint)
+                )
+                ReportLine(
+                    "",
+                    stringResource(R.string.report_val_g_residual, r.gResidual, r.wavelengthGError)
+                )
+                ReportLine(
+                    stringResource(R.string.report_lbl_peak_estimator),
+                    stringResource(R.string.report_val_peak_estimator)
+                )
                 if (r.peakDiagnostics != "—") {
                     Text(
                         r.peakDiagnostics,
@@ -165,31 +186,31 @@ fun ReportScreen(
             }
 
             // ══════ PAGE 2 — SPD response & response-proportional fusion ═══════
-            PageCard(page = 2, title = "Step 2: Spectral Response & Fusion — MycoSpec v2.3.0") {
+            PageCard(page = 2, title = stringResource(R.string.report_page2_title)) {
                 StatusLine(r.step2Status)
                 if (r.spdLambda.isNotEmpty()) {
                     if (r.spdPosR.isNotEmpty()) {
-                        FigureLabel("Figure 4a: Positioning LEDs — RAW measured (independent data)")
+                        FigureLabel(stringResource(R.string.report_fig4a))
                         MultiLineChartX(r.spdLambda, listOf(
                             r.spdPosR to AppColors.Chart.R,
                             r.spdPosG to AppColors.Chart.G,
                             r.spdPosB to AppColors.Chart.B
                         ), widths = listOf(1.5f, 1.5f, 1.5f))
                     }
-                    FigureLabel("Figure 4b: SPD-corrected (thin) + ONE pointwise-fused curve (thick)")
+                    FigureLabel(stringResource(R.string.report_fig4b))
                     MultiLineChartX(r.spdLambda, listOf(
                         r.spdCorrR to AppColors.Chart.R,
                         r.spdCorrG to AppColors.Chart.G,
                         r.spdCorrB to AppColors.Chart.B,
                         r.spdFused to AppColors.TextPrimary
                     ), widths = listOf(1.2f, 1.2f, 1.2f, 3f))
-                    FigureLabel("Figure 4c: Camera absolute response = Lamp_c / SPD_true (masked)")
+                    FigureLabel(stringResource(R.string.report_fig4c))
                     MultiLineChartX(r.spdLambda, listOf(
                         r.spdRespR to AppColors.Chart.R,
                         r.spdRespG to AppColors.Chart.G,
                         r.spdRespB to AppColors.Chart.B
                     ))
-                    FigureLabel("Figure 4d: Response-proportional channel weights (sum = 1) with responsivity crossings")
+                    FigureLabel(stringResource(R.string.report_fig4d))
                     MultiLineChartX(r.spdLambda, listOf(
                         r.spdWB to AppColors.Chart.B,
                         r.spdWG to AppColors.Chart.G,
@@ -198,73 +219,88 @@ fun ReportScreen(
                         vLines = listOf(r.spdCrossingBG, r.spdCrossingGR))
                     Spacer(Modifier.height(8.dp))
                 }
-                SectionTitle("SPD Response & Fusion Parameters")
-                ReportLine("Status / source", "${r.spdStatus} · ${r.spdSource}")
-                r.spdPresetName?.let { ReportLine("Preset name", it) }
-                r.spdPresetFile?.let { ReportLine("Preset file ID", it) }
-                r.spdImportedAt?.let { ReportLine("Imported at", it) }
+                SectionTitle(stringResource(R.string.report_sec_spd_params))
+                ReportLine(
+                    stringResource(R.string.report_lbl_status_source),
+                    stringResource(R.string.report_val_status_source, r.spdStatus, source(r.spdSource))
+                )
+                r.spdPresetName?.let { ReportLine(stringResource(R.string.report_lbl_preset_name), it) }
+                r.spdPresetFile?.let { ReportLine(stringResource(R.string.report_lbl_preset_file_id), it) }
+                r.spdImportedAt?.let { ReportLine(stringResource(R.string.report_lbl_imported_at), it) }
                 r.spdParams.forEach { (k, v) -> ReportLine(k, v) }
-                ReportLine("Frames / Exposure", "${r.spdFrames} / ${r.spdExposure}")
-                ReportLine("[Effective Band]", "${r.spdEffectiveBand} | masked px ${r.spdMasked} | ratio 0.1")
-                ReportLine("[Responsivity Crossings (diagnostic only)]", r.spdHandoffs)
-                ReportLine("[Cross-channel Agreement]", r.spdAgreement)
-                ReportLine("[Fused Curve Peak]", r.spdFusedPeak)
-                ReportLine("[Response Peaks (absolute)]", r.spdPeaks)
-                ReportLine("[RAW Positioning Peaks]", r.spdRawPeaks)
-                ReportLine("[Corrected Positioning Peaks]", r.spdCorrPeaks)
-                ReportLine("[Method]", r.spdMethodNote)
+                ReportLine(
+                    stringResource(R.string.report_lbl_frames_exposure),
+                    stringResource(R.string.report_val_frames_exposure, r.spdFrames, r.spdExposure)
+                )
+                ReportLine(
+                    stringResource(R.string.report_lbl_effective_band),
+                    stringResource(R.string.report_val_effective_band, r.spdEffectiveBand, r.spdMasked)
+                )
+                ReportLine(stringResource(R.string.report_lbl_responsivity_crossings), r.spdHandoffs)
+                ReportLine(stringResource(R.string.report_lbl_cross_channel_agreement), r.spdAgreement)
+                ReportLine(stringResource(R.string.report_lbl_fused_curve_peak), r.spdFusedPeak)
+                ReportLine(stringResource(R.string.report_lbl_response_peaks), r.spdPeaks)
+                ReportLine(stringResource(R.string.report_lbl_raw_positioning_peaks), r.spdRawPeaks)
+                ReportLine(stringResource(R.string.report_lbl_corrected_positioning_peaks), r.spdCorrPeaks)
+                ReportLine(stringResource(R.string.report_lbl_method), r.spdMethodNote.ifBlank { methodNote })
             }
 
             // ═══════ PAGE 3 — Sample analysis ═══════
-            PageCard(page = 3, title = "Step 3: Sample Analysis") {
+            PageCard(page = 3, title = stringResource(R.string.report_page3_title)) {
                 StatusLine(r.step3Status)
                 if (r.sampleSpectrum.isNotEmpty()) {
-                    FigureLabel("Figure 7: Blank-subtracted & SPD-corrected spectrum vs Blank")
+                    FigureLabel(stringResource(R.string.report_fig7))
                     ProfileChart(r.blankSpectrum, r.sampleSpectrum, emptyList())
                     Text(
-                        "Green = corrected sample, Red = blank\nLow-response bands (<20% of channel peak) are excluded; isolated spikes are replaced locally.",
+                        stringResource(R.string.report_fig7_note),
                         style = MaterialTheme.typography.bodySmall,
                         color = AppColors.TextSecondary
                     )
                     Spacer(Modifier.height(8.dp))
                 }
-                SectionTitle("Sample Analysis Parameters")
-                ReportLine("Target fluorophore", "${r.sampleFluorophore} (${r.sampleBand})")
-                ReportLine("Analysis channel", r.sampleIntegratedArea.substringAfter("ch=").substringBefore(","))
-                ReportLine("SPD correction", r.sampleIntegratedArea.substringAfter("resp=").substringBefore(")"))
-                ReportLine("[Peak Wavelength]", r.samplePeakNm)
-                ReportLine("[Peak Intensity]", r.samplePeakIntensity)
-                ReportLine("[FWHM]", r.sampleFwhm)
-                ReportLine("[Centroid]", r.sampleCentroid)
-                ReportLine("Integration window", r.integrationWindow)
-                ReportLine("Blank mean area", r.blankMeanArea)
-                ReportLine("Sample mean area", r.sampleMeanArea)
-                ReportLine("[Corrected Integrated Area]", r.sampleIntegratedArea)
-                ReportLine("Sample SD / Replicates", "${r.sampleSD} / ${r.replicates}")
+                SectionTitle(stringResource(R.string.report_sec_sample_params))
+                ReportLine(
+                    stringResource(R.string.lbl_target_fluorophore),
+                    stringResource(R.string.report_val_fluorophore, r.sampleFluorophore, r.sampleBand)
+                )
+                ReportLine(stringResource(R.string.report_lbl_analysis_channel), r.sampleIntegratedArea.substringAfter("ch=").substringBefore(","))
+                ReportLine(stringResource(R.string.report_lbl_spd_correction), r.sampleIntegratedArea.substringAfter("resp=").substringBefore(")"))
+                ReportLine(stringResource(R.string.report_lbl_peak_wavelength), r.samplePeakNm)
+                ReportLine(stringResource(R.string.report_lbl_peak_intensity), r.samplePeakIntensity)
+                ReportLine(stringResource(R.string.report_lbl_fwhm), r.sampleFwhm)
+                ReportLine(stringResource(R.string.report_lbl_centroid), r.sampleCentroid)
+                ReportLine(stringResource(R.string.report_lbl_integration_window), r.integrationWindow)
+                ReportLine(stringResource(R.string.report_lbl_blank_mean_area), r.blankMeanArea)
+                ReportLine(stringResource(R.string.report_lbl_sample_mean_area), r.sampleMeanArea)
+                ReportLine(stringResource(R.string.report_lbl_corrected_area), r.sampleIntegratedArea)
+                ReportLine(
+                    stringResource(R.string.report_lbl_sd_replicates),
+                    stringResource(R.string.report_val_sd_replicates, r.sampleSD, r.replicates)
+                )
             }
 
             // ═══════ PAGE 4 — Concentration regression ═══════
-            PageCard(page = 4, title = "Step 4: Concentration Regression") {
+            PageCard(page = 4, title = stringResource(R.string.report_page4_title)) {
                 StatusLine(r.step4Status)
                 if (r.curvePoints.isNotEmpty() && r.curveSlope != null) {
-                    FigureLabel("Figure 8: Standard curve with unknown sample")
+                    FigureLabel(stringResource(R.string.report_fig8))
                     CurveChart(r.curvePoints, r.curveSlope, r.curveIntercept ?: 0.0)
                     Spacer(Modifier.height(8.dp))
                 }
-                SectionTitle("Concentration Parameters")
-                ReportLine("Source", r.step4Source)
-                r.step4PresetName?.let { ReportLine("Preset name", it) }
-                r.step4PresetFile?.let { ReportLine("Preset file ID", it) }
-                r.step4ImportedAt?.let { ReportLine("Imported at", it) }
+                SectionTitle(stringResource(R.string.report_sec_conc_params))
+                ReportLine(stringResource(R.string.report_lbl_source), source(r.step4Source))
+                r.step4PresetName?.let { ReportLine(stringResource(R.string.report_lbl_preset_name), it) }
+                r.step4PresetFile?.let { ReportLine(stringResource(R.string.report_lbl_preset_file_id), it) }
+                r.step4ImportedAt?.let { ReportLine(stringResource(R.string.report_lbl_imported_at), it) }
                 r.step4Params.forEach { (k, v) -> ReportLine(k, v) }
-                r.standardRows.forEach { ReportLine("Standard", it) }
-                ReportLine("[Regression Formula]", r.regressionFormula)
-                ReportLine("R²", r.regressionR2)
-                ReportLine("[Predicted Concentration]", r.predictedConcentration)
-                // [convergence] all warnings use the single semantic red; the orange branch was removed
+                r.standardRows.forEach { ReportLine(stringResource(R.string.report_lbl_standard), it) }
+                ReportLine(stringResource(R.string.report_lbl_regression_formula), r.regressionFormula)
+                ReportLine(stringResource(R.string.result_r2), r.regressionR2)
+                ReportLine(stringResource(R.string.report_lbl_predicted_conc), r.predictedConcentration)
+                // [Convergence] All warnings unified to semantic red, the orange branch is removed
                 r.curveWarnings.forEach { warning ->
                     Text(
-                        text = "⚠ $warning",
+                        text = stringResource(R.string.report_warning, warning),
                         color = AppColors.Error,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -281,7 +317,7 @@ fun ReportScreen(
 private fun StatusLine(s: String) {
     val token = s.substringBefore('|')
     val message = s.substringAfter('|', s)
-    // [unified] status colours converge: green = success / translucent green = processing / red = failure / grey = idle
+    // [Unified] Status colors converge: green = success / translucent green = processing / red = failed / gray = idle
     Text(message, style = MaterialTheme.typography.bodySmall, color = statusTextColor(token))
     Spacer(Modifier.height(8.dp))
 }
@@ -294,7 +330,7 @@ private fun PageCard(page: Int, title: String, content: @Composable ColumnScope.
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                "— Page $page —",
+                stringResource(R.string.report_page, page),
                 style = MaterialTheme.typography.labelSmall,
                 color = AppColors.TextSecondary
             )
@@ -336,7 +372,7 @@ private fun ReportLine(label: String, value: String) {
 
 @Composable
 private fun QualityBadge(quality: String) {
-    // [convergence] PASS = green / WARNING = translucent green / FAILED = red / anything else = grey
+    // [Convergence] PASS = green / WARNING = translucent green / FAILED = red / others = gray
     val color = when (quality) {
         "PASS" -> AppColors.Accent
         "WARNING" -> AppColors.AccentSoft
@@ -344,7 +380,7 @@ private fun QualityBadge(quality: String) {
         else -> AppColors.TextSecondary
     }
     Text(
-        "Calibration Quality: $quality",
+        stringResource(R.string.report_calibration_quality, quality),
         color = color,
         fontWeight = FontWeight.Bold,
         style = MaterialTheme.typography.titleSmall
@@ -364,7 +400,7 @@ private fun ProfileChart(
         val all = red + green + blue
         val max = all.maxOrNull()?.coerceAtLeast(1e-6f) ?: 1f
         val n = maxOf(red.size, green.size, blue.size, 1)
-        // [convergence] channel window colours come from the Chart sub-object
+        // [Convergence] Channel window colors now come from the Chart sub-object
         val winColors = listOf(AppColors.Chart.R, AppColors.Chart.G, AppColors.Chart.B)
         windows.forEachIndexed { i, (lo, hi) ->
             val x0 = lo.toFloat() / n * size.width
@@ -432,7 +468,7 @@ private fun MultiLineChartX(
 
 /**
  * Two-point fit chart.
- * [v2.2.2] pxB is nullable; when isGreenRedFit the B point is hidden and the title wording changes.
+ * [v2.2.2] pxB is nullable; hides the B point and adjusts the title text when isGreenRedFit is true.
  */
 @Composable
 private fun FitChart(
@@ -455,14 +491,14 @@ private fun FitChart(
             val ySpan = (yMax - yMin).coerceAtLeast(1f)
             fun px(wl: Float) = (wl - xMin) / (xMax - xMin) * size.width
             fun py(v: Float) = (v - yMin) / ySpan * size.height
-            // [convergence] the fit line uses the neutral grey-blue Chart.Fit instead of olive green 0xFF558B2F
+            // [Convergence] Fit line switched to the neutral gray-blue Chart.Fit, replacing olive green 0xFF558B2F
             drawLine(
                 AppColors.Chart.Fit,
                 Offset(px(xMin), py((slope * xMin + intercept).toFloat())),
                 Offset(px(xMax), py((slope * xMax + intercept).toFloat())),
                 2f
             )
-            // [v2.2.2] the B point is not drawn in filter mode
+            // [v2.2.2] The B point is not drawn in filter mode
             if (!isGreenRedFit && pxB != null) {
                 drawCircle(AppColors.Chart.B, 6f, Offset(px(wlB.toFloat()), py(pxB)))
             }
@@ -473,16 +509,17 @@ private fun FitChart(
                 style = Stroke(2f)
             )
         }
+        // All numbers are formatted with Locale.US to keep the decimal separator consistent across languages
         val fitText = if (isGreenRedFit) {
             String.format(
                 Locale.US,
-                "Fit: p = %.4fλ %+.2f   Train (G, R)   [Filter Mode]",
+                stringResource(R.string.report_fit_filter),
                 slope, intercept
             )
         } else {
             String.format(
                 Locale.US,
-                "Fit: p = %.4fλ %+.2f   Train (B, R)   Validate (G)   Error: %+.2f nm",
+                stringResource(R.string.report_fit),
                 slope, intercept, errorNm
             )
         }
@@ -511,14 +548,14 @@ private fun CurveChart(
         val ySpan = (yMax - yMin).coerceAtLeast(1e-6f)
         fun px(v: Float) = (v - xMin) / xSpan * size.width
         fun py(v: Float) = size.height - (v - yMin) / ySpan * size.height
-        // [convergence] the regression line uses the neutral Chart.Fit
+        // [Convergence] The regression line uses the neutral Chart.Fit
         drawLine(
             AppColors.Chart.Fit,
             Offset(px(xMin), py((slope * xMin + intercept).toFloat())),
             Offset(px(xMax), py((slope * xMax + intercept).toFloat())),
             2f
         )
-        // [convergence] standards use the single accent colour Accent
+        // [Convergence] Standard points use the single accent color Accent
         points.forEach { p ->
             drawCircle(
                 AppColors.Accent, 6f,

@@ -310,7 +310,7 @@ fun Step4StandardCurveScreen(
                 ) { Text(stringResource(R.string.act_save_preset)) }
             },
             dismissButton = {
-                TextButton(onClick = { showSavePresetDialog = false }) { Text("×") }
+                TextButton(onClick = { showSavePresetDialog = false }) { Text(stringResource(R.string.action_dismiss)) }
             }
         )
     }
@@ -348,7 +348,7 @@ fun Step4StandardCurveScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showLoadPresetDialog = false }) { Text("×") }
+                TextButton(onClick = { showLoadPresetDialog = false }) { Text(stringResource(R.string.action_dismiss)) }
             }
         )
     }
