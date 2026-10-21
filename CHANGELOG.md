@@ -1,8 +1,13 @@
 # Changelog — MycoSpec
 
-The Android client of the Fungal Sentinel spectral pipeline. All dates are
-commit dates; every entry is sourced from repository history. Short commit
-hashes are given so each claim can be checked against the tree.
+The Android client of the Fungal Sentinel spectral pipeline.
+**This file is MycoSpec — the Android app — and nothing else.** The Python
+desktop program FSSA publishes its own changelog in its own repository; the two
+are mentioned in the same sentence only where they implement a shared numerical
+reference, and every such mention is marked as a cross-reference.
+
+All dates are commit dates; every entry is sourced from repository history.
+Short commit hashes are given so each claim can be checked against the tree.
 
 Released version: **v2.4.0** (`versionName 2.4.0`, `versionCode 230`, 2026-10-21),
 tagged `v2.4.0`. Version references were bumped in `app/build.gradle.kts`, the
