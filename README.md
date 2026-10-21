@@ -80,6 +80,9 @@ blank-corrected spectrum, and the standard curve.
    [Releases](https://github.com/LittleSky-CN/Mycospec/releases).
 2. Allow "install unknown apps" when prompted.
 3. Open MycoSpec → New Project → follow Steps 1–4 → View Report.
+   Phones that do not expose Camera2 RAW (Huawei devices in particular) cannot use the
+   in-app camera — see below for the stock-camera + upload alternative, which produces
+   identical results.
 
 ### The app starts but the built-in camera does not work
 
@@ -116,6 +119,28 @@ can make it appear.
    - Then run Steps 1–4 as usual.
 4. **Do not judge spectral accuracy on an emulator.** Emulators exercise the UI and the
    flow only; they have no real optics.
+
+#### Recommended alternative: shoot with the stock camera app and upload into MycoSpec
+
+If the built-in RAW capture refuses to open, you lose no functionality: take the frames with
+your phone's own camera app and bring them in with **Gallery** or **Files / DNG** on the
+capture card. Imported frames run through exactly the same decode, calibration and analysis
+code path as in-app captures.
+
+1. Open the device's **native (stock) camera app** and enable its RAW / Pro mode — usually
+   *Pro → RAW*, *Pro mode → DNG* or *Photo → RAW*, depending on the vendor. In most cases it
+   is available only on the main rear camera, and only with HDR / AI scene modes turned off.
+2. Capture the frames you need. Keep **ISO, exposure time, focus and the optical setup
+   identical** for every frame of the same batch.
+3. In MycoSpec tap **Gallery** for pictures stored on the device, or **Files / DNG** for
+   anything in a file manager or cloud folder, then choose the frames.
+4. Continue with Steps 1–4 as usual. Imported files are copied into app-private storage, so
+   the batch stays re-analysable and every result reproducible.
+
+If your stock camera app cannot write DNG either, shoot on any device that can — another
+phone, or a dedicated camera — transfer the DNG files to the phone running MycoSpec and
+import them the same way. **JPEG-only captures cannot be used**: Steps 1–4 need linear,
+un-demosaiced sensor data.
 
 ### Build from source
 Requires Android Studio (JDK 17+) and Android SDK 37.
