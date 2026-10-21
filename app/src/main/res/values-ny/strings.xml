@@ -255,7 +255,7 @@
     <string name="report_project">Pulojekiti: %1$s</string>
     <string name="report_page">— Tsamba %1$d —</string>
     <string name="report_page1_title">Sitepe 1: Calibration ya mafunde a kuwala</string>
-    <string name="report_page2_title">Sitepe 2: Response ya sipekitiramu ndi Fusion — MycoSpec v2.3.0</string>
+    <string name="report_page2_title">Sitepe 2: Response ya sipekitiramu ndi Fusion — MycoSpec v2.4.0</string>
     <string name="report_page3_title">Sitepe 3: Kusanthula kwa sample</string>
     <string name="report_page4_title">Sitepe 4: Regression ya kuchuluka</string>
     <string name="report_fig1">Chithunzi 1: Chiwonetsero cha positioning ndi Auto ROI</string>

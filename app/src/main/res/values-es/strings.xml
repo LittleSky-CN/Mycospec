@@ -255,7 +255,7 @@
     <string name="report_project">Proyecto: %1$s</string>
     <string name="report_page">— Página %1$d —</string>
     <string name="report_page1_title">Paso 1: Calibración de longitud de onda</string>
-    <string name="report_page2_title">Paso 2: Respuesta espectral y fusión — MycoSpec v2.3.0</string>
+    <string name="report_page2_title">Paso 2: Respuesta espectral y fusión — MycoSpec v2.4.0</string>
     <string name="report_page3_title">Paso 3: Análisis de la muestra</string>
     <string name="report_page4_title">Paso 4: Regresión de concentración</string>
     <string name="report_fig1">Figura 1: Vista previa de posicionamiento con ROI automático</string>

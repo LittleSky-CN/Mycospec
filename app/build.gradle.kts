@@ -30,8 +30,8 @@ android {
         applicationId = "org.fungalsentinel.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 229
-        versionName = "2.3.0"
+        versionCode = 230
+        versionName = "2.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

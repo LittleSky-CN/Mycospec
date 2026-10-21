@@ -9,7 +9,7 @@ their own hardware.**
 - Repository: <https://gitlab.igem.org/2026/software/cau-china/mycospec>
   (mirror: <https://github.com/LittleSky-CN/Mycospec>)
 - Python reference implementation: **FSSA** — <https://gitlab.igem.org/2026/software/cau-china/fungal-sentinel-spectral-analyzer>
-- Latest build: **versionCode 229 / versionName 2.3.0** · License: **Apache-2.0**
+- Latest build: **versionCode 230 / versionName 2.4.0** · License: **Apache-2.0**
   (see [LICENSE](LICENSE))
 
 This document answers three questions: *what do we accept*, *how do you get set
@@ -103,7 +103,7 @@ cd mycospec
 ./gradlew :app:testDebugUnitTest        # Windows: gradlew.bat :app:testDebugUnitTest
 ```
 
-Expected result on v2.3.0: **118 tests across 16 classes, 0 failures**, reproducible
+Expected result on v2.4.0: **118 tests across 16 classes, 0 failures**, reproducible
 by anyone — no device, no DNG files, no network, **every test runs on synthetic
 input**:
 
@@ -154,7 +154,7 @@ A reproducible failure reported back is worth more to the next team than another
 feature. Use this template:
 
 ```
-Version / commit:      MycoSpec 2.3.0 (versionCode 229) @ <commit sha>
+Version / commit:      MycoSpec 2.4.0 (versionCode 230) @ <commit sha>
 Device:                make, model, Android version
 Camera:                does Camera2 work here? does it expose RAW? (see note below)
 Input:                 DNG source (gallery import / capture) or synthetic fixture

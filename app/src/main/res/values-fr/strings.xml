@@ -249,7 +249,7 @@
     <string name="report_project">Projet&#160;: %1$s</string>
     <string name="report_page">— Page %1$d —</string>
     <string name="report_page1_title">Étape 1&#160;: calibration des longueurs d\'onde</string>
-    <string name="report_page2_title">Étape 2&#160;: réponse spectrale et fusion — MycoSpec v2.3.0</string>
+    <string name="report_page2_title">Étape 2&#160;: réponse spectrale et fusion — MycoSpec v2.4.0</string>
     <string name="report_page3_title">Étape 3&#160;: analyse de l\'échantillon</string>
     <string name="report_page4_title">Étape 4&#160;: régression de la concentration</string>
     <string name="report_fig1">Figure 1&#160;: aperçu de positionnement avec ROI automatique</string>

@@ -1,6 +1,6 @@
 # MycoSpec · Pocket Fluorescence Spectral Analyzer (Android)
 
-> **MycoSpec — v2.3.0** (Android frontend of the Fungal Sentinel software stack)
+> **MycoSpec — v2.4.0** (Android frontend of the Fungal Sentinel software stack)
 >
 > **Naming**
 > | Name | Version | Meaning |
@@ -8,7 +8,7 @@
 > | **Fungal Sentinel** | — | iGEM team project (wet lab + hardware + software) |
 > | **OptiX** | — | Hardware project |
 > | **FSSA** | v1.5.0 | Python desktop spectral analyzer (reference implementation) |
-> | **MycoSpec** | v2.3.0 | This Android app |
+> | **MycoSpec** | v2.4.0 | This Android app |
 >
 > The Android app was originally shipped under the same name **FSSA** during its
 > 1.x releases. It was renamed **MycoSpec** from v2.0.0 onwards so that the
@@ -154,31 +154,16 @@ app/src/main/java/org/fungalsentinel/app/
   Camera2; on phones that do not (see the troubleshooting section above), use
   **Gallery / Files (DNG)** upload — it runs the same analysis pipeline. Manual
   exposure / ISO / focus / WB controls at capture time are still on the roadmap.
-- Cross-check formal results against Python FSSA v1.5.0 on the same DNG set.
+- Cross-check formal results against Python FSSA v1.6.0 on the same DNG set.
 
 ### Versioning
-Current version **v2.3.0** — the single authoritative version number across this
-repository, the app module (`versionName 2.3.0 / versionCode 229`), in-app text
+Current version **v2.4.0** — the single authoritative version number across this
+repository, the app module (`versionName 2.4.0 / versionCode 230`), in-app text
 and every cross-reference to this build. Earlier public milestones (v2.0.0,
-v2.0.1, v2.2.8) are retained only as Git history / tags.
+v2.0.1, v2.2.8, v2.3.0) are retained only as Git history / tags.
 
-#### What's new in v2.3.0 (`versionCode 229`)
+#### What's new in v2.4.0 (`versionCode 230`)
 
-- **Unified the duplicated `Fluorophore` enum.** Two copies existed — one in the
-  data layer (`data/model/Entities.kt`) and one in the UI layer
-  (`Step3SampleScreen.kt`). Only the data-layer declaration remains; the UI copy
-  has been deleted and the UI now imports the single canonical enum. This removes
-  the class of bug where the two enums drifted apart and a fluorophore valid in
-  one layer was unknown in the other.
-- **Added `FLUORESCEIN` to the data-layer enum**, with the matching
-  `fluorophoreBand()` mapping to its **500–540 nm** emission band. Fluorescein
-  can now be selected and quantified end-to-end instead of being silently
-  rejected or mapped to an undefined band.
-- **Added `canonicalFluorophore()`**, a normalising resolver that maps
-  external/imported fluorophore names (including aliases and case/whitespace
-  variants) onto the canonical enum. Names arriving from Python FSSA exports or
-  hand-edited presets now resolve to the same canonical IDs used by the Python
-  side, so the same sample is identified identically on phone and desktop.
 - **Step 2 results are indexed by wavelength, not by pixel.** The response,
   position, corrected, weight and fused curves are computed per pixel and then
   resampled once onto the canonical axis (380–780 nm, 1 nm step, 401 points),
@@ -186,11 +171,27 @@ v2.0.1, v2.2.8) are retained only as Git history / tags.
   pixel↔nm mapping it was recorded with. Presets are therefore portable between
   phones and across an app update; the JSON payload carries its own axis.
 - **SPD presets can be exported and imported as files** (SAF, `application/json`)
-  so a calibration made on one phone can be used on another. A preset written
-  by a pre-v2.3.0 build is upgraded onto the wavelength grid on load instead of
-  being rejected.
+  so a calibration made on one phone can be used on another. A preset written by
+  an earlier build is upgraded onto the wavelength grid on load instead of being
+  rejected. The payload is **schema v3** and carries the axis, grid size, mask,
+  effective band and provenance metadata.
+- **Full localisation.** Every user-facing string is a resource, and four
+  translations ship alongside English: 简体中文, Français, Español and Chichewa.
+  French is new in this release; Spanish and Chichewa were completed to full key
+  coverage. Three test gates keep it honest — `LocaleCoverageTest` for coverage,
+  `StringResourceFormatTest` for valid format specifiers and `StringResourceArgCountTest`
+  for template / argument agreement.
+- **Fixed a crash on Step 1 upload**: `MissingFormatArgumentException` from a
+  zero-argument resource fetch. `ProjectViewModel.str()` now takes the
+  single-argument overload when it receives no arguments.
+- **Fixed Step 2 export / import / next buttons staying disabled outside English**
+  — the enabled check compared againstlocalised status text; it now uses a
+  language-independent frame count.
+- Spanish and Chichewa decimal separators now match what the screen actually
+  renders (all numbers are formatted with `Locale.US`); the hardcoded
+  `" (Log-Fit)"` status suffix moved into `st_log_fit`.
 
-Analysis semantics are aligned with Python **FSSA v1.5.0**; in particular the
+Analysis semantics are aligned with Python **FSSA v1.6.0**; in particular the
 Step 2 channel fusion uses response-proportional normalisation on both sides
 (`w_c = resp_c / Σ resp_c`, `Σ w_c = 1`), so the same DNG gives the same result
 on phone and desktop.
@@ -204,7 +205,7 @@ no device, no DNG files and no network: every test runs on **synthetic input**.
 .\gradlew.bat :app:testDebugUnitTest
 ```
 
-On v2.3.0 that runs **118 tests across 16 classes, 0 failures**:
+On v2.4.0 that runs **118 tests across 16 classes, 0 failures**:
 
 | Test class | What it pins |
 |---|---|

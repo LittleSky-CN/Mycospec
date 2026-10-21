@@ -262,7 +262,7 @@
     <string name="report_project">Project: %1$s</string>
     <string name="report_page">— Page %1$d —</string>
     <string name="report_page1_title">Step 1: Wavelength Calibration</string>
-    <string name="report_page2_title">Step 2: Spectral Response &amp; Fusion — MycoSpec v2.3.0</string>
+    <string name="report_page2_title">Step 2: Spectral Response &amp; Fusion — MycoSpec v2.4.0</string>
     <string name="report_page3_title">Step 3: Sample Analysis</string>
     <string name="report_page4_title">Step 4: Concentration Regression</string>
     <string name="report_fig1">Figure 1: Positioning preview with Auto ROI</string>

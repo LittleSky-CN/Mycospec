@@ -259,7 +259,7 @@
     <string name="report_project">项目：%1$s</string>
     <string name="report_page">— 第 %1$d 页 —</string>
     <string name="report_page1_title">步骤 1：波长校准</string>
-    <string name="report_page2_title">步骤 2：光谱响应与融合 — MycoSpec v2.3.0</string>
+    <string name="report_page2_title">步骤 2：光谱响应与融合 — MycoSpec v2.4.0</string>
     <string name="report_page3_title">步骤 3：样品分析</string>
     <string name="report_page4_title">步骤 4：浓度回归</string>
     <string name="report_fig1">图 1：带自动 ROI 的定位预览</string>
