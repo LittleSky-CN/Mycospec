@@ -270,8 +270,7 @@ string to every locale, and run **both** the Android and the Python test suites 
 you touch a shared algorithm.
 
 Full policy, setup steps, the parity gate and the bug-report template are in
-[`CONTRIBUTING.md`](CONTRIBUTING.md). Using an AI assistant? Read
-[`.claude/RESPONSIBLE_AI_USE.md`](.claude/RESPONSIBLE_AI_USE.md) first.
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ### AI use
 
