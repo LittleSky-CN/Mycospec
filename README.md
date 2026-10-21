@@ -7,7 +7,7 @@
 > |---|---|---|
 > | **Fungal Sentinel** | — | iGEM team project (wet lab + hardware + software) |
 > | **OptiX** | — | Hardware project |
-> | **FSSA** | v1.5.0 | Python desktop spectral analyzer (reference implementation) |
+> | **FSSA** | v1.6.0 | Python desktop spectral analyzer (reference implementation) |
 > | **MycoSpec** | v2.4.0 | This Android app |
 >
 > The Android app was originally shipped under the same name **FSSA** during its
