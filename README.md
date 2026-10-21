@@ -110,13 +110,8 @@ can make it appear.
 2. **Read the toast.** A message such as *"No RAW-capable camera found"* or *"No RAW
    sizes"* means point 3 applies — this device cannot feed the in-app camera.
 3. **Use Gallery / Files (DNG) instead.** This is the supported path and it runs exactly
-   the same analysis pipeline:
-   - Capture the frames on something that does write DNG — a RAW-capable phone, a system
-     camera in Pro/RAW mode, or a dedicated camera.
-   - In MycoSpec choose **Gallery / Files (DNG)** and pick them. Imported frames are
-     copied into app-private storage, so the same batch stays re-analysable and
-     reproducible.
-   - Then run Steps 1–4 as usual.
+   the same analysis pipeline — the step-by-step recipe with your stock camera app is right
+   below.
 4. **Do not judge spectral accuracy on an emulator.** Emulators exercise the UI and the
    flow only; they have no real optics.
 
